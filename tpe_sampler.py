@@ -21,13 +21,13 @@ if types.TYPE_CHECKING:
 EPS = 1e-12
 
 
-def default_gamma(x):
+def default_gamma(x, n_sample_low = 25):
     # type: (int) -> int
 
-    return min(int(np.ceil(0.25 * np.sqrt(x))), 25)
+    return min(int(np.ceil(0.25 * np.sqrt(x))), n_sample_low)
 
 
-def default_weights(x):
+def default_weights(x, n_sample_low = 25):
     # type: (int) -> np.ndarray
 
     if x == 0:
@@ -406,8 +406,8 @@ class TPESampler(base.BaseSampler):
 
         x = np.asarray(x)
         m = x.max(axis=1)
-        return np.log(np.exp(x - m[:, None]).sum(axis=1)) + m
-
+        return np.log(np.exp(x).sum(axis=1))
+        
     @classmethod
     def _normal_cdf(cls, x, mu, sigma):
         # type: (float, np.ndarray, np.ndarray) -> np.ndarray
