@@ -1,24 +1,63 @@
 import numpy as np
 import scipy.special
+import csv
+import ConfigSpace as CS
+import ConfigSpace as CSH
+from parzen_estimator import ParzenEstimator
+from parzen_estimator import ParzenEstimatorParameters
 
-from optuna import distributions  # NOQA
-from optuna.distributions import BaseDistribution  # NOQA
-from optuna.samplers import base  # NOQA
-from optuna.samplers import random  # NOQA
-from optuna.samplers.tpe.parzen_estimator import ParzenEstimator  # NOQA
-from optuna.samplers.tpe.parzen_estimator import ParzenEstimatorParameters  # NOQA
-from optuna.storages.base import BaseStorage  # NOQA
-from optuna.structs import StudyDirection
-from optuna import types
-
-if types.TYPE_CHECKING:
-    from typing import Callable  # NOQA
-    from typing import List  # NOQA
-    from typing import Optional  # NOQA
-    from typing import Tuple  # NOQA
-    from typing import Union  # NOQA
 
 EPS = 1e-12
+
+def get_evaluations(model, num):
+    with open("evaluation/{}/{}/evaluation.csv".format(model, num), "r", newline = "") as f:
+        reader = dict(csv.DictReader(f, delimieter = ",", quotechar = '"'))
+        param_names = list(csv.DictReader(f, delimieter = ",", quotechar = '"').fieldnames)
+        
+        hyperparameters = {param_name :[] for param_name in param_names}
+
+        for row in reader:
+            for param_name in param_names:
+                try:
+                    hyperparameters[param_name].append(eval(row[param_name]))
+                except:
+                    hyperparameters[param_name].append(row[param_name])
+    
+    return hyperparameters
+
+def get_variable_features(model):
+    with open("feature/{}/feature.csv".format(model), "r", newline = "") as f:
+        reader = dict(csv.DictReader(f, delimieter = ";", quotechar = '"'))
+        config_space = CS.ConfigurationSpace()
+        
+        for row in reader:
+            default = eval(row["default"])
+            param_name = row["var_name"]
+            var_type = row["type"]
+            dist = row["dist"]
+
+            if var_type == "c":
+                choices = eval(row["bound"])
+                hp = CSH.CategoricalHyperparameter(name = param_name, choices = choices, default_value = default)
+            else:
+                b = eval(row["bound"])
+
+                if var_type == "i":
+                    if dist == "log":
+                        hp = CSH.UniformIntegerHyperparameter(name = row["var_name"], lower = b[0], upper = b[1], default_value = default, log = True)
+                    else:
+                        hp = CSH.UniformIntegerHyperparameter(name = row["var_name"], lower = b[0], upper = b[1], default_value = default, log = False)
+                elif var_type == "f":
+                    if dist == "log":
+                        hp = CSH.UniformFloatHyperparameter(name = row["var_name"], lower = b[0], upper = b[1], default_value = default, log = True)
+                    else:
+                        hp = CSH.UniformFloatHyperparameter(name = row["var_name"], lower = b[0], upper = b[1], default_value = default, log = False)
+            
+            config_space.add_hyperparameter(hp)
+    
+    return config_space
+            
+            
 
 
 def default_gamma(x, n_sample_low = 25):
@@ -32,29 +71,29 @@ def default_weights(x, n_sample_low = 25):
 
     if x == 0:
         return np.asarray([])
-    elif x < 25:
+    elif x < n_sample_low:
         return np.ones(x)
     else:
-        ramp = np.linspace(1.0 / x, 1.0, num=x - 25)
-        flat = np.ones(25)
+        ramp = np.linspace(1.0 / x, 1.0, num=x - n_sample_low)
+        flat = np.ones(n_sample_low)
         return np.concatenate([ramp, flat], axis=0)
 
-
-class TPESampler(base.BaseSampler):
+class TPESampler():
     def __init__(
             self,
-            consider_prior=True,  # type: bool
-            prior_weight=1.0,  # type: float
-            consider_magic_clip=True,  # type: bool
-            consider_endpoints=False,  # type: bool
-            n_startup_trials=10,  # type: int
-            n_ei_candidates=24,  # type: int
-            gamma=default_gamma,  # type: Callable[[int], int]
-            weights=default_weights,  # type: Callable[[int], np.ndarray]
-            seed=None  # type: Optional[int]
+            cs,
+            consider_prior = True,  # type: bool
+            prior_weight = 1.0,  # type: float
+            consider_magic_clip = True,  # type: bool
+            consider_endpoints = False,  # type: bool
+            n_startup_trials = 10,  # type: int
+            n_ei_candidates = 24,  # type: int
+            gamma = default_gamma,  # type: Callable[[int], int]
+            weights = default_weights,  # type: Callable[[int], np.ndarray]
+            seed = None  # type: Optional[int]
     ):
         # type: (...) -> None
-
+        
         self.parzen_estimator_parameters = ParzenEstimatorParameters(
             consider_prior, prior_weight, consider_magic_clip, consider_endpoints, weights)
         self.prior_weight = prior_weight
@@ -425,8 +464,8 @@ class TPESampler(base.BaseSampler):
         mu, sigma = map(np.asarray, (mu, sigma))
         if x < 0:
             raise ValueError("Negative argument is given to _lognormal_cdf. x: {}".format(x))
-        denominator = np.log(np.maximum(x, EPS)) - mu
-        numerator = np.maximum(np.sqrt(2) * sigma, EPS)
-        z = denominator / numerator
+        numerator = np.log(np.maximum(x, EPS)) - mu
+        denominator = np.maximum(np.sqrt(2) * sigma, EPS)
+        z = numerator / denominator
         return .5 + .5 * scipy.special.erf(z)
 

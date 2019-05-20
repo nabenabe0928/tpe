@@ -102,11 +102,6 @@ if __name__ == "__main__":
     if not os.path.isdir("exec_screen/{}/{}".format(model, num)):
         os.mkdir("exec_screen/{}/{}".format(model, num))
 
-    if not os.path.isdir("groups/{}".format(model)):
-        os.mkdir("groups/{}".format(model))
-    if not os.path.isdir("groups/{}/{}".format(model, num)):
-        os.mkdir("groups/{}/{}".format(model, num))
-
     if not os.path.isdir("storage/{}".format(model)):
         os.mkdir("storage/{}".format(model))
     if not os.path.isdir("storage/{}/{}".format(model, num)):
@@ -119,8 +114,6 @@ if __name__ == "__main__":
         "\n", \
         "rm storage/{}/{}/*".format(model, num), \
         "echo $USER:~$CWD$ rm storage/{}/{}/*".format(model, num), \
-        "rm groups/{}/{}/*".format(model, num), \
-        "echo $USER:~$CWD$ rm groups/{}/{}/*".format(model, num), \
         "rm evaluation/{}/{}/*".format(model, num), \
         "echo $USER:~$CWD$ rm evaluation/{}/{}/*".format(model, num), \
         "rm log/{}/{}/*".format(model, num), \
@@ -151,7 +144,6 @@ if __name__ == "__main__":
 
     if not rerun:
         files = [
-                    ["groups/{}/{}/".format(model, num) + f for f in os.listdir("simplex/{}/{}".format(model, num))],\
                     ["storage/{}/{}/".format(model, num) + f for f in os.listdir("storage/{}/{}".format(model, num))],\
                     ["log/{}/{}/".format(model, num) + f for f in os.listdir("log/{}/{}".format(model, num))],\
                     ["exec_screen/{}/{}/".format(model, num) + f for f in os.listdir("exec_screen/{}/{}".format(model, num))],\
@@ -224,16 +216,7 @@ if __name__ == "__main__":
         
     if not os.path.isfile("storage/{}/{}/storage.csv".format(model, num)):
         with open("storage/{}/{}/storage.csv".format(model, num), "w", newline = "") as f:
-            pass
-        
-    if not os.path.isfile("groups/{}/{}/group_g.csv".format(model, num)):
-        with open("groups/{}/{}/group_g.csv".format(model, num), "w", newline = "") as f:
-            pass
-
-    if not os.path.isfile("groups/{}/{}/group_l.csv".format(model, num)):
-        with open("groups/{}/{}/group_l.csv".format(model, num), "w", newline = "") as f:
-            pass
-        
+            pass   
 
     for t in range(itr):
         n_log = len(os.listdir("exec_screen/{}/{}".format(model, num)))
