@@ -22,8 +22,18 @@ def get_evaluations(model, num):
                     hyperparameters[param_name].append(eval(row[param_name]))
                 except:
                     hyperparameters[param_name].append(row[param_name])
-    
+
     return hyperparameters
+
+
+def get_var_type(cs_var):
+    if "Integer" in str(type(cs_var)):
+        return "int"
+    elif "Float" in str(type(cs_var)):
+        return "float"
+    elif "Categorical" in str(type(cs_var)):
+        return "cat"
+
 
 def get_variable_features(model):
     with open("feature/{}/feature.csv".format(model), "r", newline = "") as f:
@@ -36,18 +46,18 @@ def get_variable_features(model):
             var_type = row["type"]
             dist = row["dist"]
 
-            if var_type == "c":
+            if var_type == "cat":
                 choices = eval(row["bound"])
                 hp = CSH.CategoricalHyperparameter(name = param_name, choices = choices, default_value = default)
             else:
                 b = eval(row["bound"])
 
-                if var_type == "i":
+                if var_type == "int":
                     if dist == "log":
                         hp = CSH.UniformIntegerHyperparameter(name = row["var_name"], lower = b[0], upper = b[1], default_value = default, log = True)
                     else:
                         hp = CSH.UniformIntegerHyperparameter(name = row["var_name"], lower = b[0], upper = b[1], default_value = default, log = False)
-                elif var_type == "f":
+                elif var_type == "float":
                     if dist == "log":
                         hp = CSH.UniformFloatHyperparameter(name = row["var_name"], lower = b[0], upper = b[1], default_value = default, log = True)
                     else:
@@ -56,8 +66,6 @@ def get_variable_features(model):
             config_space.add_hyperparameter(hp)
     
     return config_space
-            
-            
 
 
 def default_gamma(x, n_sample_low = 25):
@@ -81,19 +89,24 @@ def default_weights(x, n_sample_low = 25):
 class TPESampler():
     def __init__(
             self,
-            cs,
-            consider_prior = True,  # type: bool
-            prior_weight = 1.0,  # type: float
-            consider_magic_clip = True,  # type: bool
-            consider_endpoints = False,  # type: bool
-            n_startup_trials = 10,  # type: int
-            n_ei_candidates = 24,  # type: int
+            model,
+            num,
+            consider_prior = True,
+            prior_weight = 1.0,
+            consider_magic_clip = True,
+            consider_endpoints = False,
+            n_startup_trials = 10,
+            n_ei_candidates = 24, 
             gamma = default_gamma,  # type: Callable[[int], int]
             weights = default_weights,  # type: Callable[[int], np.ndarray]
             seed = None  # type: Optional[int]
     ):
         # type: (...) -> None
         
+        self.config_space = get_variable_features(model)
+        # config_space._hyperparameters[name].lower
+        self.hyperparameters = get_evaluations(model, num)
+
         self.parzen_estimator_parameters = ParzenEstimatorParameters(
             consider_prior, prior_weight, consider_magic_clip, consider_endpoints, weights)
         self.prior_weight = prior_weight
