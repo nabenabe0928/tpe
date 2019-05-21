@@ -13,17 +13,22 @@ def get_evaluations(model, num):
     with open("evaluation/{}/{}/evaluation.csv".format(model, num), "r", newline = "") as f:
         reader = dict(csv.DictReader(f, delimieter = ",", quotechar = '"'))
         param_names = list(csv.DictReader(f, delimieter = ",", quotechar = '"').fieldnames)
-        
-        hyperparameters = {param_name :[] for param_name in param_names}
+        losses = []
+        hyperparameters = {param_name :[] for param_name in param_names if param_name != "loss"}
 
         for row in reader:
             for param_name in param_names:
-                try:
-                    hyperparameters[param_name].append(eval(row[param_name]))
-                except:
-                    hyperparameters[param_name].append(row[param_name])
+                if param_name == "loss":
+                    losses.append(row[param_name])
+                else:
+                    try:
+                        hyperparameters[param_name].append(eval(row[param_name]))
+                    except:
+                        hyperparameters[param_name].append(row[param_name])
 
-    return hyperparameters
+    hyperparameters = {name: np.array(hps) for name, hps in hyperparameters.items()}
+
+    return hyperparameters, losses
 
 
 def get_var_type(cs_var):
@@ -105,7 +110,7 @@ class TPESampler():
         
         self.config_space = get_variable_features(model)
         # config_space._hyperparameters[name].lower
-        self.hyperparameters = get_evaluations(model, num)
+        self.hyperparameters, self.losses = get_evaluations(model, num)
 
         self.parzen_estimator_parameters = ParzenEstimatorParameters(
             consider_prior, prior_weight, consider_magic_clip, consider_endpoints, weights)
