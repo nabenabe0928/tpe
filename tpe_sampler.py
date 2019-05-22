@@ -31,14 +31,18 @@ def get_evaluations(model, num):
     return hyperparameters, losses
 
 
-def get_var_type(cs_var):
-    if "Integer" in str(type(cs_var)):
-        return "int"
-    elif "Float" in str(type(cs_var)):
-        return "float"
-    elif "Categorical" in str(type(cs_var)):
-        return "cat"
+def distribution_type(cs, var_name):
+    
+    cs_dist = str(type(cs._hyperparameters[var_name]))
 
+    if "Integer" in cs_dist:
+        return "int"
+    elif "Float" in cs_dist:
+        return "float"
+    elif "Categorical" in cs_dist:
+        return "cat"
+    else:
+        raise NotImplementedError("The distribution is not implemented.")
 
 def get_variable_features(model):
     with open("feature/{}/feature.csv".format(model), "r", newline = "") as f:
@@ -72,23 +76,22 @@ def get_variable_features(model):
     
     return config_space
 
-
-def default_gamma(x, n_sample_low = 25):
+def default_gamma(x, n_samples_lower = 25):
     # type: (int) -> int
 
-    return min(int(np.ceil(0.25 * np.sqrt(x))), n_sample_low)
+    return min(int(np.ceil(0.25 * np.sqrt(x))), n_samples_lower)
 
 
-def default_weights(x, n_sample_low = 25):
+def default_weights(x, n_samples_lower = 25):
     # type: (int) -> np.ndarray
 
     if x == 0:
         return np.asarray([])
-    elif x < n_sample_low:
+    elif x < n_samples_lower:
         return np.ones(x)
     else:
-        ramp = np.linspace(1.0 / x, 1.0, num=x - n_sample_low)
-        flat = np.ones(n_sample_low)
+        ramp = np.linspace(1.0 / x, 1.0, num=x - n_samples_lower)
+        flat = np.ones(n_samples_lower)
         return np.concatenate([ramp, flat], axis=0)
 
 class TPESampler():
@@ -109,7 +112,6 @@ class TPESampler():
         # type: (...) -> None
         
         self.config_space = get_variable_features(model)
-        # config_space._hyperparameters[name].lower
         self.hyperparameters, self.losses = get_evaluations(model, num)
 
         self.parzen_estimator_parameters = ParzenEstimatorParameters(
@@ -124,192 +126,90 @@ class TPESampler():
         self.rng = np.random.RandomState(seed)
         self.random_sampler = random.RandomSampler(seed=seed)
 
-    def sample(self, storage, study_id, param_name, param_distribution):
+    def sample(self):
         # type: (BaseStorage, int, str, BaseDistribution) -> float
 
-        observation_pairs = storage.get_trial_param_result_pairs(study_id, param_name)
-        if storage.get_study_direction(study_id) == StudyDirection.MAXIMIZE:
-            observation_pairs = [(p, -v) for p, v in observation_pairs]
-
-        n = len(observation_pairs)
+        n = len(self.losses)
 
         if n < self.n_startup_trials:
-            return self.random_sampler.sample(storage, study_id, param_name, param_distribution)
+            pass
+            #return randomsample
 
-        below_param_values, above_param_values = self._split_observation_pairs(
-            list(range(n)), [p[0] for p in observation_pairs], list(range(n)),
-            [p[1] for p in observation_pairs])
+        for var_name in self.hyperparameters.keys():            
+            lower_vals, upper_vals = self._split_observation_pairs(var_name)
 
-        if isinstance(param_distribution, distributions.UniformDistribution):
-            return self._sample_uniform(param_distribution, below_param_values, above_param_values)
-        elif isinstance(param_distribution, distributions.LogUniformDistribution):
-            return self._sample_loguniform(param_distribution, below_param_values,
-                                           above_param_values)
-        elif isinstance(param_distribution, distributions.DiscreteUniformDistribution):
-            return self._sample_discrete_uniform(param_distribution, below_param_values,
-                                                 above_param_values)
-        elif isinstance(param_distribution, distributions.IntUniformDistribution):
-            return self._sample_int(param_distribution, below_param_values, above_param_values)
-        elif isinstance(param_distribution, distributions.CategoricalDistribution):
-            return self._sample_categorical(param_distribution, below_param_values,
-                                            above_param_values)
-        else:
-            distribution_list = [
-                distributions.UniformDistribution.__name__,
-                distributions.LogUniformDistribution.__name__,
-                distributions.DiscreteUniformDistribution.__name__,
-                distributions.IntUniformDistribution.__name__,
-                distributions.CategoricalDistribution.__name__
-            ]
-            raise NotImplementedError("The distribution {} is not implemented. "
-                                      "The parameter distribution should be one of the {}".format(
-                                          param_distribution, distribution_list))
+            _dist = distribution_type(self.config_space, var_name)
 
-    def _split_observation_pairs(
-            self,
-            config_idxs,  # type: List[int]
-            config_vals,  # type: List[float]
-            loss_idxs,  # type: List[int]
-            loss_vals  # type: List[float]
-    ):
-        # type: (...) -> Tuple[np.ndarray, np.ndarray]
+            if _dist == "cat":
+                self._sample_categorical(var_name, lower_vals, upper_vals)
+            else:
+                self._sample_numerical(_dist, var_name, lower_vals, upper_vals)
 
-        config_idxs, config_vals, loss_idxs, loss_vals = map(
-            np.asarray, [config_idxs, config_vals, loss_idxs, loss_vals])
-        n_below = self.gamma(len(config_vals))
+    def _split_observation_pairs(self, var_name):
+        observation_pairs = [[hp, loss] for hp, loss in zip(self.hyperparameters[var_name], self.losses) if hp != None]
+        config_vals, loss_vals = np.asarray([p[0] for p in observation_pairs]), np.asarray([p[1] for p in observation_pairs])
+        
+        n_lower = self.gamma(len(config_vals))
         loss_ascending = np.argsort(loss_vals)
 
-        keep_idxs = set(loss_idxs[loss_ascending[:n_below]])
-        below = [v for i, v in zip(config_idxs, config_vals) if i in keep_idxs]
+        lower_vals = np.asarray(config_vals[loss_ascending[:n_lower]], dtype = float)
+        upper_vals = np.asarray(config_vals[loss_ascending[n_lower:]], dtype = float)
 
-        keep_idxs = set(loss_idxs[loss_ascending[n_below:]])
-        above = [v for i, v in zip(config_idxs, config_vals) if i in keep_idxs]
+        return lower_vals, upper_vals
 
-        below = np.asarray(below, dtype=float)
-        above = np.asarray(above, dtype=float)
-        return below, above
-
-    def _sample_uniform(self, distribution, below, above):
-        # type: (distributions.UniformDistribution, np.ndarray, np.ndarray) -> float
-
-        low = distribution.low
-        high = distribution.high
-        return self._sample_numerical(low, high, below, above)
-
-    def _sample_loguniform(self, distribution, below, above):
-        # type: (distributions.LogUniformDistribution, np.ndarray, np.ndarray) -> float
-
-        low = distribution.low
-        high = distribution.high
-        return self._sample_numerical(low, high, below, above, is_log=True)
-
-    def _sample_discrete_uniform(self, distribution, below, above):
-        # type:(distributions.DiscreteUniformDistribution, np.ndarray, np.ndarray) -> float
-
-        q = distribution.q
-        r = distribution.high - distribution.low
-        # [low, high] is shifted to [0, r] to align sampled values at regular intervals.
-        low = 0 - 0.5 * q
-        high = r + 0.5 * q
-        best_sample = self._sample_numerical(low, high, below, above, q=q) + distribution.low
-        return min(max(best_sample, distribution.low), distribution.high)
-
-    def _sample_int(self, distribution, below, above):
-        # type: (distributions.IntUniformDistribution, np.ndarray, np.ndarray) -> float
-
-        q = 1.0
-        low = distribution.low - 0.5 * q
-        high = distribution.high + 0.5 * q
-        return int(self._sample_numerical(low, high, below, above, q=q))
-
-    def _sample_numerical(
-            self,
-            low,  # type: float
-            high,  # type: float
-            below,  # type: np.ndarray
-            above,  # type: np.ndarray
-            q=None,  # type: Optional[float]
-            is_log=False  # type: bool
-    ):
+    def _sample_numerical(self, _dist, var_name, lower_vals, upper_vals):
         # type: (...) -> float
+        lower_bound, upper_bound = self.config_space._hyperparameters[var_name].lower, self.config_space._hyperparameters[var_name].upper
+
+        is_log = self.config_space._hyperparameters[var_name].log
 
         if is_log:
-            low = np.log(low)
-            high = np.log(high)
-            below = np.log(below)
-            above = np.log(above)
+            lower_bound = np.log(lower_bound)
+            upper_bound = np.log(upper_bound)
+            lower_vals = np.log(lower_vals)
+            upper_vals = np.log(upper_vals)
+        
+        if _dist == "int":
+            lower_bound -= 0.5
+            upper_bound += 0.5
 
         size = (self.n_ei_candidates, )
 
-        parzen_estimator_below = ParzenEstimator(
-            mus=below, low=low, high=high, parameters=self.parzen_estimator_parameters)
-        samples_below = self._sample_from_gmm(
-            parzen_estimator=parzen_estimator_below,
-            low=low,
-            high=high,
-            q=q,
-            is_log=is_log,
-            size=size)
-        log_likelihoods_below = self._gmm_log_pdf(
-            samples=samples_below,
-            parzen_estimator=parzen_estimator_below,
-            low=low,
-            high=high,
-            q=q,
-            is_log=is_log)
+        parzen_estimator_lower = ParzenEstimator(samples = lower_vals, lower = lower_bound, upper = upper_bound, parameters = self.parzen_estimator_parameters)
+        samples_lower = self._sample_from_gmm(parzen_estimator=parzen_estimator_lower, lower = lower_bound, upper = upper_bound, var_type = _dist, is_log = is_log, size = size)
+        log_likelihoods_lower = self._gmm_log_pdf(samples=samples_lower, parzen_estimator=parzen_estimator_lower, lower = lower_bound, upper = upper_bound, var_type = _dist, is_log=is_log)
 
-        parzen_estimator_above = ParzenEstimator(
-            mus=above, low=low, high=high, parameters=self.parzen_estimator_parameters)
+        parzen_estimator_upper = ParzenEstimator(samples = upper_vals, lower = lower_bound, upper = upper_bound, parameters = self.parzen_estimator_parameters)
 
-        log_likelihoods_above = self._gmm_log_pdf(
-            samples=samples_below,
-            parzen_estimator=parzen_estimator_above,
-            low=low,
-            high=high,
-            q=q,
-            is_log=is_log)
+        log_likelihoods_upper = self._gmm_log_pdf(samples=samples_lower, parzen_estimator=parzen_estimator_upper, lower = lower_bound, upper = upper_bound, var_type = _dist, is_log = is_log)
 
-        return float(
-            TPESampler._compare(
-                samples=samples_below, log_l=log_likelihoods_below,
-                log_g=log_likelihoods_above)[0])
+        return float(TPESampler._compare(samples = samples_lower, log_l = log_likelihoods_lower, log_g = log_likelihoods_upper))
 
-    def _sample_categorical(self, distribution, below, above):
-        # type: (distributions.CategoricalDistribution, np.ndarray, np.ndarray) -> float
+    def _sample_categorical(self, var_name, lower_vals, upper_vals):
 
-        choices = distribution.choices
-        below = list(map(int, below))
-        above = list(map(int, above))
-        upper = len(choices)
+        choices = self.config_space._hyperparameters[var_name].choices
+        lower_vals = [choices.index(val) for val in lower_vals]
+        upper_vals = [choices.index(val) for val in upper_vals]
+
+        n_choices = len(choices)
         size = (self.n_ei_candidates, )
 
-        weights_below = self.weights(len(below))
-        counts_below = np.bincount(below, minlength=upper, weights=weights_below)
-        weighted_below = counts_below + self.prior_weight
-        weighted_below /= weighted_below.sum()
-        samples_below = self._sample_from_categorical_dist(weighted_below, size=size)
-        log_likelihoods_below = TPESampler._categorical_log_pdf(samples_below, weighted_below)
+        weights_lower = self.weights(len(lower_vals))
+        counts_lower = np.bincount(lower_vals, minlength = n_choices, weights = weights_lower)
+        weighted_lower = counts_lower + self.prior_weight
+        weighted_lower /= weighted_lower.sum()
+        samples_lower = self._sample_from_categorical_dist(weighted_lower, size = size)
+        log_likelihoods_lower = TPESampler._categorical_log_pdf(samples_lower, weighted_lower)
 
-        weights_above = self.weights(len(above))
-        counts_above = np.bincount(above, minlength=upper, weights=weights_above)
-        weighted_above = counts_above + self.prior_weight
-        weighted_above /= weighted_above.sum()
-        log_likelihoods_above = TPESampler._categorical_log_pdf(samples_below, weighted_above)
+        weights_upper = self.weights(len(upper_vals))
+        counts_upper = np.bincount(upper_vals, minlength = n_choices, weights = weights_upper)
+        weighted_upper = counts_upper + self.prior_weight
+        weighted_upper /= weighted_upper.sum()
+        log_likelihoods_upper = TPESampler._categorical_log_pdf(samples_lower, weighted_upper)
 
-        return int(
-            TPESampler._compare(
-                samples=samples_below, log_l=log_likelihoods_below,
-                log_g=log_likelihoods_above)[0])
+        return int(TPESampler._compare(samples=samples_lower, log_l = log_likelihoods_lower, log_g=log_likelihoods_upper))
 
-    def _sample_from_gmm(
-            self,
-            parzen_estimator,  # type: ParzenEstimator
-            low,  # type: float
-            high,  # type: float
-            q=None,  # type: Optional[float]
-            size=(),  # type: Tuple
-            is_log=False,  # type: bool
-    ):
+    def _sample_from_gmm(self, parzen_estimator, lower, upper, var_type, size=(), is_log = False):
         # type: (...) -> np.ndarray
 
         weights = parzen_estimator.weights
@@ -318,14 +218,14 @@ class TPESampler():
         weights, mus, sigmas = map(np.asarray, (weights, mus, sigmas))
         n_samples = np.prod(size)
 
-        if low >= high:
-            raise ValueError("The 'low' should be lower than the 'high'. "
-                             "But (low, high) = ({}, {}).".format(low, high))
+        if lower >= upper:
+            raise ValueError("The 'lower' should be lower than the 'upper'. "
+                             "But (lower, upper) = ({}, {}).".format(lower, upper))
         samples = np.asarray([], dtype=float)
         while samples.size < n_samples:
             active = np.argmax(self.rng.multinomial(1, weights))
             draw = self.rng.normal(loc=mus[active], scale=sigmas[active])
-            if low <= draw < high:
+            if lower <= draw < upper:
                 samples = np.append(samples, draw)
 
         samples = np.reshape(samples, size)
@@ -333,26 +233,19 @@ class TPESampler():
         if is_log:
             samples = np.exp(samples)
 
-        if q is None:
+        if var_type == "float":
             return samples
-        else:
-            return np.round(samples / q) * q
+        elif var_type == "int":
+            return np.round(samples)
 
-    def _gmm_log_pdf(
-            self,
-            samples,  # type: np.ndarray
-            parzen_estimator,  # type: ParzenEstimator
-            low,  # type: float
-            high,  # type: float
-            q=None,  # type: Optional[float]
-            is_log=False  # type: bool
-    ):
+    def _gmm_log_pdf(self, samples, parzen_estimator, lower, upper, var_type, is_log = False):
         # type: (...) -> np.ndarray
 
         weights = parzen_estimator.weights
         mus = parzen_estimator.mus
         sigmas = parzen_estimator.sigmas
         samples, weights, mus, sigmas = map(np.asarray, (samples, weights, mus, sigmas))
+        
         if samples.size == 0:
             return np.asarray([], dtype=float)
         if weights.ndim != 1:
@@ -364,40 +257,35 @@ class TPESampler():
         if sigmas.ndim != 1:
             raise ValueError("The 'sigmas' should be 2-dimension. "
                              "But sigmas.shape = {}".format(sigmas.shape))
-        _samples = samples
-        samples = _samples.flatten()
+        
+        p_accept = np.sum(weights * (TPESampler._normal_cdf(upper, mus, sigmas) - TPESampler._normal_cdf(lower, mus, sigmas)))
 
-        p_accept = np.sum(
-            weights *
-            (TPESampler._normal_cdf(high, mus, sigmas) - TPESampler._normal_cdf(low, mus, sigmas)))
-
-        if q is None:
-            jacobian = samples[:, None] if is_log else np.ones(samples.shape)[:, None]
+        if var_type == "float":
+            jacobian_inv = samples[:, None] if is_log else np.ones(samples.shape)[:, None]
             if is_log:
                 distance = np.log(samples[:, None]) - mus
             else:
                 distance = samples[:, None] - mus
             mahalanobis = (distance / np.maximum(sigmas, EPS))**2
-            Z = np.sqrt(2 * np.pi) * sigmas * jacobian
-            coefficient = weights / Z / p_accept
-            return_val = TPESampler._logsum_rows(-0.5 * mahalanobis + np.log(coefficient))
+            Z = np.sqrt(2 * np.pi) * sigmas * jacobian_inv
+            coef = weights / Z / p_accept
+            return_val = TPESampler._logsum_rows(-0.5 * mahalanobis + np.log(coef))
         else:
             probabilities = np.zeros(samples.shape, dtype=float)
             cdf_func = TPESampler._log_normal_cdf if is_log else TPESampler._normal_cdf
             for w, mu, sigma in zip(weights, mus, sigmas):
                 if is_log:
-                    upper_bound = np.minimum(samples + q / 2.0, np.exp(high))
-                    lower_bound = np.maximum(samples - q / 2.0, np.exp(low))
+                    upper_bound = np.minimum(samples + 0.5, np.exp(upper))
+                    lower_bound = np.maximum(samples - 0.5, np.exp(lower))
                     lower_bound = np.maximum(0, lower_bound)
                 else:
-                    upper_bound = np.minimum(samples + q / 2.0, high)
-                    lower_bound = np.maximum(samples - q / 2.0, low)
-                inc_amt = w * cdf_func(upper_bound, mu, sigma)
-                inc_amt -= w * cdf_func(lower_bound, mu, sigma)
-                probabilities += inc_amt
+                    upper_bound = np.minimum(samples + 0.5, upper)
+                    lower_bound = np.maximum(samples - 0.5, lower)
+                probabilities += w * (cdf_func(upper_bound, mu, sigma) - cdf_func(lower_bound, mu, sigma))
             return_val = np.log(probabilities + EPS) - np.log(p_accept + EPS)
 
-        return_val.shape = _samples.shape
+        return_val.shape = samples.shape
+        
         return return_val
 
     def _sample_from_categorical_dist(self, probabilities, size=()):
@@ -427,48 +315,37 @@ class TPESampler():
         return return_val
 
     @classmethod
-    def _categorical_log_pdf(
-            cls,
-            sample,  # type: np.ndarray
-            p  # type: np.ndarray
-    ):
-        # type: (...) -> np.ndarray
-
-        if sample.size:
-            return np.log(np.asarray(p)[sample])
+    def _categorical_log_pdf(cls, samples, p):
+        
+        if samples.size:
+            return np.log(np.asarray(p)[samples])
         else:
             return np.asarray([])
 
     @classmethod
     def _compare(cls, samples, log_l, log_g):
-        # type: (np.ndarray, np.ndarray, np.ndarray) -> np.ndarray
-
+        
         samples, log_l, log_g = map(np.asarray, (samples, log_l, log_g))
-        if samples.size:
-            score = log_l - log_g
-            if samples.size != score.size:
-                raise ValueError("The size of the 'samples' and that of the 'score' "
-                                 "should be same. "
-                                 "But (samples.size, score.size) = ({}, {})".format(
-                                     samples.size, score.size))
+        
+        score = log_l - log_g
+        if samples.size != score.size:
+            raise ValueError("The size of the 'samples' and that of the 'score' "
+                             "should be same. "
+                             "But (samples.size, score.size) = ({}, {})".format(
+                                 samples.size, score.size))
 
-            best = np.argmax(score)
-            return np.asarray([samples[best]] * samples.size)
-        else:
-            return np.asarray([])
-
+        best = np.argmax(score)
+        
+        return samples[best]
+        
     @classmethod
     def _logsum_rows(cls, x):
-        # type: (np.ndarray) -> np.ndarray
 
         x = np.asarray(x)
-        m = x.max(axis=1)
         return np.log(np.exp(x).sum(axis=1))
         
     @classmethod
     def _normal_cdf(cls, x, mu, sigma):
-        # type: (float, np.ndarray, np.ndarray) -> np.ndarray
-
         mu, sigma = map(np.asarray, (mu, sigma))
         denominator = x - mu
         numerator = np.maximum(np.sqrt(2) * sigma, EPS)
@@ -477,8 +354,6 @@ class TPESampler():
 
     @classmethod
     def _log_normal_cdf(cls, x, mu, sigma):
-        # type: (float, np.ndarray, np.ndarray) -> np.ndarray
-
         mu, sigma = map(np.asarray, (mu, sigma))
         if x < 0:
             raise ValueError("Negative argument is given to _lognormal_cdf. x: {}".format(x))
