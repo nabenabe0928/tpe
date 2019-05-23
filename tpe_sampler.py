@@ -1,6 +1,7 @@
 import numpy as np
 import scipy.special
 import csv
+import random
 import ConfigSpace as CS
 import ConfigSpace as CSH
 from parzen_estimator import ParzenEstimator
@@ -44,38 +45,6 @@ def distribution_type(cs, var_name):
     else:
         raise NotImplementedError("The distribution is not implemented.")
 
-def get_variable_features(model):
-    with open("feature/{}/feature.csv".format(model), "r", newline = "") as f:
-        reader = dict(csv.DictReader(f, delimieter = ";", quotechar = '"'))
-        config_space = CS.ConfigurationSpace()
-        
-        for row in reader:
-            default = eval(row["default"])
-            param_name = row["var_name"]
-            var_type = row["type"]
-            dist = row["dist"]
-
-            if var_type == "cat":
-                choices = eval(row["bound"])
-                hp = CSH.CategoricalHyperparameter(name = param_name, choices = choices, default_value = default)
-            else:
-                b = eval(row["bound"])
-
-                if var_type == "int":
-                    if dist == "log":
-                        hp = CSH.UniformIntegerHyperparameter(name = row["var_name"], lower = b[0], upper = b[1], default_value = default, log = True)
-                    else:
-                        hp = CSH.UniformIntegerHyperparameter(name = row["var_name"], lower = b[0], upper = b[1], default_value = default, log = False)
-                elif var_type == "float":
-                    if dist == "log":
-                        hp = CSH.UniformFloatHyperparameter(name = row["var_name"], lower = b[0], upper = b[1], default_value = default, log = True)
-                    else:
-                        hp = CSH.UniformFloatHyperparameter(name = row["var_name"], lower = b[0], upper = b[1], default_value = default, log = False)
-            
-            config_space.add_hyperparameter(hp)
-    
-    return config_space
-
 def default_gamma(x, n_samples_lower = 25):
     # type: (int) -> int
 
@@ -95,24 +64,16 @@ def default_weights(x, n_samples_lower = 25):
         return np.concatenate([ramp, flat], axis=0)
 
 class TPESampler():
-    def __init__(
-            self,
-            model,
-            num,
-            consider_prior = True,
-            prior_weight = 1.0,
-            consider_magic_clip = True,
-            consider_endpoints = False,
-            n_startup_trials = 10,
+    def __init__(self, model, num, config_space, consider_prior = True, prior_weight = 1.0,
+            consider_magic_clip = True, consider_endpoints = False, n_startup_trials = 10,
             n_ei_candidates = 24, 
             gamma = default_gamma,  # type: Callable[[int], int]
             weights = default_weights,  # type: Callable[[int], np.ndarray]
-            seed = None  # type: Optional[int]
-    ):
+        ):
         # type: (...) -> None
         
-        self.config_space = get_variable_features(model)
-        self.hyperparameters, self.losses = get_evaluations(model, num)
+        self.config_space = config_space
+        #self.hyperparameters, self.losses = get_evaluations(model, num)
 
         self.parzen_estimator_parameters = ParzenEstimatorParameters(
             consider_prior, prior_weight, consider_magic_clip, consider_endpoints, weights)
@@ -121,19 +82,15 @@ class TPESampler():
         self.n_ei_candidates = n_ei_candidates
         self.gamma = gamma
         self.weights = weights
-        self.seed = seed
-
-        self.rng = np.random.RandomState(seed)
-        self.random_sampler = random.RandomSampler(seed=seed)
-
+        self.rng = np.random.RandomState()
+        
     def sample(self):
         # type: (BaseStorage, int, str, BaseDistribution) -> float
 
         n = len(self.losses)
 
         if n < self.n_startup_trials:
-            pass
-            #return randomsample
+            return self.sample_configuration().get_dictionary()
 
         for var_name in self.hyperparameters.keys():            
             lower_vals, upper_vals = self._split_observation_pairs(var_name)
