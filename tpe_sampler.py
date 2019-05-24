@@ -7,7 +7,6 @@ import ConfigSpace as CSH
 from parzen_estimator import ParzenEstimator
 from parzen_estimator import ParzenEstimatorParameters
 
-
 EPS = 1e-12
 
 def get_evaluations(model, num):
@@ -66,31 +65,30 @@ def default_weights(x, n_samples_lower = 25):
 class TPESampler():
     def __init__(self, model, num, config_space, consider_prior = True, prior_weight = 1.0,
             consider_magic_clip = True, consider_endpoints = False, n_startup_trials = 10,
-            n_ei_candidates = 24, 
-            gamma = default_gamma,  # type: Callable[[int], int]
-            weights = default_weights,  # type: Callable[[int], np.ndarray]
+            n_ei_candidates = 24, gamma_func = default_gamma, weight_func = default_weights
         ):
         # type: (...) -> None
         
         self.config_space = config_space
-        #self.hyperparameters, self.losses = get_evaluations(model, num)
+        self.hyperparameters, self.losses = get_evaluations(model, num)
 
         self.parzen_estimator_parameters = ParzenEstimatorParameters(
-            consider_prior, prior_weight, consider_magic_clip, consider_endpoints, weights)
+            consider_prior, prior_weight, consider_magic_clip, consider_endpoints, weight_func)
         self.prior_weight = prior_weight
         self.n_startup_trials = n_startup_trials
         self.n_ei_candidates = n_ei_candidates
-        self.gamma = gamma
-        self.weights = weights
+        self.gamma_func = gamma_func
+        self.weight_func = weight_func
         self.rng = np.random.RandomState()
         
     def sample(self):
-        # type: (BaseStorage, int, str, BaseDistribution) -> float
-
+        
         n = len(self.losses)
 
         if n < self.n_startup_trials:
-            return self.sample_configuration().get_dictionary()
+            return self.config_space.sample_configuration().get_dictionary()
+
+        sample_dict = {var_name : None for var_name in self.hyperparameters.keys()}
 
         for var_name in self.hyperparameters.keys():            
             lower_vals, upper_vals = self._split_observation_pairs(var_name)
@@ -98,15 +96,18 @@ class TPESampler():
             _dist = distribution_type(self.config_space, var_name)
 
             if _dist == "cat":
-                self._sample_categorical(var_name, lower_vals, upper_vals)
+                cat_idx = sample_dict[var_name] = self._sample_categorical(var_name, lower_vals, upper_vals)
+                sample_dict[var_name] = self.config_space._hyperparameters[var_name].choices[cat_idx]
             else:
-                self._sample_numerical(_dist, var_name, lower_vals, upper_vals)
+                sample_dict[var_name] = self._sample_numerical(_dist, var_name, lower_vals, upper_vals)
+        
+        return sample_dict
 
     def _split_observation_pairs(self, var_name):
         observation_pairs = [[hp, loss] for hp, loss in zip(self.hyperparameters[var_name], self.losses) if hp != None]
         config_vals, loss_vals = np.asarray([p[0] for p in observation_pairs]), np.asarray([p[1] for p in observation_pairs])
         
-        n_lower = self.gamma(len(config_vals))
+        n_lower = self.gamma_func(len(config_vals))
         loss_ascending = np.argsort(loss_vals)
 
         lower_vals = np.asarray(config_vals[loss_ascending[:n_lower]], dtype = float)
@@ -115,9 +116,8 @@ class TPESampler():
         return lower_vals, upper_vals
 
     def _sample_numerical(self, _dist, var_name, lower_vals, upper_vals):
-        # type: (...) -> float
-        lower_bound, upper_bound = self.config_space._hyperparameters[var_name].lower, self.config_space._hyperparameters[var_name].upper
 
+        lower_bound, upper_bound = self.config_space._hyperparameters[var_name].lower, self.config_space._hyperparameters[var_name].upper
         is_log = self.config_space._hyperparameters[var_name].log
 
         if is_log:
@@ -151,14 +151,14 @@ class TPESampler():
         n_choices = len(choices)
         size = (self.n_ei_candidates, )
 
-        weights_lower = self.weights(len(lower_vals))
+        weights_lower = self.weight_func(len(lower_vals))
         counts_lower = np.bincount(lower_vals, minlength = n_choices, weights = weights_lower)
         weighted_lower = counts_lower + self.prior_weight
         weighted_lower /= weighted_lower.sum()
         samples_lower = self._sample_from_categorical_dist(weighted_lower, size = size)
         log_likelihoods_lower = TPESampler._categorical_log_pdf(samples_lower, weighted_lower)
 
-        weights_upper = self.weights(len(upper_vals))
+        weights_upper = self.weight_func(len(upper_vals))
         counts_upper = np.bincount(upper_vals, minlength = n_choices, weights = weights_upper)
         weighted_upper = counts_upper + self.prior_weight
         weighted_upper /= weighted_upper.sum()
@@ -167,8 +167,7 @@ class TPESampler():
         return int(TPESampler._compare(samples=samples_lower, log_l = log_likelihoods_lower, log_g=log_likelihoods_upper))
 
     def _sample_from_gmm(self, parzen_estimator, lower, upper, var_type, size=(), is_log = False):
-        # type: (...) -> np.ndarray
-
+        
         weights = parzen_estimator.weights
         mus = parzen_estimator.mus
         sigmas = parzen_estimator.sigmas
@@ -181,40 +180,23 @@ class TPESampler():
         samples = np.asarray([], dtype=float)
         while samples.size < n_samples:
             active = np.argmax(self.rng.multinomial(1, weights))
-            draw = self.rng.normal(loc=mus[active], scale=sigmas[active])
+            draw = self.rng.normal(loc = mus[active], scale = sigmas[active])
             if lower <= draw < upper:
                 samples = np.append(samples, draw)
 
-        samples = np.reshape(samples, size)
-
         if is_log:
             samples = np.exp(samples)
-
         if var_type == "float":
             return samples
         elif var_type == "int":
             return np.round(samples)
 
     def _gmm_log_pdf(self, samples, parzen_estimator, lower, upper, var_type, is_log = False):
-        # type: (...) -> np.ndarray
-
+        
         weights = parzen_estimator.weights
         mus = parzen_estimator.mus
         sigmas = parzen_estimator.sigmas
         samples, weights, mus, sigmas = map(np.asarray, (samples, weights, mus, sigmas))
-        
-        if samples.size == 0:
-            return np.asarray([], dtype=float)
-        if weights.ndim != 1:
-            raise ValueError("The 'weights' should be 2-dimension. "
-                             "But weights.shape = {}".format(weights.shape))
-        if mus.ndim != 1:
-            raise ValueError("The 'mus' should be 2-dimension. "
-                             "But mus.shape = {}".format(mus.shape))
-        if sigmas.ndim != 1:
-            raise ValueError("The 'sigmas' should be 2-dimension. "
-                             "But sigmas.shape = {}".format(sigmas.shape))
-        
         p_accept = np.sum(weights * (TPESampler._normal_cdf(upper, mus, sigmas) - TPESampler._normal_cdf(lower, mus, sigmas)))
 
         if var_type == "float":
@@ -228,8 +210,8 @@ class TPESampler():
             coef = weights / Z / p_accept
             return_val = TPESampler._logsum_rows(-0.5 * mahalanobis + np.log(coef))
         else:
-            probabilities = np.zeros(samples.shape, dtype=float)
-            cdf_func = TPESampler._log_normal_cdf if is_log else TPESampler._normal_cdf
+            probabilities = np.zeros(samples.shape, dtype = float)
+            cdf = TPESampler._log_normal_cdf if is_log else TPESampler._normal_cdf
             for w, mu, sigma in zip(weights, mus, sigmas):
                 if is_log:
                     upper_bound = np.minimum(samples + 0.5, np.exp(upper))
@@ -238,7 +220,7 @@ class TPESampler():
                 else:
                     upper_bound = np.minimum(samples + 0.5, upper)
                     lower_bound = np.maximum(samples - 0.5, lower)
-                probabilities += w * (cdf_func(upper_bound, mu, sigma) - cdf_func(lower_bound, mu, sigma))
+                probabilities += w * (cdf(upper_bound, mu, sigma) - cdf(lower_bound, mu, sigma))
             return_val = np.log(probabilities + EPS) - np.log(p_accept + EPS)
 
         return_val.shape = samples.shape
@@ -246,8 +228,7 @@ class TPESampler():
         return return_val
 
     def _sample_from_categorical_dist(self, probabilities, size=()):
-        # type: (Union[np.ndarray, np.ndarray], Tuple) -> Union[np.ndarray, np.ndarray]
-
+        
         if probabilities.size == 1 and isinstance(probabilities[0], np.ndarray):
             probabilities = probabilities[0]
         probabilities = np.asarray(probabilities)
@@ -261,12 +242,9 @@ class TPESampler():
 
         if size == (0, ):
             return np.asarray([], dtype=float)
-        assert len(size)
-        assert probabilities.ndim == 1
 
         n_draws = int(np.prod(size))
-        sample = self.rng.multinomial(n=1, pvals=probabilities, size=int(n_draws))
-        assert sample.shape == size + (probabilities.size, )
+        sample = self.rng.multinomial(n = 1, pvals = probabilities, size = int(n_draws))
         return_val = np.dot(sample, np.arange(probabilities.size))
         return_val.shape = size
         return return_val
@@ -282,15 +260,8 @@ class TPESampler():
     @classmethod
     def _compare(cls, samples, log_l, log_g):
         
-        samples, log_l, log_g = map(np.asarray, (samples, log_l, log_g))
-        
+        samples, log_l, log_g = map(np.asarray, (samples, log_l, log_g))        
         score = log_l - log_g
-        if samples.size != score.size:
-            raise ValueError("The size of the 'samples' and that of the 'score' "
-                             "should be same. "
-                             "But (samples.size, score.size) = ({}, {})".format(
-                                 samples.size, score.size))
-
         best = np.argmax(score)
         
         return samples[best]
@@ -299,7 +270,7 @@ class TPESampler():
     def _logsum_rows(cls, x):
 
         x = np.asarray(x)
-        return np.log(np.exp(x).sum(axis=1))
+        return np.log(np.exp(x).sum(axis = 1))
         
     @classmethod
     def _normal_cdf(cls, x, mu, sigma):
