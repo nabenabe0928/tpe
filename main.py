@@ -29,7 +29,6 @@ if __name__ == "__main__":
         argp.add_argument("-num", type = int)
         argp.add_argument("-parallel", type = int, default = 1)
         argp.add_argument("-itr", type = int, default = 60)
-        argp.add_argument("-round", type = int, default = 1, choices = [0, 1])
         argp.add_argument("-cuda", type = int, nargs = "*", default = [1])
         argp.add_argument("-re", type = int, default = 0, choices = [0, 1])
         args = argp.parse_args()
@@ -38,7 +37,6 @@ if __name__ == "__main__":
         num = args.num
         n_parallel = args.parallel
         itr = args.itr
-        round = bool(args.round)
         rerun = bool(args.re)
         cudas = args.cuda
         sys.argv[11]
@@ -49,7 +47,7 @@ if __name__ == "__main__":
         models = [file.split(".")[0] for file in os.listdir( "model" )]
         
         print("YOUR COMMAND MUST BE LIKE AS FOLLOWED:")
-        print(pycolor.YELLOW + "python main.py -model CNN -num 0 -parallel 1 -itr 10 -round 0 -cuda 0 1 -re 0" + pycolor.END)
+        print(pycolor.YELLOW + "python main.py -model CNN -num 0 -parallel 1 -itr 10 -cuda 0 1 -re 0" + pycolor.END)
         print("")
         print(pycolor.RED + "SET the variables shown below:" + pycolor.END)
         print("model: which model you run:")
@@ -69,11 +67,6 @@ if __name__ == "__main__":
         print("")
         print("     itr: how many times evaluating the model: ")
         print("\t[any natural number]")
-        print("")
-        print("   round: whether you round up the hyperparameter when one of them is out of boundaries.")
-        print("\t1: Round up and Evaluate")
-        print("\t0: Not Round up and Record -inf as output.")
-        print("\t### NOTICE ### : When you examine some models by fixing the hyperparameters, try to set the round 1")
         print("")
         print("   cuda: Which cuda drivers do you want to make visible.")
         print("\t[any devices number's array. up to No.GPU you have in the device - 1]")
@@ -127,11 +120,11 @@ if __name__ == "__main__":
         "USER=$(whoami)", \
         "CWD=$(dirname $0)", \
         "\n", \
-        "echo $USER:~$CWD$ python tpe_sampler.py -model {} -num {} -round {}".format(model, num, int(round)), \
-        "python tpe_sampler.py -model {} -num {} -round {}".format(model, num, int(round)), \
+        "echo $USER:~$CWD$ python tpe_sampler.py -model {} -num {}".format(model, num), \
+        "python tpe_sampler.py -model {} -num {}".format(model, num), \
         "echo",  \
-        "echo $USER:~$CWD$ python env.py -model {} -num {} -round {} -cuda {} -parallel {}".format(model, num, int(round), 0, n_parallel), \
-        "python env.py -model {} -num {} -round {} -cuda {} -parallel {}".format(model, num, int(round), 0, n_parallel), \
+        "echo $USER:~$CWD$ python env.py -model {} -num {} -cuda {}".format(model, num, 0), \
+        "python env.py -model {} -num {} -cuda {}".format(model, num, 0), \
         "echo",  \
         "echo $USER:~$CWD$ ./run.sh", \
         "./run.sh", \
@@ -217,6 +210,8 @@ if __name__ == "__main__":
     if not os.path.isfile("storage/{}/{}/storage.csv".format(model, num)):
         with open("storage/{}/{}/storage.csv".format(model, num), "w", newline = "") as f:
             pass   
+
+    occupied_cuda = [False for _ in cudas]
 
     for t in range(itr):
         n_log = len(os.listdir("exec_screen/{}/{}".format(model, num)))

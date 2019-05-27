@@ -1,3 +1,11 @@
+from tpe_sampler import TPESampler
+from argparse import ArgumentParser as ArgPar
+
+def optimize(model, num):
+    sampler = TPESampler(model, num, config_space)
+    objective_func = eval(model)(**config_space)
+    objective_func.train()
+
 def get_variable_features(model):
     with open("feature/{}/feature.csv".format(model), "r", newline = "") as f:
         reader = dict(csv.DictReader(f, delimieter = ";", quotechar = '"'))
@@ -29,3 +37,13 @@ def get_variable_features(model):
             config_space.add_hyperparameter(hp)
     
     return config_space
+
+
+if __name__ == "__main__":
+    argp = ArgPar()
+    argp.add_argument("-model", type = str)
+    argp.add_argument("-num", type = int)
+    args = argp.parse_args()
+        
+    model = args.model
+    num = args.num

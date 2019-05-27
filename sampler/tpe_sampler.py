@@ -31,8 +31,7 @@ def get_evaluations(model, num):
     return hyperparameters, losses
 
 
-def distribution_type(cs, var_name):
-    
+def distribution_type(cs, var_name):    
     cs_dist = str(type(cs._hyperparameters[var_name]))
 
     if "Integer" in cs_dist:
@@ -45,29 +44,25 @@ def distribution_type(cs, var_name):
         raise NotImplementedError("The distribution is not implemented.")
 
 def default_gamma(x, n_samples_lower = 25):
-    # type: (int) -> int
 
     return min(int(np.ceil(0.25 * np.sqrt(x))), n_samples_lower)
 
 
 def default_weights(x, n_samples_lower = 25):
-    # type: (int) -> np.ndarray
-
     if x == 0:
         return np.asarray([])
     elif x < n_samples_lower:
         return np.ones(x)
     else:
-        ramp = np.linspace(1.0 / x, 1.0, num=x - n_samples_lower)
+        ramp = np.linspace(1.0 / x, 1.0, num = x - n_samples_lower)
         flat = np.ones(n_samples_lower)
-        return np.concatenate([ramp, flat], axis=0)
+        return np.concatenate([ramp, flat], axis = 0)
 
 class TPESampler():
     def __init__(self, model, num, config_space, consider_prior = True, prior_weight = 1.0,
             consider_magic_clip = True, consider_endpoints = False, n_startup_trials = 10,
             n_ei_candidates = 24, gamma_func = default_gamma, weight_func = default_weights
         ):
-        # type: (...) -> None
         
         self.config_space = config_space
         self.hyperparameters, self.losses = get_evaluations(model, num)
@@ -81,8 +76,7 @@ class TPESampler():
         self.weight_func = weight_func
         self.rng = np.random.RandomState()
         
-    def sample(self):
-        
+    def sample(self):        
         n = len(self.losses)
 
         if n < self.n_startup_trials:
