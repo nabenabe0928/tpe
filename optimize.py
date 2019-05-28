@@ -4,8 +4,11 @@ from sampler.tpe_sampler import TPESampler
 from argparse import ArgumentParser as ArgPar
 from objective_functions.train import func
 
-def objective_func(model, num, n_cuda, n_jobs, config_space):
-    hp_dict = TPESampler(model, num, config_space)
+def objective_func(model, num, n_cuda, n_jobs, config_space, n_startup_trials = 10):
+    if n_jobs < n_startup_trials:
+        hp_dict = config_space.sample_configuration().get_dictionary()
+    else:
+        hp_dict = TPESampler(model, num, config_space, n_jobs, n_startup_trials = n_startup_trials).sample()
     func(hp_dict, model, num, n_cuda, n_jobs)
 
 def optimize(model, num, config_space, max_jobs = 100, n_parallels = None):

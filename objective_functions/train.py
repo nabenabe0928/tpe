@@ -5,11 +5,13 @@ import torch.optim as optim
 import datetime
 import csv
 import os
-from dataset import get_data
+
 from tqdm import tqdm
-from model.CNN import CNN
 from argparse import ArgumentParser as ArgPar
 from collections import namedtuple
+from objective_functions.dataset import get_data
+from objective_functions.model.CNN import CNN
+
 
 def accuracy(y, target):
     pred = y.data.max(1, keepdim = True)[1]
@@ -34,7 +36,7 @@ def print_result(values, model, num, n_jobs):
     s = f_vars.format(*values)
     print(s)
 
-    with open("{}/{}/log{}.csv".format(model, num, n_jobs), "a", newline = "") as f:
+    with open("log/{}/{}/log{}.csv".format(model, num, n_jobs), "a", newline = "") as f:
         writer = csv.writer(f, delimiter = ",", quotechar = " ")
         s += "\n"
         writer.writerow(s)
@@ -82,7 +84,7 @@ def test(device, optimizer, learner, test_data, loss_func):
     return float(test_acc) / n_test, test_loss / n_test
 
 def main(learner, n_cuda, model, num, n_jobs):
-
+    
     if torch.cuda.is_available():
         device = torch.device("cuda", n_cuda) 
     else:
@@ -139,7 +141,7 @@ def func(hp_dict, model, num, n_cuda, n_jobs):
     hyperparameters = hp_tuple(**hp_dict)
     learner = eval(model)(hyperparameters)
     
-    with open("{}/{}/log{}.csv".format(model, num, n_jobs), "w", newline = "") as f:
+    with open("log/{}/{}/log{}.csv".format(model, num, n_jobs), "w", newline = "") as f:
         writer = csv.writer(f, delimiter = ",", quotechar = " ")
         s = "### Hyperparameters ### \n"
 
@@ -159,17 +161,17 @@ def func(hp_dict, model, num, n_cuda, n_jobs):
 
 def save_evaluation(hp_dict, model, num):
     
-    if os.path.isfile("{}/{}/evaluation.csv".format(model, num)):
+    if os.path.isfile("evaluation/{}/{}/evaluation.csv".format(model, num)):
     
-        with open("{}/{}/evaluation.csv".format(model, num), "r", newline = "") as f:
+        with open("evaluation/{}/{}/evaluation.csv".format(model, num), "r", newline = "") as f:
             head = list(csv.reader(f, delimiter = ",", quotechar = "'"))[0]
         
-        with open("{}/{}/evaluation.csv".format(model, num), "a", newline = "") as f:
+        with open("evaluation/{}/{}/evaluation.csv".format(model, num), "a", newline = "") as f:
             writer = csv.writer(f, delimiter = ",", quotechar = "'")
             row = [hp_dict[k] for k in head]
             writer.writerow(row)
     else:
-        with open("{}/{}/evaluation.csv".format(model, num), "w", newline = "") as f:
+        with open("evaluation/{}/{}/evaluation.csv".format(model, num), "w", newline = "") as f:
             writer = csv.DictWriter(f, delimiter = ",", quotechar = "'", fieldnames = hp_dict.keys())
             writer.writeheader()
             writer.writerow(hp_dict)

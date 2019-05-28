@@ -4,28 +4,30 @@ import csv
 import random
 import ConfigSpace as CS
 import ConfigSpace as CSH
-from parzen_estimator import ParzenEstimator
-from parzen_estimator import ParzenEstimatorParameters
+from sampler.parzen_estimator import ParzenEstimator
+from sampler.parzen_estimator import ParzenEstimatorParameters
 
 EPS = 1e-12
 
 def get_evaluations(model, num):
     with open("evaluation/{}/{}/evaluation.csv".format(model, num), "r", newline = "") as f:
-        reader = dict(csv.DictReader(f, delimieter = ",", quotechar = '"'))
-        param_names = list(csv.DictReader(f, delimieter = ",", quotechar = '"').fieldnames)
+
+        reader = list(csv.DictReader(f, delimiter = ",", quotechar = '"'))
+        param_names = list(reader[0].keys())
+        
         losses = []
         hyperparameters = {param_name :[] for param_name in param_names if param_name != "loss"}
 
         for row in reader:
             for param_name in param_names:
                 if param_name == "loss":
-                    losses.append(row[param_name])
+                    losses.append(float(row[param_name]))
                 else:
                     try:
                         hyperparameters[param_name].append(eval(row[param_name]))
                     except:
                         hyperparameters[param_name].append(row[param_name])
-
+    
     hyperparameters = {name: np.array(hps) for name, hps in hyperparameters.items()}
 
     return hyperparameters, losses
@@ -59,7 +61,7 @@ def default_weights(x, n_samples_lower = 25):
         return np.concatenate([ramp, flat], axis = 0)
 
 class TPESampler():
-    def __init__(self, model, num, config_space, consider_prior = True, prior_weight = 1.0,
+    def __init__(self, model, num, config_space, n_jobs, consider_prior = True, prior_weight = 1.0,
             consider_magic_clip = True, consider_endpoints = False, n_startup_trials = 10,
             n_ei_candidates = 24, gamma_func = default_gamma, weight_func = default_weights
         ):
@@ -103,9 +105,9 @@ class TPESampler():
         
         n_lower = self.gamma_func(len(config_vals))
         loss_ascending = np.argsort(loss_vals)
-
-        lower_vals = np.asarray(config_vals[loss_ascending[:n_lower]], dtype = float)
-        upper_vals = np.asarray(config_vals[loss_ascending[n_lower:]], dtype = float)
+        
+        lower_vals = np.asarray(config_vals[loss_ascending[:n_lower]])
+        upper_vals = np.asarray(config_vals[loss_ascending[n_lower:]])
 
         return lower_vals, upper_vals
 
@@ -134,7 +136,7 @@ class TPESampler():
 
         log_likelihoods_upper = self._gmm_log_pdf(samples=samples_lower, parzen_estimator=parzen_estimator_upper, lower = lower_bound, upper = upper_bound, var_type = _dist, is_log = is_log)
 
-        return float(TPESampler._compare(samples = samples_lower, log_l = log_likelihoods_lower, log_g = log_likelihoods_upper))
+        return eval(_dist)(TPESampler._compare(samples = samples_lower, log_l = log_likelihoods_lower, log_g = log_likelihoods_upper))
 
     def _sample_categorical(self, var_name, lower_vals, upper_vals):
 
@@ -277,7 +279,7 @@ class TPESampler():
     @classmethod
     def _log_normal_cdf(cls, x, mu, sigma):
         mu, sigma = map(np.asarray, (mu, sigma))
-        if x < 0:
+        if np.any(x < 0):
             raise ValueError("Negative argument is given to _lognormal_cdf. x: {}".format(x))
         numerator = np.log(np.maximum(x, EPS)) - mu
         denominator = np.maximum(np.sqrt(2) * sigma, EPS)

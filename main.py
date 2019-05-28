@@ -1,9 +1,7 @@
-from argparse import ArgumentParser as ArgPar
 import subprocess as sp
 import sys
-import math
 import os
-import time
+from optimize import optimize
 
 class pycolor:
     BLACK = '\033[30m'
@@ -20,34 +18,17 @@ class pycolor:
     INVISIBLE = '\033[08m'
     REVERCE = '\033[07m'    
 
-if __name__ == "__main__":
-    sp.call('export SINGULARITY_BINDPATH="~/research/AIST_TPE"', shell = True)
 
-    try:
-        argp = ArgPar()
-        argp.add_argument("-model", type = str)
-        argp.add_argument("-num", type = int)
-        argp.add_argument("-parallel", type = int, default = 1)
-        argp.add_argument("-itr", type = int, default = 60)
-        argp.add_argument("-cuda", type = int, nargs = "*", default = [1])
-        argp.add_argument("-re", type = int, default = 0, choices = [0, 1])
-        args = argp.parse_args()
-        
-        model = args.model
-        num = args.num
-        n_parallel = args.parallel
-        itr = args.itr
-        rerun = bool(args.re)
-        cudas = args.cuda
-        sys.argv[11]
-
-    except Exception:
+def main(config_space, model = None, num = None, n_parallels = None, n_jobs = None, rerun = None):
+    
+    if model is None or num is None or n_parallels is None or rerun is None:
         print("")
         print("###### ERROR ######")
-        models = [file.split(".")[0] for file in os.listdir( "model" )]
+        models = [file.split(".")[0] for file in os.listdir( "objective_functions/model" )]
         
         print("YOUR COMMAND MUST BE LIKE AS FOLLOWED:")
-        print(pycolor.YELLOW + "python main.py -model CNN -num 0 -parallel 1 -itr 10 -cuda 0 1 -re 0" + pycolor.END)
+        print(pycolor.YELLOW + "python ####.py -num 0 -parallel 2 -jobs 10 -re 0" + pycolor.END)
+        #print(pycolor.YELLOW + "python main.py -model CNN -num 0 -parallel 1 -itr 10 -cuda 0 1 -re 0" + pycolor.END)
         print("")
         print(pycolor.RED + "SET the variables shown below:" + pycolor.END)
         print("model: which model you run:")
@@ -65,12 +46,8 @@ if __name__ == "__main__":
         print("paralell: how many resources parallelized: ")
         print("\t[0, 1, 2, ...]")
         print("")
-        print("     itr: how many times evaluating the model: ")
+        print("    jobs: how many times evaluating the model: ")
         print("\t[any natural number]")
-        print("")
-        print("   cuda: Which cuda drivers do you want to make visible.")
-        print("\t[any devices number's array. up to No.GPU you have in the device - 1]")
-        print("\te.g. -cuda 0 1 # when you have at least 2 cuda drivers in your device.")
         print("")
         print("     re: When you want to restart the searching.")
         print("\t0 or 1 : Default is False(= 0)")
@@ -80,15 +57,19 @@ if __name__ == "__main__":
         print("")
         sys.exit()
     
+    if not os.path.isdir("evaluation"):
+        os.mkdir("evaluation")
     if not os.path.isdir("evaluation/{}".format(model)):
         os.mkdir("evaluation/{}".format(model))
     if not os.path.isdir("evaluation/{}/{}".format(model, num)):
         os.mkdir("evaluation/{}/{}".format(model, num))
 
-    if not os.path.isdir("exec_screen/{}".format(model)):
-        os.mkdir("exec_screen/{}".format(model))
-    if not os.path.isdir("exec_screen/{}/{}".format(model, num)):
-        os.mkdir("exec_screen/{}/{}".format(model, num))
+    if not os.path.isdir("log"):
+        os.mkdir("log")
+    if not os.path.isdir("log/{}".format(model)):
+        os.mkdir("log/{}".format(model))
+    if not os.path.isdir("log/{}/{}".format(model, num)):
+        os.mkdir("log/{}/{}".format(model, num))
 
     init_sh = \
         ["#!/bin/bash", \
@@ -97,36 +78,17 @@ if __name__ == "__main__":
         "\n", \
         "rm evaluation/{}/{}/*".format(model, num), \
         "echo $USER:~$CWD$ rm evaluation/{}/{}/*".format(model, num), \
-        "rm exec_screen/{}/{}/*".format(model, num), \
-        "echo $USER:~$CWD$ rm exec_screen/{}/{}/*".format(model,num), \
+        "rm log/{}/{}/*".format(model, num), \
+        "echo $USER:~$CWD$ rm log/{}/{}/*".format(model,num), \
         ]
-
-    main_sh = \
-        ["#!/bin/bash", \
-        "USER=$(whoami)", \
-        "CWD=$(dirname $0)", \
-        "\n", \
-        "echo $USER:~$CWD$ python tpe_sampler.py -model {} -num {}".format(model, num), \
-        "python tpe_sampler.py -model {} -num {}".format(model, num), \
-        "echo",  \
-        "echo $USER:~$CWD$ python env.py -model {} -num {} -cuda {}".format(model, num, 0), \
-        "python env.py -model {} -num {} -cuda {}".format(model, num, 0), \
-        "echo",  \
-        "echo $USER:~$CWD$ ./run.sh", \
-        "./run.sh", \
-        "echo",  \
-        ]
-    
-    cuda_script_idx = [i for i, s in enumerate(main_sh) if "-cuda" in s]
-    n_cudas = len(cudas)
-    script = ""
 
     if not rerun:
         files = [
-                    ["exec_screen/{}/{}/".format(model, num) + f for f in os.listdir("exec_screen/{}/{}".format(model, num))],\
+                    ["log/{}/{}/".format(model, num) + f for f in os.listdir("log/{}/{}".format(model, num))],\
                     ["evaluation/{}/{}/".format(model, num) + f for f in os.listdir("evaluation/{}/{}".format(model, num))] ]
         
         rm_files = []
+        script = ""
 
         for line in init_sh:
             script += line + "\n"
@@ -176,9 +138,9 @@ if __name__ == "__main__":
             print("#########################")
             print("")
     else:
-        n_ex = os.listdir("exec_screen/{}/{}".format(model, num))
+        n_ex = os.listdir("log/{}/{}".format(model, num))
         for del_idx in range(max(0, n_ex - 1), n_ex):
-            sp.call("rm {}".format("exec_screen/{}/{}/exec{}.log".format(model, num, del_idx)), shell = True)
+            sp.call("rm {}".format("log/{}/{}/log{}.csv".format(model, num, del_idx)), shell = True)
 
         with open("init.sh", "w") as f:
             f.writelines(script)
@@ -189,30 +151,4 @@ if __name__ == "__main__":
     print("#########################")
     print("")
         
-    occupied_cuda = [False for _ in cudas]
-
-    for t in range(itr):
-        n_log = len(os.listdir("exec_screen/{}/{}".format(model, num)))
-        print("")
-        print("")
-        print("#########################")
-        print("####### evals {:0>3} #######".format(1 + n_log))
-        print("#########################")
-        print("")
-        print("Will use the cuda visible device {}".format(cudas[(t + 1) % n_cudas]))
-        print("")
-        print("")
-        script = ""
-        
-        for idx in cuda_script_idx:
-            main_sh[idx] = main_sh[idx].split("-cuda")[0] + "-cuda {}".format(cudas[(t + 1) % n_cudas])
-
-        for line in main_sh:
-            script += line + "\n"
-
-        with open("main.sh", "w") as f:
-            f.writelines(script)
-        
-        sp.call("chmod +x main.sh", shell = True)
-        sp.call("./main.sh > exec_screen/{}/{}/exec{}.log".format(model, num, n_log), shell = True)
-        
+    optimize(model, num, config_space, max_jobs = n_jobs, n_parallels = n_parallels)
