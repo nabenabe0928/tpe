@@ -6,7 +6,9 @@ from objective_functions.train import func
 
 def objective_func(model, num, n_cuda, n_jobs, config_space, n_startup_trials = 10):
     if n_jobs < n_startup_trials:
-        hp_dict = config_space.sample_configuration().get_dictionary()
+        for _ in range(n_jobs + 1):
+            hp_dict = config_space.sample_configuration().get_dictionary()
+        
     else:
         hp_dict = TPESampler(model, num, config_space, n_jobs, n_startup_trials = n_startup_trials).sample()
     func(hp_dict, model, num, n_cuda, n_jobs)
