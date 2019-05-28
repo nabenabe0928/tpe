@@ -85,32 +85,18 @@ if __name__ == "__main__":
     if not os.path.isdir("evaluation/{}/{}".format(model, num)):
         os.mkdir("evaluation/{}/{}".format(model, num))
 
-    if not os.path.isdir("log/{}".format(model)):
-        os.mkdir("log/{}".format(model))
-    if not os.path.isdir("log/{}/{}".format(model, num)):
-        os.mkdir("log/{}/{}".format(model, num))
-
     if not os.path.isdir("exec_screen/{}".format(model)):
         os.mkdir("exec_screen/{}".format(model))
     if not os.path.isdir("exec_screen/{}/{}".format(model, num)):
         os.mkdir("exec_screen/{}/{}".format(model, num))
-
-    if not os.path.isdir("storage/{}".format(model)):
-        os.mkdir("storage/{}".format(model))
-    if not os.path.isdir("storage/{}/{}".format(model, num)):
-        os.mkdir("storage/{}/{}".format(model, num))    
 
     init_sh = \
         ["#!/bin/bash", \
         "USER=$(whoami)", \
         "CWD=$(dirname $0)", \
         "\n", \
-        "rm storage/{}/{}/*".format(model, num), \
-        "echo $USER:~$CWD$ rm storage/{}/{}/*".format(model, num), \
         "rm evaluation/{}/{}/*".format(model, num), \
         "echo $USER:~$CWD$ rm evaluation/{}/{}/*".format(model, num), \
-        "rm log/{}/{}/*".format(model, num), \
-        "echo $USER:~$CWD$ rm log/{}/{}/*".format(model,num), \
         "rm exec_screen/{}/{}/*".format(model, num), \
         "echo $USER:~$CWD$ rm exec_screen/{}/{}/*".format(model,num), \
         ]
@@ -137,8 +123,6 @@ if __name__ == "__main__":
 
     if not rerun:
         files = [
-                    ["storage/{}/{}/".format(model, num) + f for f in os.listdir("storage/{}/{}".format(model, num))],\
-                    ["log/{}/{}/".format(model, num) + f for f in os.listdir("log/{}/{}".format(model, num))],\
                     ["exec_screen/{}/{}/".format(model, num) + f for f in os.listdir("exec_screen/{}/{}".format(model, num))],\
                     ["evaluation/{}/{}/".format(model, num) + f for f in os.listdir("evaluation/{}/{}".format(model, num))] ]
         
@@ -192,9 +176,8 @@ if __name__ == "__main__":
             print("#########################")
             print("")
     else:
-        n_log = len(os.listdir("log/{}/{}".format(model, num)))
         n_ex = os.listdir("exec_screen/{}/{}".format(model, num))
-        for del_idx in range(n_log, n_ex):
+        for del_idx in range(max(0, n_ex - 1), n_ex):
             sp.call("rm {}".format("exec_screen/{}/{}/exec{}.log".format(model, num, del_idx)), shell = True)
 
         with open("init.sh", "w") as f:
@@ -205,12 +188,7 @@ if __name__ == "__main__":
     print("##### RENEW THE ENV #####")
     print("#########################")
     print("")
-
         
-    if not os.path.isfile("storage/{}/{}/storage.csv".format(model, num)):
-        with open("storage/{}/{}/storage.csv".format(model, num), "w", newline = "") as f:
-            pass   
-
     occupied_cuda = [False for _ in cudas]
 
     for t in range(itr):
