@@ -134,6 +134,11 @@ def main(learner, n_cuda, model, num, n_jobs):
         print_result(rsl[-1].values(), model, num, n_jobs)
         scheduler.step()
 
+    with open("log/{}/{}/log{}.csv".format(model, num, n_jobs), "a", newline = "") as f:
+        writer = csv.writer(f, delimiter = ",", quotechar = " ")
+        s = "\n MinTestLoss: {} \n MaxTestAcc: {}".format(loss_min, acc_max)
+        writer.writerow([s])
+
     return loss_min, acc_max
 
 def func(hp_dict, model, num, n_cuda, n_jobs):
