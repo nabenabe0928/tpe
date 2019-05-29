@@ -10,7 +10,7 @@ from sampler.parzen_estimator import ParzenEstimatorParameters
 EPS = 1e-12
 
 def get_evaluations(model, num):
-    with open("evaluation/{}/{}/evaluation.csv".format(model, num), "r", newline = "") as f:
+    with open("evaluation/{}/{:0>3}/evaluation.csv".format(model, num), "r", newline = "") as f:
 
         reader = list(csv.DictReader(f, delimiter = ",", quotechar = '"'))
         param_names = list(reader[0].keys())

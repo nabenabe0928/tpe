@@ -61,31 +61,31 @@ def main(config_space, model = None, num = None, n_parallels = None, n_jobs = No
         os.mkdir("evaluation")
     if not os.path.isdir("evaluation/{}".format(model)):
         os.mkdir("evaluation/{}".format(model))
-    if not os.path.isdir("evaluation/{}/{}".format(model, num)):
-        os.mkdir("evaluation/{}/{}".format(model, num))
+    if not os.path.isdir("evaluation/{}/{:0>3}".format(model, num)):
+        os.mkdir("evaluation/{}/{:0>3}".format(model, num))
 
     if not os.path.isdir("log"):
         os.mkdir("log")
     if not os.path.isdir("log/{}".format(model)):
         os.mkdir("log/{}".format(model))
-    if not os.path.isdir("log/{}/{}".format(model, num)):
-        os.mkdir("log/{}/{}".format(model, num))
+    if not os.path.isdir("log/{}/{:0>3}".format(model, num)):
+        os.mkdir("log/{}/{:0>3}".format(model, num))
 
     init_sh = \
         ["#!/bin/bash", \
         "USER=$(whoami)", \
         "CWD=$(dirname $0)", \
         "\n", \
-        "rm evaluation/{}/{}/*".format(model, num), \
-        "echo $USER:~$CWD$ rm evaluation/{}/{}/*".format(model, num), \
-        "rm log/{}/{}/*".format(model, num), \
-        "echo $USER:~$CWD$ rm log/{}/{}/*".format(model,num), \
+        "rm evaluation/{}/{:0>3}/*".format(model, num), \
+        "echo $USER:~$CWD$ rm evaluation/{}/{:0>3}/*".format(model, num), \
+        "rm log/{}/{:0>3}/*".format(model, num), \
+        "echo $USER:~$CWD$ rm log/{}/{:0>3}/*".format(model,num), \
         ]
 
     if not rerun:
         files = [
-                    ["log/{}/{}/".format(model, num) + f for f in os.listdir("log/{}/{}".format(model, num))],\
-                    ["evaluation/{}/{}/".format(model, num) + f for f in os.listdir("evaluation/{}/{}".format(model, num))] ]
+                    ["log/{}/{:0>3}/".format(model, num) + f for f in os.listdir("log/{}/{:0>3}".format(model, num))],\
+                    ["evaluation/{}/{:0>3}/".format(model, num) + f for f in os.listdir("evaluation/{}/{:0>3}".format(model, num))] ]
         
         rm_files = []
         script = ""
@@ -138,9 +138,9 @@ def main(config_space, model = None, num = None, n_parallels = None, n_jobs = No
             print("#########################")
             print("")
     else:
-        n_ex = os.listdir("log/{}/{}".format(model, num))
+        n_ex = os.listdir("log/{}/{:0>3}".format(model, num))
         for del_idx in range(max(0, n_ex - 1), n_ex):
-            sp.call("rm {}".format("log/{}/{}/log{}.csv".format(model, num, del_idx)), shell = True)
+            sp.call("rm {}".format("log/{}/{:0>3}/log{:0>5}.csv".format(model, num, del_idx)), shell = True)
 
         with open("init.sh", "w") as f:
             f.writelines(script)
