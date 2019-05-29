@@ -38,8 +38,8 @@ def print_result(values, model, num, n_jobs):
 
     with open("log/{}/{}/log{}.csv".format(model, num, n_jobs), "a", newline = "") as f:
         writer = csv.writer(f, delimiter = ",", quotechar = " ")
-        s += "\n"
-        writer.writerow(s)
+        #s += "\n"
+        writer.writerow([s])
 
 def train(device, optimizer, learner, train_data, loss_func):
     train_acc, train_loss, n_train = 0, 0, 0
@@ -84,7 +84,7 @@ def test(device, optimizer, learner, test_data, loss_func):
     return float(test_acc) / n_test, test_loss / n_test
 
 def main(learner, n_cuda, model, num, n_jobs):
-    
+
     if torch.cuda.is_available():
         device = torch.device("cuda", n_cuda) 
     else:
