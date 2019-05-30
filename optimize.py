@@ -1,17 +1,47 @@
 import time
 import multiprocessing
+import csv
+import os
 from sampler.tpe_sampler import TPESampler
 from argparse import ArgumentParser as ArgPar
 from objective_functions.train import func
 
+def save_evaluation(hp_dict, model, num):
+    
+    if os.path.isfile("evaluation/{}/evaluation{:0>3}.csv".format(model, num)):
+    
+        with open("evaluation/{}/evaluation{:0>3}.csv".format(model, num), "r", newline = "") as f:
+            head = list(csv.reader(f, delimiter = ",", quotechar = "'"))[0]
+        
+        with open("evaluation/{}/evaluation{:0>3}.csv".format(model, num), "a", newline = "") as f:
+            writer = csv.writer(f, delimiter = ",", quotechar = "'")
+            row = [hp_dict[k] for k in head]
+            writer.writerow(row)
+    else:
+        with open("evaluation/{}/evaluation{:0>3}.csv".format(model, num), "w", newline = "") as f:
+            writer = csv.DictWriter(f, delimiter = ",", quotechar = "'", fieldnames = hp_dict.keys())
+            writer.writeheader()
+            writer.writerow(hp_dict)
+
 def objective_func(model, num, n_cuda, n_jobs, config_space, n_startup_trials = 10):
+
     if n_jobs < n_startup_trials:
         for _ in range(n_jobs + 1):
             hp_dict = config_space.sample_configuration().get_dictionary()
         
     else:
         hp_dict = TPESampler(model, num, config_space, n_jobs, n_startup_trials = n_startup_trials).sample()
-    func(hp_dict, model, num, n_cuda, n_jobs)
+    loss, acc = func(hp_dict, model, num, n_cuda, n_jobs)
+    
+    hp_dict["loss"] = loss
+
+    save_evaluation(hp_dict, model, num)
+
+    print("")
+    print("###################")
+    print("# evaluation{: >5} #".format(n_jobs))
+    print("###################")
+    print("loss: {:.4f} acc: {:.2f}%".format(loss, acc * 100))
 
 def optimize(model, num, config_space, max_jobs = 100, n_parallels = None):
     if n_parallels == None or n_parallels <= 1:
