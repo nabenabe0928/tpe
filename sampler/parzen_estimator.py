@@ -72,7 +72,7 @@ class ParzenEstimator(object):
         
         sorted_weights /= sorted_weights.sum()
 
-        return sorted_weights        
+        return sorted_weights
 
     def _calculate(self, samples, lower_bound, upper_bound, consider_prior, prior_weight, consider_magic_clip, consider_endpoints, weights_func):
         

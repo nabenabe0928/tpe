@@ -10,7 +10,7 @@ from sampler.parzen_estimator import ParzenEstimatorParameters
 EPS = 1e-12
 
 def get_evaluations(model, num):
-    with open("evaluation/{}/{:0>3}/evaluation.csv".format(model, num), "r", newline = "") as f:
+    with open("evaluation/{}/evaluation{:0>3}.csv".format(model, num), "r", newline = "") as f:
 
         reader = list(csv.DictReader(f, delimiter = ",", quotechar = '"'))
         param_names = list(reader[0].keys())
@@ -78,7 +78,7 @@ class TPESampler():
         self.weight_func = weight_func
         self.rng = np.random.RandomState()
         
-    def sample(self):        
+    def sample(self):
         n = len(self.losses)
 
         if n < self.n_startup_trials:
@@ -86,7 +86,7 @@ class TPESampler():
 
         sample_dict = {var_name : None for var_name in self.hyperparameters.keys()}
 
-        for var_name in self.hyperparameters.keys():            
+        for var_name in self.hyperparameters.keys():
             lower_vals, upper_vals = self._split_observation_pairs(var_name)
 
             _dist = distribution_type(self.config_space, var_name)
@@ -256,7 +256,7 @@ class TPESampler():
     @classmethod
     def _compare(cls, samples, log_l, log_g):
         
-        samples, log_l, log_g = map(np.asarray, (samples, log_l, log_g))        
+        samples, log_l, log_g = map(np.asarray, (samples, log_l, log_g))
         score = log_l - log_g
         best = np.argmax(score)
         
