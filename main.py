@@ -61,9 +61,7 @@ def main(config_space, model = None, num = None, n_parallels = None, n_jobs = No
         os.mkdir("evaluation")
     if not os.path.isdir("evaluation/{}".format(model)):
         os.mkdir("evaluation/{}".format(model))
-    if not os.path.isdir("evaluation/{}/{:0>3}".format(model, num)):
-        os.mkdir("evaluation/{}/{:0>3}".format(model, num))
-
+    
     if not os.path.isdir("log"):
         os.mkdir("log")
     if not os.path.isdir("log/{}".format(model)):
@@ -76,16 +74,15 @@ def main(config_space, model = None, num = None, n_parallels = None, n_jobs = No
         "USER=$(whoami)", \
         "CWD=$(dirname $0)", \
         "\n", \
-        "rm evaluation/{}/{:0>3}/*".format(model, num), \
-        "echo $USER:~$CWD$ rm evaluation/{}/{:0>3}/*".format(model, num), \
+        "rm evaluation/{}/evaluation{:0>3}.csv".format(model, num), \
+        "echo $USER:~$CWD$ rm evaluation/{}/evaluation{:0>3}.csv".format(model, num), \
         "rm log/{}/{:0>3}/*".format(model, num), \
         "echo $USER:~$CWD$ rm log/{}/{:0>3}/*".format(model,num), \
         ]
 
     if not rerun:
-        files = [
-                    ["log/{}/{:0>3}/".format(model, num) + f for f in os.listdir("log/{}/{:0>3}".format(model, num))],\
-                    ["evaluation/{}/{:0>3}/".format(model, num) + f for f in os.listdir("evaluation/{}/{:0>3}".format(model, num))] ]
+        files = ["log/{}/{:0>3}/".format(model, num) + f for f in os.listdir("log/{}/{:0>3}".format(model, num))]
+                    
         
         rm_files = []
         script = ""
@@ -93,9 +90,9 @@ def main(config_space, model = None, num = None, n_parallels = None, n_jobs = No
         for line in init_sh:
             script += line + "\n"
         
-        for fs in files:
-            for file in fs:
+        for file in files:
                 rm_files.append(file)
+        rm_files.append("evaluation/{}/evaluation{:0>3}.csv".format(model, num))
 
         if len(rm_files) > 0:
             print("")

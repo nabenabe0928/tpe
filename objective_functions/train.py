@@ -166,17 +166,17 @@ def func(hp_dict, model, num, n_cuda, n_jobs):
 
 def save_evaluation(hp_dict, model, num):
     
-    if os.path.isfile("evaluation/{}/{:0>3}/evaluation.csv".format(model, num)):
+    if os.path.isfile("evaluation/{}/evaluation{:0>3}.csv".format(model, num)):
     
-        with open("evaluation/{}/{:0>3}/evaluation.csv".format(model, num), "r", newline = "") as f:
+        with open("evaluation/{}/evaluation{:0>3}.csv".format(model, num), "r", newline = "") as f:
             head = list(csv.reader(f, delimiter = ",", quotechar = "'"))[0]
         
-        with open("evaluation/{}/{:0>3}/evaluation.csv".format(model, num), "a", newline = "") as f:
+        with open("evaluation/{}/evaluation{:0>3}.csv".format(model, num), "a", newline = "") as f:
             writer = csv.writer(f, delimiter = ",", quotechar = "'")
             row = [hp_dict[k] for k in head]
             writer.writerow(row)
     else:
-        with open("evaluation/{}/{:0>3}/evaluation.csv".format(model, num), "w", newline = "") as f:
+        with open("evaluation/{}/evaluation{:0>3}.csv".format(model, num), "w", newline = "") as f:
             writer = csv.DictWriter(f, delimiter = ",", quotechar = "'", fieldnames = hp_dict.keys())
             writer.writeheader()
             writer.writerow(hp_dict)
