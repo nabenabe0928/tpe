@@ -29,9 +29,7 @@ def get_evaluations(model, num):
                         hyperparameters[param_name].append(row[param_name])
     
     hyperparameters = {name: np.array(hps) for name, hps in hyperparameters.items()}
-
     return hyperparameters, losses
-
 
 def distribution_type(cs, var_name):    
     cs_dist = str(type(cs._hyperparameters[var_name]))
@@ -82,7 +80,16 @@ class TPESampler():
         n = len(self.losses)
 
         if n < self.n_startup_trials:
-            return self.config_space.sample_configuration().get_dictionary()
+            sample_dict = self.config_space.sample_configuration().get_dictionary()
+
+            for var_name in self.config_space.keys():
+                hp = self.config_space._hyperparameters[var_name]
+                q = hp.q
+                if q is not None and hp.is_log:
+                    rnd = random.random() * (hp.upper - hp.lower) + hp.lower
+                    sample_dict[var_name] = np.exp(np.round(rnd / q) * q)
+
+            return sample_dict
 
         sample_dict = {var_name : None for var_name in self.hyperparameters.keys()}
 
@@ -95,9 +102,19 @@ class TPESampler():
             if _dist == "cat":
                 cat_idx = sample_dict[var_name] = self._sample_categorical(var_name, lower_vals, upper_vals)
                 sample_dict[var_name] = self.config_space._hyperparameters[var_name].choices[cat_idx]
-            else:
+            elif _dist == "float" or _dist == "int":
                 sample_dict[var_name] = self._sample_numerical(_dist, var_name, lower_vals, upper_vals, q)
         
+
+        #####
+        for var_name in self.hyperparameters.keys():
+            hoge = None
+            cond = None
+            if hoge == "cond" and not cond:
+                sample_dict[var_name] = None
+        ##### here, i have to add the function to make the conditional parameters None to prevent the conditional parameters 
+        ##### density estimator including the point which was not used to evaluate the algorithm.
+
         return sample_dict
 
     def _split_observation_pairs(self, var_name):
