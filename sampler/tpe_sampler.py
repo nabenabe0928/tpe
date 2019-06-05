@@ -99,13 +99,13 @@ class TPESampler():
             _dist = distribution_type(self.config_space, var_name)
             q = self.config_space._hyperparameters[var_name].q
 
-            if _dist == "cat":
+            if _dist is "cat":
                 cat_idx = sample_dict[var_name] = self._sample_categorical(var_name, lower_vals, upper_vals)
                 sample_dict[var_name] = self.config_space._hyperparameters[var_name].choices[cat_idx]
-            elif _dist == "float" or _dist == "int":
-                sample_dict[var_name] = self._sample_numerical(_dist, var_name, lower_vals, upper_vals, q)
+            elif _dist is "float" or _dist is "int":
+                sample_dict[var_name] = self._sample_numerical(_dist, var_name, lower_vals, upper_vals, q = q)
         
-
+        """
         #####
         for var_name in self.hyperparameters.keys():
             hoge = None
@@ -114,6 +114,7 @@ class TPESampler():
                 sample_dict[var_name] = None
         ##### here, i have to add the function to make the conditional parameters None to prevent the conditional parameters 
         ##### density estimator including the point which was not used to evaluate the algorithm.
+        """
 
         return sample_dict
 
@@ -154,7 +155,7 @@ class TPESampler():
         size = (self.n_ei_candidates, )
 
         parzen_estimator_lower = ParzenEstimator(lower_vals, lower_bound, upper_bound, self.parzen_estimator_parameters)
-        samples_lower = self._sample_from_gmm(parzen_estimator_lower, lower_bound, upper_bound, _dist, size, is_log = is_log, q = q)
+        samples_lower = self._sample_from_gmm(parzen_estimator_lower, lower_bound, upper_bound, _dist, size = size, is_log = is_log, q = q)
         log_likelihoods_lower = self._gmm_log_pdf(samples_lower, parzen_estimator_lower, lower_bound, upper_bound, var_type = _dist, is_log=is_log, q = q)
 
         parzen_estimator_upper = ParzenEstimator(upper_vals, lower_bound, upper_bound, self.parzen_estimator_parameters)
@@ -205,14 +206,14 @@ class TPESampler():
             if lower <= draw < upper:
                 samples = np.append(samples, draw)
 
-        if var_type == "float" and q is not None:
+        if var_type == "float" and q is None:
             if is_log:
                 samples = np.exp(samples)
             return samples
         else:
             q = q if q is not None else 1
             if is_log:
-                samples = np.round( np.exp(samples) / q ) * q
+                samples = np.exp(samples)
             return np.round(samples / q) * q
 
     def _gmm_log_pdf(self, samples, parzen_estimator, lower, upper, var_type, is_log = False, q = None):
@@ -223,7 +224,7 @@ class TPESampler():
         samples, weights, mus, sigmas = map(np.asarray, (samples, weights, mus, sigmas))
         p_accept = np.sum(weights * (TPESampler._normal_cdf(upper, mus, sigmas) - TPESampler._normal_cdf(lower, mus, sigmas)))
 
-        if var_type == "float" and q is not None:
+        if var_type == "float" and q is None:
             jacobian_inv = samples[:, None] if is_log else np.ones(samples.shape)[:, None]
             if is_log:
                 distance = np.log(samples[:, None]) - mus
