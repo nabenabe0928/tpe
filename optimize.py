@@ -2,40 +2,34 @@ import time
 import multiprocessing
 import csv
 import os
+import ConfigSpace as CS
 from sampler.tpe_sampler import TPESampler
 from argparse import ArgumentParser as ArgPar
 from objective_functions.train import func
 
-def save_evaluation(hp_dict, model, num):
-    
-    if os.path.isfile("evaluation/{}/evaluation{:0>3}.csv".format(model, num)):
-    
-        with open("evaluation/{}/evaluation{:0>3}.csv".format(model, num), "r", newline = "") as f:
-            head = list(csv.reader(f, delimiter = ",", quotechar = "'"))[0]
-        
-        with open("evaluation/{}/evaluation{:0>3}.csv".format(model, num), "a", newline = "") as f:
+def save_evaluation(hp_dict, model, num, n_jobs):
+    for var_name, hp in hp_dict.items():
+        with open("evaluation/{}/{:0>3}/{}.csv".format(model, num, var_name), "a", newline = "") as f:
             writer = csv.writer(f, delimiter = ",", quotechar = "'")
-            row = [hp_dict[k] for k in head]
-            writer.writerow(row)
-    else:
-        with open("evaluation/{}/evaluation{:0>3}.csv".format(model, num), "w", newline = "") as f:
-            writer = csv.DictWriter(f, delimiter = ",", quotechar = "'", fieldnames = hp_dict.keys())
-            writer.writeheader()
-            writer.writerow(hp_dict)
-
+            writer.writerow([n_jobs, hp])
+    
 def objective_func(model, num, n_cuda, n_jobs, config_space, n_startup_trials = 10):
-
+    ###### change here to adopt the conditional parameters
     if n_jobs < n_startup_trials:
         for _ in range(n_jobs + 1):
             hp_dict = config_space.sample_configuration().get_dictionary()
         
     else:
-        hp_dict = TPESampler(model, num, config_space, n_jobs, n_startup_trials = n_startup_trials).sample()
+        config_dict = config_space._hyperparameters
+        for var_name, hp_info in config_dict.items():
+            target_cs = CS.ConfigurationSpace().add_hyperparameter(hp_info)
+            hp_info = TPESampler(model, num, target_cs, n_jobs, n_startup_trials = n_startup_trials).sample()
+    
     loss, acc = func(hp_dict, model, num, n_cuda, n_jobs)
     
     hp_dict["loss"] = loss
 
-    save_evaluation(hp_dict, model, num)
+    save_evaluation(hp_dict, model, num, n_jobs)
 
     print("")
     print("###################")

@@ -74,8 +74,8 @@ def main(config_space, model = None, num = None, n_parallels = None, n_jobs = No
         "USER=$(whoami)", \
         "CWD=$(dirname $0)", \
         "\n", \
-        "rm evaluation/{}/evaluation{:0>3}.csv".format(model, num), \
-        "echo $USER:~$CWD$ rm evaluation/{}/evaluation{:0>3}.csv".format(model, num), \
+        "rm -r evaluation/{}/{:0>3}".format(model, num), \
+        "echo $USER:~$CWD$ rm -r evaluation/{}/{:0>3}".format(model, num), \
         "rm log/{}/{:0>3}/*".format(model, num), \
         "echo $USER:~$CWD$ rm log/{}/{:0>3}/*".format(model,num), \
         ]
@@ -92,7 +92,7 @@ def main(config_space, model = None, num = None, n_parallels = None, n_jobs = No
         
         for file in files:
                 rm_files.append(file)
-        rm_files.append("evaluation/{}/evaluation{:0>3}.csv".format(model, num))
+        rm_files.append("evaluation/{}/{:0>3}".format(model, num))
 
         if len(rm_files) > 0:
             print("")
