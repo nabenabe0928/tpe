@@ -19,7 +19,7 @@ class pycolor:
     REVERCE = '\033[07m'    
 
 
-def main(config_space, model = None, num = None, n_parallels = None, n_jobs = None, rerun = None):
+def start_opt(model = None, num = None, obj = None, n_parallels = None, n_jobs = None, rerun = None):
     
     if model is None or num is None or n_parallels is None or rerun is None:
         print("")
@@ -148,4 +148,4 @@ def main(config_space, model = None, num = None, n_parallels = None, n_jobs = No
     print("#########################")
     print("")
         
-    optimize(model, num, config_space, max_jobs = n_jobs, n_parallels = n_parallels)
+    optimize(model, num, obj, max_jobs = n_jobs, n_parallels = n_parallels)
