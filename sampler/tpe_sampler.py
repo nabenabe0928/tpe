@@ -144,7 +144,7 @@ class TPESampler():
         size = (self.n_ei_candidates, )
 
         parzen_estimator_lower = ParzenEstimator(lower_vals, lower_bound, upper_bound, self.parzen_estimator_parameters)
-        samples_lower = self._sample_from_gmm(parzen_estimator_lower, lower_bound, upper_bound, _dist, size, is_log = is_log, q = q)
+        samples_lower = self._sample_from_gmm(parzen_estimator_lower, lower_bound, upper_bound, _dist, size = size, is_log = is_log, q = q)
         log_likelihoods_lower = self._gmm_log_pdf(samples_lower, parzen_estimator_lower, lower_bound, upper_bound, var_type = _dist, is_log=is_log, q = q)
 
         parzen_estimator_upper = ParzenEstimator(upper_vals, lower_bound, upper_bound, self.parzen_estimator_parameters)
@@ -195,14 +195,14 @@ class TPESampler():
             if lower <= draw < upper:
                 samples = np.append(samples, draw)
 
-        if var_type == "float" and q is not None:
+        if var_type == "float" and q is None:
             if is_log:
                 samples = np.exp(samples)
             return samples
         else:
             q = q if q is not None else 1
             if is_log:
-                samples = np.round( np.exp(samples) / q ) * q
+                samples = np.exp(samples)
             return np.round(samples / q) * q
 
     def _gmm_log_pdf(self, samples, parzen_estimator, lower, upper, var_type, is_log = False, q = None):
@@ -213,7 +213,7 @@ class TPESampler():
         samples, weights, mus, sigmas = map(np.asarray, (samples, weights, mus, sigmas))
         p_accept = np.sum(weights * (TPESampler._normal_cdf(upper, mus, sigmas) - TPESampler._normal_cdf(lower, mus, sigmas)))
 
-        if var_type == "float" and q is not None:
+        if var_type == "float" and q is None:
             jacobian_inv = samples[:, None] if is_log else np.ones(samples.shape)[:, None]
             if is_log:
                 distance = np.log(samples[:, None]) - mus
