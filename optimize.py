@@ -14,7 +14,7 @@ def sample_target(model, num, n_jobs, n_startup_trials = 10):
 
     return _imp
 
-def create_hyperparameter(hp_type, name, lower, upper, default_value = None, log = False, q = None, choices = []):
+def create_hyperparameter(hp_type, name, lower, upper, default_value = None, log = False, q = None, choices = None):
     if hp_type == "int":
         return CSH.UniformIntegerHyperparameter(name = name, lower = lower, upper = upper, default_value = default_value, log = log, q = q)
     elif hp_type == "float":
