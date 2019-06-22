@@ -6,7 +6,7 @@ from optimize import sample_target, create_hyperparameter, save_evaluation, prin
 from objective_functions.train import func
 
 
-def objective_func(model, num, n_cuda, n_jobs, config_space, n_startup_trials = 10):
+def objective_func(model, num, n_cuda, n_jobs, n_startup_trials = 10):
     hp_dict = {}
     sample = sample_target(model, num, n_jobs)
 

@@ -1,6 +1,7 @@
 import numpy as np
 import scipy.special
 import csv
+import os
 import random
 import ConfigSpace as CS
 import ConfigSpace as CSH
@@ -11,6 +12,10 @@ EPS = 1e-12
 
 def get_evaluations(model, num, var_name):
     idx = []
+
+    if not os.path.isfile("evaluation/{}/{:0>3}/{}.csv".format(model, num, var_name)):
+        return np.array([]), np.array([])
+    
     with open("evaluation/{}/{:0>3}/{}.csv".format(model, num, var_name), "r", newline = "") as f:
         reader = list(csv.reader(f, delimiter = ",", quotechar = '"'))
         hyperparameter = []
@@ -62,14 +67,15 @@ def default_weights(x, n_samples_lower = 25):
         return np.concatenate([ramp, flat], axis = 0)
 
 class TPESampler():
-    def __init__(self, model, num, target_cs, n_jobs, consider_prior = True, prior_weight = 1.0,
+    def __init__(self, model, num, target_hp, n_jobs, consider_prior = True, prior_weight = 1.0,
             consider_magic_clip = True, consider_endpoints = False, n_startup_trials = 10,
             n_ei_candidates = 24, gamma_func = default_gamma, weight_func = default_weights
         ):
         
-        self.target_cs = target_cs
-        self.var_name = list(target_cs._hyperparameters.keys())[0]
-        self.hp = target_cs._hyperparameters[self.var_name]
+        self.target_cs = CS.ConfigurationSpace()
+        self.target_cs.add_hyperparameter(target_hp)
+        self.var_name = list(self.target_cs._hyperparameters.keys())[0]
+        self.hp = self.target_cs._hyperparameters[self.var_name]
         self.hyperparameter, self.losses = get_evaluations(model, num, self.var_name)
 
         self.parzen_estimator_parameters = ParzenEstimatorParameters(

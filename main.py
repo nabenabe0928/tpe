@@ -57,18 +57,6 @@ def start_opt(model = None, num = None, obj = None, n_parallels = None, n_jobs =
         print("")
         sys.exit()
     
-    if not os.path.isdir("evaluation"):
-        os.mkdir("evaluation")
-    if not os.path.isdir("evaluation/{}".format(model)):
-        os.mkdir("evaluation/{}".format(model))
-    
-    if not os.path.isdir("log"):
-        os.mkdir("log")
-    if not os.path.isdir("log/{}".format(model)):
-        os.mkdir("log/{}".format(model))
-    if not os.path.isdir("log/{}/{:0>3}".format(model, num)):
-        os.mkdir("log/{}/{:0>3}".format(model, num))
-
     init_sh = \
         ["#!/bin/bash", \
         "USER=$(whoami)", \
@@ -147,5 +135,19 @@ def start_opt(model = None, num = None, obj = None, n_parallels = None, n_jobs =
     print("##### RENEW THE ENV #####")
     print("#########################")
     print("")
+
+    if not os.path.isdir("evaluation"):
+        os.mkdir("evaluation")
+    if not os.path.isdir("evaluation/{}".format(model)):
+        os.mkdir("evaluation/{}".format(model))
+    if not os.path.isdir("evaluation/{}/{:0>3}".format(model, num)):
+        os.mkdir("evaluation/{}/{:0>3}".format(model, num))
+
+    if not os.path.isdir("log"):
+        os.mkdir("log")
+    if not os.path.isdir("log/{}".format(model)):
+        os.mkdir("log/{}".format(model))
+    if not os.path.isdir("log/{}/{:0>3}".format(model, num)):
+        os.mkdir("log/{}/{:0>3}".format(model, num))                                                                                            
         
     optimize(model, num, obj, max_jobs = n_jobs, n_parallels = n_parallels)
