@@ -38,7 +38,6 @@ def start_opt(model = None, num = None, obj = None, n_parallels = None, n_jobs =
                 print("{}, ".format(model), end = "")
         print("]")
         print("")
-        
         print("   model: model name: ")
         print("\twhatever you want.")
         print("")

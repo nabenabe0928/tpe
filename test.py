@@ -1,10 +1,7 @@
-import ConfigSpace as CS
-import ConfigSpace.hyperparameters as CSH
 from argparse import ArgumentParser as ArgPar
 from main import start_opt
 from optimize import sample_target, create_hyperparameter, save_evaluation, print_iterations
 from objective_functions.train import func
-
 
 def objective_func(model, num, n_cuda, n_jobs, n_startup_trials = 10):
     hp_dict = {}
@@ -27,7 +24,7 @@ def objective_func(model, num, n_cuda, n_jobs, n_startup_trials = 10):
     var_name = "ch4"
     hp_dict[var_name] = sample(create_hyperparameter("int", name = var_name, lower = 16, upper = 128, default_value = 64, log = True))
     var_name = "drop_rate"
-    hp_dict[var_name] = sample(CSH.UniformFloatHyperparameter(name = "float", lower = 0., upper = 1., default_value = 0.5, log = False))
+    hp_dict[var_name] = sample(create_hyperparameter("float", name = var_name, lower = 0., upper = 1., default_value = 0.5, log = False))
     
     loss, acc = func(hp_dict, model, num, n_cuda, n_jobs)
     print_iterations(n_jobs, loss, acc)
@@ -37,6 +34,7 @@ def objective_func(model, num, n_cuda, n_jobs, n_startup_trials = 10):
     
 if __name__ == "__main__":
     argp = ArgPar()
+    argp.add_argument("-model", default = "CNN")
     argp.add_argument("-num", type = int, default = None)
     argp.add_argument("-parallel", type = int, default = None)
     argp.add_argument("-jobs", type = int, default = None)
@@ -47,5 +45,6 @@ if __name__ == "__main__":
     n_parallels = args.parallel
     n_jobs = args.jobs
     rerun = bool(args.re)
+    model = args.model
     
-    start_opt(obj = objective_func, model = "CNN", num = num, n_parallels = n_parallels, n_jobs = n_jobs, rerun = rerun)
+    start_opt(obj = objective_func, model = model, num = num, n_parallels = n_parallels, n_jobs = n_jobs, rerun = rerun)
