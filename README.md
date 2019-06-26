@@ -9,23 +9,23 @@
 
 ## Required Argument when implementing
 
-・model
+・{\bf model}
 
 the name used when saving the hyperparamters 
 
-・num
+・{\bf num}
 
 the experiment number (You can save up to 1000 experiments)
 
-・jobs
+・{\bf jobs}
 
 the number of evaluations in one optimization
 
-・parallel
+・{\bf parallel}
 
 the maximum number of evaluation which can be run at the same time.
 
-・re
+・{\bf re}
 
 restart the experiment or not (in case the experiment suddenly stops, but you have the log file)
 
