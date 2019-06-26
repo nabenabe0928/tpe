@@ -18,7 +18,6 @@
 ・parallel  -> the maximum number of evaluation which can be run at the same time.
 
 ・re        -> restart the experiment or not (in case the experiment suddenly stops, but you 
-               
                have the log file)
 
 The log files of each hyperparameters are stocked in "tpe/evaluations/[model]/[num]/[Hyperparameter].csv"
