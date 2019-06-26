@@ -9,24 +9,19 @@
 
 ## Required Argument when implementing
 
-・{\bf model}
-
+### model
 the name used when saving the hyperparamters 
 
-・{\bf num}
-
+### num
 the experiment number (You can save up to 1000 experiments)
 
-・{\bf jobs}
-
+### jobs
 the number of evaluations in one optimization
 
-・{\bf parallel}
-
+### parallel
 the maximum number of evaluation which can be run at the same time.
 
-・{\bf re}
-
+### re
 restart the experiment or not (in case the experiment suddenly stops, but you have the log file)
 
 The log files of each hyperparameters are stocked in `tpe/evaluations/[model]/[num]/[Hyperparameter].csv`
