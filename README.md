@@ -1,4 +1,4 @@
-# AIST_TPE
+# TPE
 
 ## Requirements
 ・python3.7
