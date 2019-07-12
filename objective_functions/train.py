@@ -114,7 +114,7 @@ def main(learner, n_cuda, model, num, n_jobs):
     acc_max = 0.0
 
     print_result(rsl_keys, model, num, n_jobs)
-    
+
     for epoch in range(learner.epochs):
         lr = optimizer.param_groups[0]["lr"]
         train_acc, train_loss = train(device, optimizer, learner, train_data, loss_func)     

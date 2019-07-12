@@ -140,7 +140,7 @@ def start_opt(model = None, num = None, obj = None, n_parallels = None, n_jobs =
             print("#########################")
             print("")
     else:
-        n_ex = os.listdir("log/{}/{:0>3}".format(model, num))
+        n_ex = len(os.listdir("log/{}/{:0>3}".format(model, num)))
         for del_idx in range(max(0, n_ex - 1), n_ex):
             sp.call("rm {}".format("log/{}/{:0>3}/log{:0>5}.csv".format(model, num, del_idx)), shell = True)
 
