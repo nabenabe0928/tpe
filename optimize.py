@@ -49,7 +49,11 @@ def optimize(model, num, obj, max_jobs = 100, n_parallels = None):
     
 
 def _optimize_sequential(model, num, obj, max_jobs = 100):
-    n_jobs = 0
+    if os.path.isfile("evaluation/{}/{:0>3}/loss.csv".format(model, num)):
+        with open("evaluation/{}/{:0>3}/{}.csv".format(model, num, var_name), "r", newline = "") as f:
+            n_jobs = len(list(csv.reader(f, delimiter = ",")))
+    else:
+        n_jobs = 0
 
     while True:
         n_cuda = 0
@@ -61,9 +65,14 @@ def _optimize_sequential(model, num, obj, max_jobs = 100):
             break
 
 def _optimize_parallel(model, num, obj, max_jobs = 100, n_parallels = 4):
+    if os.path.isfile("evaluation/{}/{:0>3}/loss.csv".format(model, num)):
+        with open("evaluation/{}/{:0>3}/{}.csv".format(model, num, var_name), "r", newline = "") as f:
+            n_jobs = len(list(csv.reader(f, delimiter = ",")))
+    else:
+        n_jobs = 0
+    
     jobs = []
     n_runnings = 0
-    n_jobs = 0
 
     while True:
         cudas = [False for _ in range(n_parallels)]
