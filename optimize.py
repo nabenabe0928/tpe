@@ -30,12 +30,16 @@ def save_evaluation(hp_dict, model, num, n_jobs):
             writer = csv.writer(f, delimiter = ",", quotechar = "'")
             writer.writerow([n_jobs, hp])
 
-def print_iterations(n_jobs, loss, acc):
+def print_iterations(n_jobs, loss, acc = None):
     print("")
     print("###################")
     print("# evaluation{: >5} #".format(n_jobs))
     print("###################")
-    print("loss: {:.4f} acc: {:.2f}%".format(loss, acc * 100))
+
+    if acc:
+        print("loss: {:.4f} acc: {:.2f}%".format(loss, acc * 100))
+    else:
+        print("loss: {:.4f}".format(loss))
 
 def optimize(model, num, obj, max_jobs = 100, n_parallels = None):
     if n_parallels == None or n_parallels <= 1:
