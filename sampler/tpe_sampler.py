@@ -15,7 +15,9 @@ def get_evaluations(model, num, var_name):
 
     if not os.path.isfile("evaluation/{}/{:0>3}/{}.csv".format(model, num, var_name)):
         return np.array([]), np.array([])
-    
+    if not os.path.isfile("evaluation/{}/{:0>3}/loss.csv".format(model, num, var_name)):
+        return np.array([]), np.array([])
+
     with open("evaluation/{}/{:0>3}/{}.csv".format(model, num, var_name), "r", newline = "") as f:
         reader = list(csv.reader(f, delimiter = ",", quotechar = '"'))
         hyperparameter = []
@@ -26,16 +28,18 @@ def get_evaluations(model, num, var_name):
                 hyperparameter.append(eval(row[1]))
             except:
                 hyperparameter.append(row[1])
-
+    
+    idx = np.array(idx)
     with open("evaluation/{}/{:0>3}/loss.csv".format(model, num), "r", newline = "") as f:
         reader = list(csv.reader(f, delimiter = ",", quotechar = '"'))
         loss = []
 
         for row in reader:
-            loss.append(float(row[1]))
+            if int(row[0]) in idx:
+                loss.append(float(row[1]))
                 
     hyperparameter = np.array(hyperparameter)
-    loss = np.array(loss)[np.asarray(idx)]
+    loss = np.array(loss)
 
     return hyperparameter, loss
 
