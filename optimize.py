@@ -92,7 +92,6 @@ def _optimize_parallel(model, num, obj, max_jobs = 100, n_parallels = 4):
 
         for _ in range(max(0, n_parallels - n_runnings)):
             n_cuda = cudas.index(False)
-            #### obj
             p = multiprocessing.Process(target = obj, args = (model, num, n_cuda, n_jobs))
             p.start()
             jobs.append([n_cuda, p])
@@ -101,7 +100,7 @@ def _optimize_parallel(model, num, obj, max_jobs = 100, n_parallels = 4):
             if n_jobs >= max_jobs:
                 break
             
-            time.sleep(1.0e-3)
+            time.sleep(0.1)
     
         if n_jobs >= max_jobs:
             break

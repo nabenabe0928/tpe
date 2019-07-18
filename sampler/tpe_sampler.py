@@ -32,11 +32,13 @@ def get_evaluations(model, num, var_name):
     idx = np.array(idx)
     with open("evaluation/{}/{:0>3}/loss.csv".format(model, num), "r", newline = "") as f:
         reader = list(csv.reader(f, delimiter = ",", quotechar = '"'))
-        loss = []
+        loss = [0.0 for _ in range(len(idx))]
 
         for row in reader:
-            if int(row[0]) in idx:
-                loss.append(float(row[1]))
+            n_eval = int(row[0])
+            if n_eval in idx:
+                loc = np.where(idx == n_eval)[0][0]
+                loss[loc] = float(row[1])
                 
     hyperparameter = np.array(hyperparameter)
     loss = np.array(loss)
