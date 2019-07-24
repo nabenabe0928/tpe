@@ -153,6 +153,13 @@ class TPESampler():
                 lower_bound -= 0.5 * q
                 upper_bound += 0.5 * q
 
+        if is_log:
+            lower_bound = np.log(max(lower_bound, 1.0e-10))
+            upper_bound = np.log(upper_bound)
+            lower_vals = np.log(lower_vals)
+            upper_vals = np.log(upper_vals)
+
+
         size = (self.n_ei_candidates, )
 
         parzen_estimator_lower = ParzenEstimator(lower_vals, lower_bound, upper_bound, self.parzen_estimator_parameters)
