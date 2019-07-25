@@ -21,7 +21,7 @@ class pycolor:
 
 def start_opt(model = None, num = None, obj = None, n_parallels = None, n_jobs = None, rerun = None):
 
-    if model is None or num is None or n_parallels is None or rerun is None:
+    if model is None or num is None or n_parallels is None or rerun is None or n_jobs is None:
         print("")
         print("###### ERROR ######")
         models = [file.split(".")[0] for file in os.listdir( "objective_functions/model" )]

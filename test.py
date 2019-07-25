@@ -27,10 +27,11 @@ def objective_func(model, num, n_cuda, n_jobs, lock):
     var_name = "drop_rate"
     hp_dict[var_name] = sample(create_hyperparameter("float", name = var_name, lower = 0., upper = 1., default_value = 0.5))
     
-    loss, acc = func(hp_dict, model, num, n_cuda, n_jobs)
-    print_iterations(n_jobs, loss, acc)
-    hp_dict["loss"] = loss
-    hp_dict["acc"] = acc
+    #loss, acc = func(hp_dict, model, num, n_cuda, n_jobs)
+    #print_iterations(n_jobs, loss, acc)
+    import random
+    hp_dict["loss"] = random.random()
+    #hp_dict["acc"] = acc
     
     save_evaluation(hp_dict, model, num, n_jobs, lock)
 
