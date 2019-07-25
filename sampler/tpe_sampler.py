@@ -10,8 +10,10 @@ from sampler.parzen_estimator import ParzenEstimatorParameters
 
 EPS = 1e-12
 
-def get_evaluations(model, num, var_name):
+def get_evaluations(model, num, var_name, lock):
     idx = []
+    
+    lock.acquire()
 
     if not os.path.isfile("evaluation/{}/{:0>3}/{}.csv".format(model, num, var_name)):
         return np.array([]), np.array([])
@@ -39,7 +41,9 @@ def get_evaluations(model, num, var_name):
             if n_eval in idx:
                 loc = np.where(idx == n_eval)[0][0]
                 loss[loc] = float(row[1])
-                
+    
+    lock.release()
+            
     hyperparameter = np.array(hyperparameter)
     loss = np.array(loss)
 
@@ -73,7 +77,7 @@ def default_weights(x, n_samples_lower = 25):
         return np.concatenate([ramp, flat], axis = 0)
 
 class TPESampler():
-    def __init__(self, model, num, target_hp, n_jobs, consider_prior = True, prior_weight = 1.0,
+    def __init__(self, model, num, target_hp, n_jobs, lock, consider_prior = True, prior_weight = 1.0,
             consider_magic_clip = True, consider_endpoints = False, n_startup_trials = 10,
             n_ei_candidates = 24, gamma_func = default_gamma, weight_func = default_weights
         ):
@@ -82,7 +86,7 @@ class TPESampler():
         self.target_cs.add_hyperparameter(target_hp)
         self.var_name = list(self.target_cs._hyperparameters.keys())[0]
         self.hp = self.target_cs._hyperparameters[self.var_name]
-        self.hyperparameter, self.losses = get_evaluations(model, num, self.var_name)
+        self.hyperparameter, self.losses = get_evaluations(model, num, self.var_name, lock)
 
         self.parzen_estimator_parameters = ParzenEstimatorParameters(
             consider_prior, prior_weight, consider_magic_clip, consider_endpoints, weight_func)

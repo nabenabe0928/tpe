@@ -1,5 +1,5 @@
 import time
-import multiprocessing
+from multiprocessing import Process, Lock
 import csv
 import os
 import ConfigSpace as CS
@@ -7,10 +7,10 @@ import ConfigSpace.hyperparameters as CSH
 from argparse import ArgumentParser as ArgPar
 from sampler.tpe_sampler import TPESampler
 
-def sample_target(model, num, n_jobs, n_startup_trials = 10):
+def sample_target(model, num, n_jobs, lock, n_startup_trials = 10):
     def _imp(hp_info):
         target_cs = CS.ConfigurationSpace().add_hyperparameter(hp_info)
-        return TPESampler(model, num, target_cs, n_jobs, n_startup_trials = n_startup_trials).sample()
+        return TPESampler(model, num, target_cs, n_jobs, lock, n_startup_trials = n_startup_trials).sample()
 
     return _imp
 
@@ -75,6 +75,7 @@ def _optimize_parallel(model, num, obj, max_jobs = 100, n_parallels = 4):
     jobs = []
     n_runnings = 0
     max_jobs += n_jobs
+    lock = Lock()
 
     while True:
         cudas = [False for _ in range(n_parallels)]
@@ -92,7 +93,7 @@ def _optimize_parallel(model, num, obj, max_jobs = 100, n_parallels = 4):
 
         for _ in range(max(0, n_parallels - n_runnings)):
             n_cuda = cudas.index(False)
-            p = multiprocessing.Process(target = obj, args = (model, num, n_cuda, n_jobs))
+            p = Process(target = obj, args = (model, num, n_cuda, n_jobs, lock))
             p.start()
             jobs.append([n_cuda, p])
             n_jobs += 1
@@ -100,7 +101,7 @@ def _optimize_parallel(model, num, obj, max_jobs = 100, n_parallels = 4):
             if n_jobs >= max_jobs:
                 break
             
-            time.sleep(0.1)
+            time.sleep(1.0e-6)
     
         if n_jobs >= max_jobs:
             break
