@@ -13,13 +13,13 @@ EPS = 1e-12
 def get_evaluations(model, num, var_name, lock):
     idx = []
     
-    lock.acquire()
-
     if not os.path.isfile("evaluation/{}/{:0>3}/{}.csv".format(model, num, var_name)):
         return np.array([]), np.array([])
     if not os.path.isfile("evaluation/{}/{:0>3}/loss.csv".format(model, num, var_name)):
         return np.array([]), np.array([])
 
+    lock.acquire()
+    
     with open("evaluation/{}/{:0>3}/{}.csv".format(model, num, var_name), "r", newline = "") as f:
         reader = list(csv.reader(f, delimiter = ",", quotechar = '"'))
         hyperparameter = []
