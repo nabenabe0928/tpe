@@ -10,7 +10,7 @@ from sampler.parzen_estimator import ParzenEstimatorParameters
 
 EPS = 1e-12
 
-def get_evaluations(model, num, var_name, lock):
+def get_evaluations(model, num, var_name, lock, cs):
     idx = []
     
     if not os.path.isfile("evaluation/{}/{:0>3}/{}.csv".format(model, num, var_name)):
@@ -23,13 +23,11 @@ def get_evaluations(model, num, var_name, lock):
     with open("evaluation/{}/{:0>3}/{}.csv".format(model, num, var_name), "r", newline = "") as f:
         reader = list(csv.reader(f, delimiter = ",", quotechar = '"'))
         hyperparameter = []
+        cls_type = distribution_type(cs, var_name)
 
         for row in reader:
             idx.append(int(row[0]))
-            try:
-                hyperparameter.append(eval(row[1]))
-            except:
-                hyperparameter.append(row[1])
+            hyperparameter.append(cls_type(row[1]))
     
     idx = np.array(idx)
     with open("evaluation/{}/{:0>3}/loss.csv".format(model, num), "r", newline = "") as f:
@@ -53,11 +51,11 @@ def distribution_type(cs, var_name):
     cs_dist = str(type(cs._hyperparameters[var_name]))
 
     if "Integer" in cs_dist:
-        return "int"
+        return int
     elif "Float" in cs_dist:
-        return "float"
+        return float
     elif "Categorical" in cs_dist:
-        return "cat"
+        return str
     else:
         raise NotImplementedError("The distribution is not implemented.")
 
@@ -115,10 +113,10 @@ class TPESampler():
 
         _dist = distribution_type(self.target_cs, self.var_name)
 
-        if _dist == "cat":
+        if _dist == str:
             cat_idx = self._sample_categorical(lower_vals, upper_vals)
             hp_value = self.hp.choices[cat_idx]
-        elif _dist == "float" or _dist == "int":
+        elif _dist == float or _dist == int:
             hp_value = self._sample_numerical(_dist, lower_vals, upper_vals, q)
         
         return hp_value
@@ -146,7 +144,7 @@ class TPESampler():
             lower_vals = np.log(lower_vals)
             upper_vals = np.log(upper_vals)
         
-        if _dist == "int":
+        if _dist == int:
             lower_bound -= 0.5
             upper_bound += 0.5
         elif q is not None:
@@ -174,7 +172,7 @@ class TPESampler():
 
         log_likelihoods_upper = self._gmm_log_pdf(samples_lower, parzen_estimator_upper, lower_bound, upper_bound, var_type = _dist, is_log = is_log, q = q)
 
-        return eval(_dist)(TPESampler._compare(samples_lower, log_likelihoods_lower, log_likelihoods_upper))
+        return _dist(TPESampler._compare(samples_lower, log_likelihoods_lower, log_likelihoods_upper))
 
     def _sample_categorical(self, lower_vals, upper_vals):
 
