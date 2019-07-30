@@ -84,7 +84,7 @@ class TPESampler():
         self.target_cs.add_hyperparameter(target_hp)
         self.var_name = list(self.target_cs._hyperparameters.keys())[0]
         self.hp = self.target_cs._hyperparameters[self.var_name]
-        self.hyperparameter, self.losses = get_evaluations(model, num, self.var_name, lock)
+        self.hyperparameter, self.losses = get_evaluations(model, num, self.var_name, lock, self.target_cs)
 
         self.parzen_estimator_parameters = ParzenEstimatorParameters(
             consider_prior, prior_weight, consider_magic_clip, consider_endpoints, weight_func)

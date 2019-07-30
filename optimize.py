@@ -27,11 +27,11 @@ def create_hyperparameter(hp_type, name, lower, upper, default_value = None, log
 def save_evaluation(hp_dict, model, num, n_jobs, lock):
     lock.acquire()
 
-    for var_name, hp in hp_dict.items():               
+    for var_name, hp in hp_dict.items():
         with open("evaluation/{}/{:0>3}/{}.csv".format(model, num, var_name), "a", newline = "") as f:
             writer = csv.writer(f, delimiter = ",", quotechar = "'")
             writer.writerow([n_jobs, hp])
-    
+
     lock.release()
 
 
@@ -51,7 +51,7 @@ def optimize(model, num, obj, max_jobs = 100, n_parallels = None):
         _optimize_sequential(model, num, obj, max_jobs = max_jobs)
     else:
         _optimize_parallel(model, num, obj, max_jobs = max_jobs, n_parallels = n_parallels)
-    
+
 
 def _optimize_sequential(model, num, obj, max_jobs = 100):
     if os.path.isfile("evaluation/{}/{:0>3}/loss.csv".format(model, num)):
@@ -60,13 +60,14 @@ def _optimize_sequential(model, num, obj, max_jobs = 100):
     else:
         n_jobs = 0
     max_jobs += n_jobs
+    lock = Lock()
 
     while True:
         n_cuda = 0
 
-        obj(model, num, n_cuda, n_jobs)
+        obj(model, num, n_cuda, n_jobs, lock)
         n_jobs += 1
-            
+
         if n_jobs >= max_jobs:
             break
 
@@ -76,7 +77,7 @@ def _optimize_parallel(model, num, obj, max_jobs = 100, n_parallels = 4):
             n_jobs = len(list(csv.reader(f, delimiter = ",")))
     else:
         n_jobs = 0
-    
+
     jobs = []
     n_runnings = 0
     max_jobs += n_jobs
@@ -102,11 +103,11 @@ def _optimize_parallel(model, num, obj, max_jobs = 100, n_parallels = 4):
             p.start()
             jobs.append([n_cuda, p])
             n_jobs += 1
-            
+
             if n_jobs >= max_jobs:
                 break
-            
+
             time.sleep(1.0e-6)
-    
+
         if n_jobs >= max_jobs:
             break
