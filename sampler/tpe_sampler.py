@@ -74,6 +74,32 @@ def default_weights(x, n_samples_lower = 25):
         flat = np.ones(n_samples_lower)
         return np.concatenate([ramp, flat], axis = 0)
 
+def transform_vals(lower_bound, upper_bound, lower_vals, upper_vals, _dist, q = None, is_log = False):
+    if is_log:
+        lower_bound = np.log(lower_bound)
+        upper_bound = np.log(upper_bound)
+        lower_vals = np.log(lower_vals)
+        upper_vals = np.log(upper_vals)
+
+    if _dist == int:
+        lower_bound -= 0.5
+        upper_bound += 0.5
+    elif q is not None:
+        if is_log:
+            lower_bound -= 0.5 * q
+            upper_bound += 0.5 * q
+        else:
+            lower_bound -= 0.5 * q
+            upper_bound += 0.5 * q
+
+    if is_log:
+        lower_bound = np.log(max(lower_bound, 1.0e-10))
+        upper_bound = np.log(upper_bound)
+        lower_vals = np.log(lower_vals)
+        upper_vals = np.log(upper_vals)
+
+    return lower_bound, upper_bound, lower_vals, upper_vals
+
 class TPESampler():
     def __init__(self, model, num, target_hp, n_jobs, lock, consider_prior = True, prior_weight = 1.0,
             consider_magic_clip = True, consider_endpoints = False, n_startup_trials = 10,
@@ -136,31 +162,9 @@ class TPESampler():
     def _sample_numerical(self, _dist, lower_vals, upper_vals, q = None):
 
         lower_bound, upper_bound = self.hp.lower, self.hp.upper
-        is_log = self.hp.log
+        is_log, q = self.hp.log, self.hp.q
 
-        if is_log:
-            lower_bound = np.log(lower_bound)
-            upper_bound = np.log(upper_bound)
-            lower_vals = np.log(lower_vals)
-            upper_vals = np.log(upper_vals)
-
-        if _dist == int:
-            lower_bound -= 0.5
-            upper_bound += 0.5
-        elif q is not None:
-            if is_log:
-                lower_bound -= 0.5 * q
-                upper_bound += 0.5 * q
-            else:
-                lower_bound -= 0.5 * q
-                upper_bound += 0.5 * q
-
-        if is_log:
-            lower_bound = np.log(max(lower_bound, 1.0e-10))
-            upper_bound = np.log(upper_bound)
-            lower_vals = np.log(lower_vals)
-            upper_vals = np.log(upper_vals)
-
+        lower_bound, upper_bound, lower_vals, upper_vals = transform_vals(lower_bound, upper_bound, lower_vals, upper_vals, _dist, q = q, is_log = is_log)
 
         size = (self.n_ei_candidates, )
 
@@ -233,6 +237,7 @@ class TPESampler():
         sigmas = parzen_estimator.sigmas
         samples, weights, mus, sigmas = map(np.asarray, (samples, weights, mus, sigmas))
         p_accept = np.sum(weights * (TPESampler._normal_cdf(upper, mus, sigmas) - TPESampler._normal_cdf(lower, mus, sigmas)))
+        q = self.hp.q
 
         if var_type == "float" and q is None:
             jacobian_inv = samples[:, None] if is_log else np.ones(samples.shape)[:, None]
