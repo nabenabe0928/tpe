@@ -87,7 +87,7 @@ def transform_vals(lower_bound, upper_bound, lower_vals, upper_vals, _dist, q = 
     elif q is not None:
         lower_bound -= 0.5 * q
         upper_bound += 0.5 * q
-        
+
     return lower_bound, upper_bound, lower_vals, upper_vals
 
 class TPESampler():
