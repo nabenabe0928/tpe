@@ -210,7 +210,7 @@ class TPESampler():
             if lower <= draw < upper:
                 samples = np.append(samples, draw)
 
-        if var_type == "float" and q is None:
+        if var_type == float and q is None:
             if is_log:
                 samples = np.exp(samples)
             return samples
@@ -228,12 +228,13 @@ class TPESampler():
         samples, weights, mus, sigmas = map(np.asarray, (samples, weights, mus, sigmas))
         p_accept = np.sum(weights * (TPESampler._normal_cdf(upper, mus, sigmas) - TPESampler._normal_cdf(lower, mus, sigmas)))
 
-        if var_type == "float" and q is None:
+        if var_type == float and q is None:
             jacobian_inv = samples[:, None] if is_log else np.ones(samples.shape)[:, None]
             if is_log:
                 distance = np.log(samples[:, None]) - mus
             else:
                 distance = samples[:, None] - mus
+
             mahalanobis = (distance / np.maximum(sigmas, EPS))**2
             Z = np.sqrt(2 * np.pi) * sigmas * jacobian_inv
             coef = weights / Z / p_accept

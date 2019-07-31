@@ -25,7 +25,7 @@ def plot_EI(model, num, x_name, x_min, x_max, y_name = "loss", y_min = 0., y_max
     tpe = TPESampler(model, num, var, 0, lock)
     lower_bound, upper_bound, is_log, q = tpe.hp.lower, tpe.hp.upper, tpe.hp.log, tpe.hp.q
     _dist = distribution_type(tpe.target_cs, tpe.var_name)
-    n_start = 100
+    n_start = 10
     step = 10
 
     for n in range(n_start, len(ys), step):
@@ -42,15 +42,16 @@ def plot_EI(model, num, x_name, x_min, x_max, y_name = "loss", y_min = 0., y_max
             samples = np.e ** (np.linspace(lower_bound, upper_bound, 100))
         else:
             samples = np.linspace(lower_bound, upper_bound, 100)
-
+        
         parzen_estimator_lower = ParzenEstimator(lower_vals, lower_bound, upper_bound, tpe.parzen_estimator_parameters)
         log_lower = tpe._gmm_log_pdf(samples, parzen_estimator_lower, lower_bound, upper_bound, var_type = _dist, is_log=is_log, q = q)
-
+        
         parzen_estimator_upper = ParzenEstimator(upper_vals, lower_bound, upper_bound, tpe.parzen_estimator_parameters)
         log_upper = tpe._gmm_log_pdf(samples, parzen_estimator_upper, lower_bound, upper_bound, var_type = _dist, is_log = is_log, q = q)
 
         samples, log_lower, log_upper = map(np.asarray, (samples, log_lower, log_upper))
         ei = log_lower - log_upper
+        #print(log_lower, log_upper, ei)
 
         x_grid = np.linspace(lower_bound, upper_bound, 100)
 
@@ -78,14 +79,14 @@ def plot_EI(model, num, x_name, x_min, x_max, y_name = "loss", y_min = 0., y_max
         for w, m, s in zip(w_l, m_l, s_l):
             l_base = normal_pdf(x_grid, w, m, s) / p_accept_l
             sum_l += l_base
-            #plt.plot(x_grid, l_base, color = "red", linestyle = "--")
-        #plt.plot(x_grid, sum_l, color = "red")
+            plt.plot(x_grid, l_base, color = "red", linestyle = "--")
+        plt.plot(x_grid, sum_l, color = "red")
 
         for w, m, s in zip(w_g, m_g, s_g):
             g_base = normal_pdf(x_grid, w, m, s) / p_accept_g
             sum_g += g_base
             #plt.plot(x_grid, g_base, color = "blue", linestyle = "--")
-        #plt.plot(x_grid, sum_g, color = "blue")
+        plt.plot(x_grid, sum_g, color = "blue")
 
         for lower_val in lower_vals:
             print(lower_val)
