@@ -79,13 +79,13 @@ def plot_EI(model, num, x_name, x_min, x_max, y_name = "loss", y_min = 0., y_max
             l_base = normal_pdf(x_grid, w, m, s) / p_accept_l
             sum_l += l_base
             #plt.plot(x_grid, l_base, color = "red", linestyle = "--")
-        plt.plot(x_grid, sum_l, color = "red")
+        #plt.plot(x_grid, sum_l, color = "red")
 
         for w, m, s in zip(w_g, m_g, s_g):
             g_base = normal_pdf(x_grid, w, m, s) / p_accept_g
             sum_g += g_base
             #plt.plot(x_grid, g_base, color = "blue", linestyle = "--")
-        plt.plot(x_grid, sum_g, color = "blue")
+        #plt.plot(x_grid, sum_g, color = "blue")
 
         for lower_val in lower_vals:
             print(lower_val)
