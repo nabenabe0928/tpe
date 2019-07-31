@@ -12,6 +12,8 @@ from sampler.tpe_sampler import TPESampler, distribution_type, transform_vals, g
 from sampler.parzen_estimator import ParzenEstimator, ParzenEstimatorParameters
 from optimize import create_hyperparameter
 
+def normal_pdf(x, w, mu, sgm):
+    return w / np.sqrt(2 * np.pi * sgm ** 2) * np.e ** (- 0.5 * ((x - mu) / sgm) ** 2)
 
 def plot_EI(model, num, x_name, x_min, x_max, y_name = "loss", y_min = 0., y_max = 5., is_log = False, q = None):
 
@@ -23,9 +25,10 @@ def plot_EI(model, num, x_name, x_min, x_max, y_name = "loss", y_min = 0., y_max
     tpe = TPESampler(model, num, var, 0, lock)
     lower_bound, upper_bound, is_log, q = tpe.hp.lower, tpe.hp.upper, tpe.hp.log, tpe.hp.q
     _dist = distribution_type(tpe.target_cs, tpe.var_name)
-    n_start = 10
+    n_start = 100
+    step = 10
 
-    for n in range(n_start, len(ys)):
+    for n in range(n_start, len(ys), step):
         tpe.hyperparameter = np.array(xs[:n])
         tpe.losses = np.array(ys[:n])
         lower_vals, upper_vals = tpe._split_observation_pairs()
@@ -50,9 +53,45 @@ def plot_EI(model, num, x_name, x_min, x_max, y_name = "loss", y_min = 0., y_max
         ei = log_lower - log_upper
 
         x_grid = np.linspace(lower_bound, upper_bound, 100)
+
         plt.figure()
+        if is_log:
+            plt.title("{}: {} vs {} with Log Scale. # of better: {}".format(n, x_name, y_name, len(lower_vals)))
+        else:
+            plt.title("{}: {} vs {} with Usual Scale. # of better: {}".format(n, x_name, y_name, len(lower_vals)))
+
         plt.xlim(lower_bound, upper_bound)
-        plt.plot(x_grid, ei)
+
+        print("### {}".format(n))
+        w_l = parzen_estimator_lower.weights
+        m_l = parzen_estimator_lower.mus
+        s_l = parzen_estimator_lower.sigmas
+        p_accept_l = np.sum(w_l * (TPESampler._normal_cdf(upper_bound, m_l, s_l) - TPESampler._normal_cdf(lower_bound, m_l, s_l)))
+
+        w_g = parzen_estimator_upper.weights
+        m_g = parzen_estimator_upper.mus
+        s_g = parzen_estimator_upper.sigmas
+        p_accept_g = np.sum(w_g * (TPESampler._normal_cdf(upper_bound, m_g, s_g) - TPESampler._normal_cdf(lower_bound, m_g, s_g)))
+
+        sum_l = np.zeros(100)
+        sum_g = np.zeros(100)
+        for w, m, s in zip(w_l, m_l, s_l):
+            l_base = normal_pdf(x_grid, w, m, s) / p_accept_l
+            sum_l += l_base
+            #plt.plot(x_grid, l_base, color = "red", linestyle = "--")
+        plt.plot(x_grid, sum_l, color = "red")
+
+        for w, m, s in zip(w_g, m_g, s_g):
+            g_base = normal_pdf(x_grid, w, m, s) / p_accept_g
+            sum_g += g_base
+            #plt.plot(x_grid, g_base, color = "blue", linestyle = "--")
+        plt.plot(x_grid, sum_g, color = "blue")
+
+        for lower_val in lower_vals:
+            print(lower_val)
+            plt.axvline(x = lower_val, color = "red", linestyle = "--")
+
+        plt.plot(x_grid, ei, color = "green")
         plt.show()
 
 def opt_movie(xs, fs, dt = 0.1, y_min = 0., y_max = 5.):
