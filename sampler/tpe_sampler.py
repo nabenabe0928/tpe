@@ -162,7 +162,7 @@ class TPESampler():
     def _sample_numerical(self, _dist, lower_vals, upper_vals, q = None):
 
         lower_bound, upper_bound = self.hp.lower, self.hp.upper
-        is_log, q = self.hp.log, self.hp.q
+        is_log = self.hp.log
 
         lower_bound, upper_bound, lower_vals, upper_vals = transform_vals(lower_bound, upper_bound, lower_vals, upper_vals, _dist, q = q, is_log = is_log)
 
@@ -237,7 +237,6 @@ class TPESampler():
         sigmas = parzen_estimator.sigmas
         samples, weights, mus, sigmas = map(np.asarray, (samples, weights, mus, sigmas))
         p_accept = np.sum(weights * (TPESampler._normal_cdf(upper, mus, sigmas) - TPESampler._normal_cdf(lower, mus, sigmas)))
-        q = self.hp.q
 
         if var_type == "float" and q is None:
             jacobian_inv = samples[:, None] if is_log else np.ones(samples.shape)[:, None]
