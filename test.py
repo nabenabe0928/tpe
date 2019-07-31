@@ -7,7 +7,7 @@ def objective_func(model, num, n_cuda, n_jobs, lock):
     hp_dict = {}
     sample = sample_target(model, num, n_jobs, lock)
 
-
+    """
     var_name = "batch_size"
     hp_dict[var_name] = sample(create_hyperparameter("int", name = var_name, lower = 32, upper = 256, default_value = 128))
     var_name = "lr"
@@ -26,11 +26,18 @@ def objective_func(model, num, n_cuda, n_jobs, lock):
     hp_dict[var_name] = sample(create_hyperparameter("int", name = var_name, lower = 16, upper = 128, default_value = 64))
     var_name = "drop_rate"
     hp_dict[var_name] = sample(create_hyperparameter("float", name = var_name, lower = 0., upper = 1., default_value = 0.5))
+    """
+
+    hp_dict["loss"] = 0
+    for n in range(2):
+        var_name = "x{}".format(n)
+        hp_dict[var_name] = sample(create_hyperparameter("float", name = var_name, lower = -1., upper = 1., default_value = 0.5))   
+        hp_dict["loss"] += hp_dict[var_name] ** 2
 
     #loss, acc = func(hp_dict, model, num, n_cuda, n_jobs)
     #print_iterations(n_jobs, loss, acc)
-    import random
-    hp_dict["loss"] = random.random()
+
+    #hp_dict["loss"] = hp_dict["x"] ** 2
     #hp_dict["acc"] = acc
 
     save_evaluation(hp_dict, model, num, n_jobs, lock)

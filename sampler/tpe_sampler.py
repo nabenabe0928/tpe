@@ -76,7 +76,7 @@ def default_weights(x, n_samples_lower = 25):
 
 def transform_vals(lower_bound, upper_bound, lower_vals, upper_vals, _dist, q = None, is_log = False):
     if is_log:
-        lower_bound = np.log(lower_bound)
+        lower_bound = np.log(max(lower_bound, 1.0e-10))
         upper_bound = np.log(upper_bound)
         lower_vals = np.log(lower_vals)
         upper_vals = np.log(upper_vals)
@@ -85,19 +85,9 @@ def transform_vals(lower_bound, upper_bound, lower_vals, upper_vals, _dist, q = 
         lower_bound -= 0.5
         upper_bound += 0.5
     elif q is not None:
-        if is_log:
-            lower_bound -= 0.5 * q
-            upper_bound += 0.5 * q
-        else:
-            lower_bound -= 0.5 * q
-            upper_bound += 0.5 * q
-
-    if is_log:
-        lower_bound = np.log(max(lower_bound, 1.0e-10))
-        upper_bound = np.log(upper_bound)
-        lower_vals = np.log(lower_vals)
-        upper_vals = np.log(upper_vals)
-
+        lower_bound -= 0.5 * q
+        upper_bound += 0.5 * q
+        
     return lower_bound, upper_bound, lower_vals, upper_vals
 
 class TPESampler():
