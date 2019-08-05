@@ -69,6 +69,7 @@ class ParzenEstimator(object):
         sorted_weights = weights_func(samples.size)[order]
         if consider_prior:
             sorted_weights = np.insert(sorted_weights, prior_pos, prior_weight)
+
         
         sorted_weights /= sorted_weights.sum()
 
