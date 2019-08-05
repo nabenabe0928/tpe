@@ -116,7 +116,6 @@ def plot_pdf(PE, grid, lb, ub, do_plot = False, axv = False, c = "red"):
     ms = PE.mus
     ss = PE.sigmas
     p = np.sum(ws * (TPESampler._normal_cdf(ub, ms, ss) - TPESampler._normal_cdf(lb, ms, ss)))
-
     SUM = np.zeros(len(grid))
     
     for w, m, s in zip(ws, ms, ss):
@@ -124,8 +123,8 @@ def plot_pdf(PE, grid, lb, ub, do_plot = False, axv = False, c = "red"):
         SUM += base
         if do_plot:
             plt.plot(grid, base, color = c, linestyle = "--")
-    plt.plot(grid, SUM, color = c)
-
+    plt.plot(grid, (- 0.5 * lb + 0.5 * ub) * SUM, color = c)
+    
     if axv:
         for m in ms:
             plt.axvline(x = m, color = c, linestyle = "--")
