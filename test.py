@@ -2,6 +2,8 @@ from argparse import ArgumentParser as ArgPar
 from main import start_opt
 from optimize import sample_target, create_hyperparameter, save_evaluation, print_iterations
 from objective_functions.train import func
+from objective_functions.benchmark import *
+import numpy as np
 
 def objective_func(model, num, n_cuda, n_jobs, lock):
     hp_dict = {}
@@ -29,13 +31,23 @@ def objective_func(model, num, n_cuda, n_jobs, lock):
     """
 
     hp_dict["loss"] = 0
+    xs = []
     for n in range(2):
         var_name = "x{}".format(n)
-        hp_dict[var_name] = sample(create_hyperparameter("float", name = var_name, lower = -1., upper = 1., default_value = 0.5))   
-        hp_dict["loss"] += hp_dict[var_name] ** 2
+        hp_dict[var_name] = sample(create_hyperparameter("float", name = var_name, lower = -32., upper = 32., default_value = 0.5))
+        xs.append(hp_dict[var_name])
+        #hp_dict["loss"] += hp_dict[var_name] ** 2
 
+    xs = np.array(xs)
+    t1 = 20
+    t2 = - 20 * np.exp(- 0.2 * np.sqrt(1.0 / len(xs) * np.sum(xs ** 2)))
+    t3 = np.e
+    t4 = - np.exp(1.0 / len(xs) * np.sum(np.cos(2 * np.pi * xs)))
+    loss = t1 + t2 + t3 + t4
+    hp_dict["loss"] = loss
     #loss, acc = func(hp_dict, model, num, n_cuda, n_jobs)
     #print_iterations(n_jobs, loss, acc)
+    print_iterations(n_jobs, hp_dict["loss"])
 
     #hp_dict["loss"] = hp_dict["x"] ** 2
     #hp_dict["acc"] = acc
@@ -51,11 +63,11 @@ if __name__ == "__main__":
     argp.add_argument("-jobs", type = int, default = None)
     argp.add_argument("-re", type = int, default = None, choices = [0, 1])
     args = argp.parse_args()
-        
+
     num = args.num
     n_parallels = args.parallel
     n_jobs = args.jobs
     rerun = bool(args.re)
     model = args.model
-    
+
     start_opt(obj = objective_func, model = model, num = num, n_parallels = n_parallels, n_jobs = n_jobs, rerun = rerun)
