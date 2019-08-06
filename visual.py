@@ -28,15 +28,15 @@ def plot_EI_1d(model, num, x_name, x_min, x_max, y_name = "loss", y_min = 0., y_
     _dist = distribution_type(tpe.target_cs, tpe.var_name)
     n_grids = 100
     lb, ub, _, __ = transform_vals(lb, ub, np.array([]), np.array([]), _dist, is_log = is_log)
-    x_grid = np.linspace(lb, ub, n_grids) 
-    
+    x_grid = np.linspace(lb, ub, n_grids)
+
     for n in range(n_start, len(ys), step):
         tpe.hyperparameter = np.array(xs[:n])
         tpe.losses = np.array(ys[:n])
         lvs, uvs = tpe._split_observation_pairs()
         _, __, lvs, uvs = transform_vals(1, 1, lvs, uvs, _dist, is_log = is_log)
-        print("### {}".format(n)) 
-        
+        print("### {}".format(n))
+
         plt.figure()
         plt.xlim(lb, ub)
         plt.grid()
@@ -73,18 +73,18 @@ def plot_EI_2d(model, num, xnames, lbs, ubs, is_logs, y_name = "loss", y_min = 0
         eis = []
         print("### {}".format(n))
         plt.figure()
-        
+
         for tpe, xs, _dist, is_log, grid, lb, ub in zip(tpes, xns, _dists, is_logs, grids, lbs, ubs):
             tpe.hyperparameter = np.array(xs[:n])
             tpe.losses = np.array(ys[:n])
             lvs, uvs = tpe._split_observation_pairs()
             _, __, lvs, uvs = transform_vals(1, 1, lvs, uvs, _dist, is_log = is_log)
-            
+
             if is_log:
                 samples = np.e ** (np.linspace(lb, ub, n_grids))
             else:
                 samples = np.linspace(lb, ub, n_grids)
-            
+
             eis.append(np.array(plot_and_get_ei(grid, samples, lvs, uvs, lb, ub, tpe, _dist, is_log)))
 
         eis = np.array(eis)
@@ -100,7 +100,7 @@ def plot_and_get_ei(grid, samples, lvs, uvs, lb, ub, tpe, _dist, is_log, do_plot
     pe_upper = ParzenEstimator(uvs, lb, ub, tpe.parzen_estimator_parameters)
     log_upper = tpe._gmm_log_pdf(samples, pe_upper, lb, ub, var_type = _dist, is_log = is_log)
     ei = np.array(log_lower) - np.array(log_upper)
-    
+
     if do_plot:
         plot_pdf(pe_lower, grid, lb, ub, do_plot = True, axv = True, c = "red")
         plot_pdf(pe_upper, grid, lb, ub, do_plot = False, axv = False, c = "blue")
@@ -109,22 +109,22 @@ def plot_and_get_ei(grid, samples, lvs, uvs, lb, ub, tpe, _dist, is_log, do_plot
         plt.show()
 
     return ei
-    
-        
+
+
 def plot_pdf(PE, grid, lb, ub, do_plot = False, axv = False, c = "red"):
     ws = PE.weights
     ms = PE.mus
     ss = PE.sigmas
     p = np.sum(ws * (TPESampler._normal_cdf(ub, ms, ss) - TPESampler._normal_cdf(lb, ms, ss)))
     SUM = np.zeros(len(grid))
-    
+
     for w, m, s in zip(ws, ms, ss):
         base = normal_pdf(grid, w, m, s) / p
         SUM += base
         if do_plot:
             plt.plot(grid, base, color = c, linestyle = "--")
     plt.plot(grid, (- 0.5 * lb + 0.5 * ub) * SUM, color = c)
-    
+
     if axv:
         for m in ms:
             plt.axvline(x = m, color = c, linestyle = "--")
@@ -173,37 +173,51 @@ def get_evaluation(model, num, x_name, y_name, y_min = 0., y_max = 5., is_log = 
 
     return xs, ys #, y_star
 
+def get_var_infos(model, var_name = None):
+
+    with open("hps_dict/{}.csv".format(model), newline = "") as f:
+        reader = csv.DictReader(f, delimiter = ",")
+
+        for row in reader:
+            if row["name"] == var_name:
+                m = float(row["lower"])
+                M = float(row["upper"])
+                log = eval(row["log"])
+            if var_name is None:
+                m = float(row["lower"])
+                M = float(row["upper"])
+                log = eval(row["log"])
+
+    return m, M, log
+
 if __name__ == "__main__":
     argp = ArgPar()
     argp.add_argument("-model", choices = os.listdir("evaluation"), required = True)
     argp.add_argument("-num", type = int, required = True)
     argp.add_argument("-x1name", required = True)
-    argp.add_argument("-x1max", type = float, required = True)
-    argp.add_argument("-x1min", type = float, required = True)
-    argp.add_argument("-log1", type = int, default = 0, choices = [0, 1], required = True)
     argp.add_argument("-x2name", default = None)
-    argp.add_argument("-x2max", type = float, default = None)
-    argp.add_argument("-x2min", type = float, default = None)
-    argp.add_argument("-log2", type = int, default = 0, choices = [0, 1])
     argp.add_argument("-yname", default = "loss")
     argp.add_argument("-ymax", type = float, default = 5.)
     argp.add_argument("-ymin", type = float, default = 0.)
     argp.add_argument("-start", type = int, default = 10)
     argp.add_argument("-step", type = int, default = 10)
     argp.add_argument("-mode", type = int, default = 1, choices = [1, 2])
-    
+
     args = argp.parse_args()
 
     model = args.model
     num = args.num
     x1name = args.x1name
-    x1max = args.x1max
-    x1min = args.x1min
-    is_log1 = bool(args.log1)
     x2name = args.x2name
-    x2max = args.x2max
-    x2min = args.x2min
-    is_log2 = bool(args.log2)
+
+    if x1name[0] == "x" and x2name[0] == "x":
+        x1min, x1max, is_log1 = get_var_infos(model)
+        print(x1min, x1max, is_log1)
+        x2min, x2max, is_log2 = x1min, x1max, is_log1
+    else:
+        x1min, x1max, is_log1 = get_var_infos(model, x1name)
+        x2min, x2max, is_log2 = get_var_infos(model, x2name)
+
     yname = args.yname
     ymax = args.ymax
     ymin = args.ymin

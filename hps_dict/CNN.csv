@@ -1,0 +1,10 @@
+name,lower,upper,log
+batch_size,32,256,True
+lr,5.0e-3,0.5,True
+momentum,0.9,1.0,False
+weight_decay,5.0e-6,5.0e-2,True
+ch1,16,128,True
+ch2,16,128,True
+ch3,16,128,True
+ch4,16,128,True
+drop_rate,0.0,1.0,False
