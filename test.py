@@ -9,7 +9,6 @@ def objective_func(model, num, n_cuda, n_jobs, lock):
     hp_dict = {}
     sample = sample_target(model, num, n_jobs, lock)
 
-    """
     var_name = "batch_size"
     hp_dict[var_name] = sample(create_hyperparameter("int", name = var_name, lower = 32, upper = 256, default_value = 128))
     var_name = "lr"
@@ -28,29 +27,31 @@ def objective_func(model, num, n_cuda, n_jobs, lock):
     hp_dict[var_name] = sample(create_hyperparameter("int", name = var_name, lower = 16, upper = 128, default_value = 64))
     var_name = "drop_rate"
     hp_dict[var_name] = sample(create_hyperparameter("float", name = var_name, lower = 0., upper = 1., default_value = 0.5))
-    """
 
-    hp_dict["loss"] = 0
-    xs = []
-    for n in range(2):
-        var_name = "x{}".format(n)
-        hp_dict[var_name] = sample(create_hyperparameter("float", name = var_name, lower = -32., upper = 32., default_value = 0.5))
-        xs.append(hp_dict[var_name])
-        #hp_dict["loss"] += hp_dict[var_name] ** 2
-
-    xs = np.array(xs)
-    t1 = 20
-    t2 = - 20 * np.exp(- 0.2 * np.sqrt(1.0 / len(xs) * np.sum(xs ** 2)))
-    t3 = np.e
-    t4 = - np.exp(1.0 / len(xs) * np.sum(np.cos(2 * np.pi * xs)))
-    loss = t1 + t2 + t3 + t4
+    loss, acc = func(hp_dict, model, num, n_cuda, n_jobs)
+    print_iterations(n_jobs, loss, acc)
+    hp_dict["acc"] = acc
     hp_dict["loss"] = loss
-    #loss, acc = func(hp_dict, model, num, n_cuda, n_jobs)
-    #print_iterations(n_jobs, loss, acc)
-    print_iterations(n_jobs, hp_dict["loss"])
 
-    #hp_dict["loss"] = hp_dict["x"] ** 2
-    #hp_dict["acc"] = acc
+    save_evaluation(hp_dict, model, num, n_jobs, lock)
+
+def bench_func(model, num, n_cuda, n_jobs, lock):
+    hp_dict = {}
+    sample = sample_target(model, num, n_jobs, lock)
+    n_dims = 2
+    xs = []
+    func_cls = eval(model)()
+    lb = func_cls.bounds[0]
+    ub = func_cls.bounds[1]
+
+    for i in range(n_dims):
+        var_name = "x{}".format()
+        hp_dict[var_name] = sample(create_hyperparameter("float", name = var_name, lower = lb, upper = ub))
+        xs.append(hp_dict[var_name])
+
+    loss = func_cls.f(np.array(xs))
+    print_iterations(n_jobs, loss)
+    hp_dict["loss"] = loss
 
     save_evaluation(hp_dict, model, num, n_jobs, lock)
 
