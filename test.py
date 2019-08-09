@@ -38,14 +38,14 @@ def objective_func(model, num, n_cuda, n_jobs, lock):
 def bench_func(model, num, n_cuda, n_jobs, lock):
     hp_dict = {}
     sample = sample_target(model, num, n_jobs, lock)
-    n_dims = 2
+    n_dims = 10
     xs = []
     func_cls = eval(model)()
     lb = func_cls.bounds[0]
     ub = func_cls.bounds[1]
 
     for i in range(n_dims):
-        var_name = "x{}".format()
+        var_name = "x{}".format(i)
         hp_dict[var_name] = sample(create_hyperparameter("float", name = var_name, lower = lb, upper = ub))
         xs.append(hp_dict[var_name])
 
@@ -70,5 +70,6 @@ if __name__ == "__main__":
     n_jobs = args.jobs
     rerun = bool(args.re)
     model = args.model
-
-    start_opt(obj = objective_func, model = model, num = num, n_parallels = n_parallels, n_jobs = n_jobs, rerun = rerun)
+    model = "sphere"
+    #start_opt(obj = objective_func, model = model, num = num, n_parallels = n_parallels, n_jobs = n_jobs, rerun = rerun)
+    start_opt(obj = bench_func, model = model, num = num, n_parallels = n_parallels, n_jobs = n_jobs, rerun = rerun)
