@@ -20,7 +20,7 @@ class ackley():
 
 class sphere():
     def __init__(self, verbose = False):
-        self.bounds = np.array([-100, 100])
+        self.bounds = np.array([-1, 1])
         if verbose:
             print_info("sphere", self.bounds, 0)
 
