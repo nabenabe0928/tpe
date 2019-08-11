@@ -6,25 +6,27 @@ from typing import Optional
 
 EPS = 1e-12
 
+
 class ParzenEstimatorParameters(
-        NamedTuple('_ParzenEstimatorParameters', [
-            ('consider_prior', bool),
-            ('prior_weight', Optional[float]),
-            ('consider_magic_clip', bool),
-            ('consider_endpoints', bool),
-            ('weights', Callable[[int], ndarray]),
-        ])):
+    NamedTuple('_ParzenEstimatorParameters', [
+              ('consider_prior', bool),
+              ('prior_weight', Optional[float]),
+              ('consider_magic_clip', bool),
+              ('consider_endpoints', bool),
+              ('weights', Callable[[int], ndarray]),
+              ])):
     pass
+
 
 class ParzenEstimator(object):
     def __init__(self, samples, lower, upper, parameters):
 
         weights, mus, sigmas = self._calculate(samples, lower, upper, parameters.consider_prior, parameters.prior_weight,
-            parameters.consider_magic_clip, parameters.consider_endpoints, parameters.weights)
-            
+                                               parameters.consider_magic_clip, parameters.consider_endpoints, parameters.weights)
         self.weights = np.asarray(weights)
         self.mus = np.asarray(mus)
         self.sigmas = np.asarray(sigmas)
+
 
     def _calculate_mus(self, samples, lower_bound, upper_bound, consider_prior):
         order = np.argsort(samples)
@@ -39,6 +41,7 @@ class ParzenEstimator(object):
                 sorted_mus = np.insert(sorted_mus, prior_pos, prior_mu)
         
         return sorted_mus, order, prior_pos
+
 
     def _calculate_sigmas(self, samples, lower_bound, upper_bound, sorted_mus, prior_pos, consider_endpoints, consider_prior, consider_magic_clip):
         if samples.size > 0:
@@ -65,15 +68,16 @@ class ParzenEstimator(object):
         
         return sigma
 
+
     def _calculate_weights(self, samples, weights_func, order, prior_pos, prior_weight, consider_prior):
         sorted_weights = weights_func(samples.size)[order]
         if consider_prior:
             sorted_weights = np.insert(sorted_weights, prior_pos, prior_weight)
 
-        
         sorted_weights /= sorted_weights.sum()
 
         return sorted_weights
+
 
     def _calculate(self, samples, lower_bound, upper_bound, consider_prior, prior_weight, consider_magic_clip, consider_endpoints, weights_func):
         
