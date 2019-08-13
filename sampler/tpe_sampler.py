@@ -2,7 +2,6 @@ import numpy as np
 import csv
 import os
 import ConfigSpace as CS
-import ConfigSpace as CSH
 from scipy.special import erf
 from sampler.parzen_estimator import ParzenEstimator
 from sampler.parzen_estimator import ParzenEstimatorParameters
@@ -73,7 +72,7 @@ def default_weights(x, n_samples_lower=25):
     else:
         ramp = np.linspace(1.0 / x, 1.0, num=x - n_samples_lower)
         flat = np.ones(n_samples_lower)
-        return np.concatenate([ramp, flat], axis = 0)
+        return np.concatenate([ramp, flat], axis=0)
 
 
 def transform_vals(lower_bound, upper_bound, lower_vals, upper_vals, _dist, q=None, is_log=False):
@@ -113,7 +112,6 @@ class TPESampler():
         self.weight_func = weight_func
         self.rng = np.random.RandomState()
 
-
     def sample(self):
         n = len(self.losses)
         q = self.hp.q
@@ -138,7 +136,6 @@ class TPESampler():
 
         return hp_value
 
-
     def _split_observation_pairs(self):
         observation_pairs = [[hp, loss] for hp, loss in zip(self.hyperparameter, self.losses)]
         config_vals, loss_vals = np.asarray([p[0] for p in observation_pairs]), np.asarray([p[1] for p in observation_pairs])
@@ -150,7 +147,6 @@ class TPESampler():
         upper_vals = np.asarray(config_vals[loss_ascending[n_lower:]])
 
         return lower_vals, upper_vals
-
 
     def _sample_numerical(self, _dist, lower_vals, upper_vals, q=None):
         lower_bound, upper_bound = self.hp.lower, self.hp.upper
@@ -168,7 +164,6 @@ class TPESampler():
         log_likelihoods_upper = self._gmm_log_pdf(samples_lower, parzen_estimator_upper, lower_bound, upper_bound, var_type=_dist, is_log=is_log, q=q)
 
         return _dist(TPESampler._compare(samples_lower, log_likelihoods_lower, log_likelihoods_upper))
-
 
     def _sample_categorical(self, lower_vals, upper_vals):
         choices = self.target_cs._hyperparameters[self.var_name].choices
@@ -192,7 +187,6 @@ class TPESampler():
         log_likelihoods_upper = TPESampler._categorical_log_pdf(samples_lower, weighted_upper)
 
         return int(TPESampler._compare(samples_lower, log_likelihoods_lower, log_likelihoods_upper))
-
 
     def _sample_from_gmm(self, parzen_estimator, lower, upper, var_type, size=(), is_log=False, q=None):
         weights = parzen_estimator.weights
@@ -220,7 +214,6 @@ class TPESampler():
             if is_log:
                 samples = np.exp(samples)
             return np.round(samples / q) * q
-
 
     def _gmm_log_pdf(self, samples, parzen_estimator, lower, upper, var_type, is_log=False, q=None):
         weights = parzen_estimator.weights
@@ -259,7 +252,6 @@ class TPESampler():
 
         return return_val
 
-
     def _sample_from_categorical_dist(self, probabilities, size=()):
         if probabilities.size == 1 and isinstance(probabilities[0], np.ndarray):
             probabilities = probabilities[0]
@@ -281,14 +273,12 @@ class TPESampler():
         return_val.shape = size
         return return_val
 
-
     @classmethod
     def _categorical_log_pdf(cls, samples, p):
         if samples.size:
             return np.log(np.asarray(p)[samples])
         else:
             return np.asarray([])
-
 
     @classmethod
     def _compare(cls, samples, log_lower, log_upper):
@@ -298,13 +288,11 @@ class TPESampler():
 
         return samples[best]
 
-
     @classmethod
     def _logsum_rows(cls, x):
 
         x = np.asarray(x)
-        return np.log(np.exp(x).sum(axis = 1))
-
+        return np.log(np.exp(x).sum(axis=1))
 
     @classmethod
     def _normal_cdf(cls, x, mu, sigma):
@@ -314,7 +302,6 @@ class TPESampler():
         z = denominator / numerator
         return 0.5 * (1 + erf(z))
 
-
     @classmethod
     def _log_normal_cdf(cls, x, mu, sigma):
         mu, sigma = map(np.asarray, (mu, sigma))
@@ -323,4 +310,3 @@ class TPESampler():
         denominator = np.maximum(np.sqrt(2) * sigma, EPS)
         z = numerator / denominator
         return .5 + .5 * erf(z)
-

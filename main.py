@@ -3,6 +3,7 @@ import sys
 import os
 from optimize import optimize
 
+
 class pycolor:
     BLACK = '\033[30m'
     RED = '\033[31m'
@@ -16,29 +17,28 @@ class pycolor:
     BOLD = '\038[1m'
     UNDERLINE = '\033[4m'
     INVISIBLE = '\033[08m'
-    REVERCE = '\033[07m'    
+    REVERCE = '\033[07m'
 
 
-def start_opt(model = None, num = None, obj = None, n_parallels = None, n_jobs = None, rerun = None):
+def start_opt(model=None, num=None, obj=None, n_parallels=None, n_jobs=None, rerun=None):
 
     if model is None or num is None or n_parallels is None or rerun is None or n_jobs is None:
         print("")
         print("###### ERROR ######")
-        models = [file.split(".")[0] for file in os.listdir( "objective_functions/model" )]
-        
+        models = [file.split(".")[0] for file in os.listdir("objective_functions/model")]
         print("YOUR COMMAND MUST BE LIKE AS FOLLOWED:")
         print(pycolor.YELLOW + "python ####.py -model CNN -num 0 -parallel 2 -jobs 10 -re 0" + pycolor.END)
         print("")
         print(pycolor.RED + "SET the variables shown below:" + pycolor.END)
         print("model: which model you run:")
-        print("\t[", end = "")
-        
+        print("\t[", end="")
+
         for model in models:
-            if not "cache" in model:
-                print("{}, ".format(model), end = "")
+            if "cache" not in model:
+                print("{}, ".format(model), end="")
         print("]")
         print("")
-        
+
         print("   model: model name: ")
         print("\twhatever you want.")
         print("")
@@ -58,7 +58,7 @@ def start_opt(model = None, num = None, obj = None, n_parallels = None, n_jobs =
         print("")
         print("")
         sys.exit()
-    
+
     if not os.path.isdir("evaluation"):
         os.mkdir("evaluation")
     if not os.path.isdir("evaluation/{}".format(model)):
@@ -73,51 +73,45 @@ def start_opt(model = None, num = None, obj = None, n_parallels = None, n_jobs =
     if not os.path.isdir("log/{}/{:0>3}".format(model, num)):
         os.mkdir("log/{}/{:0>3}".format(model, num))
 
-    init_sh = \
-        ["#!/bin/bash", \
-        "USER=$(whoami)", \
-        "CWD=$(dirname $0)", \
-        "\n", \
-        "echo $USER:~$CWD$ rm -r evaluation/{}/{:0>3}".format(model, num), \
-        "rm -r evaluation/{}/{:0>3}".format(model, num), \
-        "echo $USER:~$CWD$ rm log/{}/{:0>3}/*".format(model,num), \
-        "rm log/{}/{:0>3}/*".format(model, num)
-        ]
+    init_sh = ["#!/bin/bash",
+               "USER=$(whoami)",
+               "CWD=$(dirname $0)",
+               "\n",
+               "echo $USER:~$CWD$ rm -r evaluation/{}/{:0>3}".format(model, num),
+               "rm -r evaluation/{}/{:0>3}".format(model, num),
+               "echo $USER:~$CWD$ rm log/{}/{:0>3}/*".format(model, num),
+               "rm log/{}/{:0>3}/*".format(model, num)]
 
     if not rerun:
         log_files = ["log/{}/{:0>3}/".format(model, num) + f for f in os.listdir("log/{}/{:0>3}".format(model, num))]
-        hp_files = ["evaluation/{}/{:0>3}/".format(model, num) + f for f in os.listdir("evaluation/{}/{:0>3}".format(model, num))]            
-        
+        hp_files = ["evaluation/{}/{:0>3}/".format(model, num) + f for f in os.listdir("evaluation/{}/{:0>3}".format(model, num))]
         rm_files = []
         script = ""
 
         for line in init_sh:
             script += line + "\n"
-        
         for file in log_files:
             rm_files.append(file)
         for file in hp_files:
             rm_files.append(file)
-        
+
         if len(rm_files) > 0:
             print("")
-            print("#### NOTICE ###") 
+            print("#### NOTICE ###")
             print(pycolor.YELLOW + "Model is {} and the trial number is {}".format(model, num) + pycolor.END)
             print(pycolor.RED + "You are going to remove some files." + pycolor.END)
             print("")
-            
+
             for i, file in enumerate(rm_files):
                 if i % 3 == 0 and i != 0:
-                    print("")    
-                print(pycolor.GREEN + "{0:<45}".format(file) + pycolor.END, end = "")
+                    print("")
+                print(pycolor.GREEN + "{0:<45}".format(file) + pycolor.END, end="")
 
-            
             answer = ""
-            while not answer in {"y", "n"}:
+            while answer not in {"y", "n"}:
                 print("")
                 print("")
                 answer = input("Is it okay? [y or n] : ")
-        
             if answer == "y":
                 with open("init.sh", "w") as f:
                     f.writelines(script)
@@ -131,9 +125,8 @@ def start_opt(model = None, num = None, obj = None, n_parallels = None, n_jobs =
             print("#########################")
             print("")
 
-            sp.call("chmod +x init.sh", shell = True)
-            sp.call("./init.sh", shell = True)
-            
+            sp.call("chmod +x init.sh", shell=True)
+            sp.call("./init.sh", shell=True)
             print("")
             print("#########################")
             print("### REMOVED THE FILES ###")
@@ -142,7 +135,7 @@ def start_opt(model = None, num = None, obj = None, n_parallels = None, n_jobs =
     else:
         n_ex = len(os.listdir("log/{}/{:0>3}".format(model, num)))
         for del_idx in range(max(0, n_ex - 1), n_ex):
-            sp.call("rm {}".format("log/{}/{:0>3}/log{:0>5}.csv".format(model, num, del_idx)), shell = True)
+            sp.call("rm {}".format("log/{}/{:0>3}/log{:0>5}.csv".format(model, num, del_idx)), shell=True)
 
     print("")
     print("#########################")
@@ -154,6 +147,6 @@ def start_opt(model = None, num = None, obj = None, n_parallels = None, n_jobs =
         os.mkdir("evaluation/{}/{:0>3}".format(model, num))
 
     if not os.path.isdir("log/{}/{:0>3}".format(model, num)):
-        os.mkdir("log/{}/{:0>3}".format(model, num))                                                                                            
-        
-    optimize(model, num, obj, max_jobs = n_jobs, n_parallels = n_parallels)
+        os.mkdir("log/{}/{:0>3}".format(model, num))
+
+    optimize(model, num, obj, max_jobs=n_jobs, n_parallels=n_parallels)

@@ -27,7 +27,6 @@ class ParzenEstimator(object):
         self.mus = np.asarray(mus)
         self.sigmas = np.asarray(sigmas)
 
-
     def _calculate_mus(self, samples, lower_bound, upper_bound, consider_prior):
         order = np.argsort(samples)
         sorted_mus = samples[order]
@@ -39,9 +38,8 @@ class ParzenEstimator(object):
             else:
                 prior_pos = np.searchsorted(samples[order], prior_mu)
                 sorted_mus = np.insert(sorted_mus, prior_pos, prior_mu)
-        
-        return sorted_mus, order, prior_pos
 
+        return sorted_mus, order, prior_pos
 
     def _calculate_sigmas(self, samples, lower_bound, upper_bound, sorted_mus, prior_pos, consider_endpoints, consider_prior, consider_magic_clip):
         if samples.size > 0:
@@ -50,24 +48,23 @@ class ParzenEstimator(object):
             if not consider_endpoints and sorted_mus_with_bounds.size > 2:
                 sigma[0] = sorted_mus_with_bounds[2] - sorted_mus_with_bounds[1]
                 sigma[-1] = sorted_mus_with_bounds[-2] - sorted_mus_with_bounds[-3]
-        
+
         maxsigma = upper_bound - lower_bound
-        
+
         if consider_magic_clip:
             minsigma = (upper_bound - lower_bound) / min(100.0, (1.0 + len(sorted_mus)))
         else:
             minsigma = EPS
         sigma = np.clip(sigma, minsigma, maxsigma)
-        
+
         if consider_prior:
             prior_sigma = 1.0 * (upper_bound - lower_bound)
             if samples.size > 0:
                 sigma[prior_pos] = prior_sigma
             else:
                 sigma = np.asarray([prior_sigma])
-        
-        return sigma
 
+        return sigma
 
     def _calculate_weights(self, samples, weights_func, order, prior_pos, prior_weight, consider_prior):
         sorted_weights = weights_func(samples.size)[order]
@@ -78,9 +75,7 @@ class ParzenEstimator(object):
 
         return sorted_weights
 
-
     def _calculate(self, samples, lower_bound, upper_bound, consider_prior, prior_weight, consider_magic_clip, consider_endpoints, weights_func):
-        
         samples = np.asarray(samples)
         sorted_mus, order, prior_pos = self._calculate_mus(samples, lower_bound, upper_bound, consider_prior)
         sigma = self._calculate_sigmas(samples, lower_bound, upper_bound, sorted_mus, prior_pos, consider_endpoints, consider_prior, consider_magic_clip)
