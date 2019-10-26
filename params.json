@@ -1,0 +1,88 @@
+{
+    "_comment1": ["FirstKey: string",
+                  "          The name of the objective function in 'func_file'.",
+                  " y_names: list of string",
+                  "          The names of measurements of hyperparameter configurations. e.g.) loss, cross entropy etc...",
+                  "  in_fmt: string",
+                  "          The format of input for the objective function. Either 'list' or 'dict'."],
+
+    "_comment2": ["About the elements of dict['config'].",
+                  "FirstKey: string",
+                  "          The name of a hyperparameter",
+                  "   lower: int or float (Only for uniform dist)",
+                  "          The lower bound of the hyperparameter.",
+                  "   upper: int or float (Only for uniform dist)",
+                  "          The upper bound of the hyperparameter.",
+                  "    dist: string (REQUIRED)('u' (uniform) or 'c' (categorical)",
+                  "          The distribution of the hyperparameter.",
+                  "var_type: string (REQUIRED)('int' or 'float' or 'str' or 'bool')",
+                  "          The type of the hyperparameter.",
+                  "       q: int or float or omitted",
+                  "          The quantization parameter.",
+                  "     log: string ('True' or 'False')",
+                  "          If True, searching on a log-scale space.",
+                  " choices: list (Only for categorical dist)",
+                  "          The possible choices for categorical parameters."],
+
+    "_comment3": "Here is the benchmark functions zone.",
+
+    "ackley": {"y_names": ["loss"], "in_fmt": "list",
+      "config": {"x": {"lower": -32.768, "upper": 32.768, "dist": "u", "var_type": "float"}}
+    },
+    "different_power": {"y_names": ["loss"], "in_fmt": "list",
+      "config": {"x": {"lower": -1.0, "upper": 1.0, "dist": "u", "var_type": "float"}}
+    },
+    "griewank": {"y_names": ["loss"], "in_fmt": "list",
+      "config": {"x": {"lower": -600.0, "upper": 600.0, "dist": "u", "var_type": "float"}}
+    },
+    "k_tablet": {"y_names": ["loss"], "in_fmt": "list",
+      "config": {"x": {"lower": -5.12, "upper": 5.12, "dist": "u", "var_type": "float"}}
+    },
+    "perm": {"y_names": ["loss"], "in_fmt": "list",
+      "config": {"x": {"lower": -1.0, "upper": 1.0, "dist": "u", "var_type": "float"}}
+    },
+    "rastrigin": {"y_names": ["loss"], "in_fmt": "list",
+      "config": {"x": {"lower": -5.12, "upper": 5.12, "dist": "u", "var_type": "float"}}
+    },
+    "rosenbrock": {"y_names": ["loss"], "in_fmt": "list",
+      "config": {"x": {"lower": -5.0, "upper": 5.0, "dist": "u", "var_type": "float"}}
+    },
+    "schwefel": {"y_names": ["loss"], "in_fmt": "list",
+      "config": {"x": {"lower": -500.0, "upper": 500.0, "dist": "u", "var_type": "float"}}
+    },
+    "sphere": {"y_names": ["loss"], "in_fmt": "list",
+      "config": {"x": {"lower": -5.0, "upper": 5.0, "dist": "u", "var_type": "float"}}
+    },
+    "styblinski": {"y_names": ["loss"], "in_fmt": "list",
+      "config": {"x": {"lower": -5.0, "upper": 5.0, "dist": "u", "var_type": "float"}}
+    },
+    "weighted_sphere": {"y_names": ["loss"], "in_fmt": "list",
+      "config": {"x": {"lower": -5.12, "upper": 5.12, "dist": "u", "var_type": "float"}}
+    },
+    "xin_she_yang": {"y_names": ["loss"], "in_fmt": "list",
+      "config": {"x": {"lower": -6.3, "upper": 6.3, "dist": "u", "var_type": "float"}}
+    },
+    "zakharov": {"y_names": ["loss"], "in_fmt": "list",
+      "config": {"x": {"lower": -10.0, "upper": 10.0, "dist": "u", "var_type": "float"}}
+    },
+
+
+    "_comment4": "Here is the machine learning algorithm zone.",
+
+    "cnn": {"y_names": ["error", "cross_entropy"], "in_fmt": "dict",
+      "config": {
+            "batch_size": {"lower": 32, "upper": 256, "dist": "u", "log": "True", "var_type": "int"},
+            "lr": {"lower": 5.0e-3, "upper": 5.0e-1, "dist": "u", "log": "True", "var_type": "float"},
+            "weight_decay": {"lower": 5.0e-6, "upper": 5.0e-2, "dist": "u", "log": "True", "var_type": "float"},
+            "momentum": {"lower": 0.8, "upper": 1.0, "dist": "u", "var_type": "float"},
+            "ch1": {"lower": 16, "upper": 128, "dist": "u", "log": "True", "var_type": "int"},
+            "ch2": {"lower": 16, "upper": 128, "dist": "u", "log": "True", "var_type": "int"},
+            "ch3": {"lower": 16, "upper": 128, "dist": "u", "log": "True", "var_type": "int"},
+            "ch4": {"lower": 16, "upper": 128, "dist": "u", "log": "True", "var_type": "int"},
+            "drop_rate": {"lower": 0.0, "upper": 1.0, "dist": "u", "var_type": "float"},
+            "nesterov": {"dist": "c", "choices": ["True", "False"], "var_type": "bool", "ignore": "True"},
+            "lr_decay": {"lower": 1.0e-2, "upper": 1.0, "dist": "u", "log": "True", "var_type": "float", "ignore": "True"}
+        }
+    }
+
+}

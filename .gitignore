@@ -1,0 +1,11 @@
+*.img
+history/
+__pycache__
+*/__pycache__
+*/*/__pycache__
+*/*/*/__pycache__
+*/*/*/*/__pycache__
+*/*/*/*/*/__pycache__
+*.sh.*
+svhn/
+cifar/
