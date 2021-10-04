@@ -1,117 +1,276 @@
+from typing import Optional, Union
+
 import numpy as np
 from scipy.special import erf
+from scipy.stats import truncnorm
 
-
-EPS = 1.0e-12
+from util.constants import EPS, NumericType, SQR2, SQR2PI
 
 
 class GaussKernel():
-    def __init__(self, mu, sigma, lb, ub, q):
+    def __init__(self, mu: NumericType, sigma: NumericType,
+                 lb: NumericType, ub: NumericType, q: Optional[NumericType] = None):
         """
-        The hyperparameters of Gauss Kernel.
+        Attributes:
+            mu: NumericType
+                In general, this value is one of the observed values.
+            sigma: NumericType
+                Generally, it is called band width and there are so many methods to initialize this value.
+            lb, ub, q: NumericType
+                lower and upper bound and quantization value
+            norm_const: NumericType
+                The normalization constant of probability density function.
+                In other words, when we integranl this kernel from lb to ub, we would obtain 1 as a result.
+        """
 
-        mu: float
-            In general, this value is one of the observed values.
-        sigma: float
-            Generally, it is called band width and there are so many methods to initialize this value.
-        lb, ub, q: float or int
-            lower and upper bound and quantization value
-        weight: float
-            The normalization constant of probability density function.
-            In other words, when we integranl this kernel from lb to ub, we would obtain 1 as a result.
-        """
+        if mu < lb or mu > ub:
+            raise ValueError('mu must be [{}, {}], but got {}'.format(lb, ub, mu))
+        if sigma <= 0:
+            raise ValueError('sigma must be non-negative, but got {}.'.format(sigma))
 
-        self.mu = mu
-        self.sigma = max(sigma, EPS)
-        self.lb, self.ub, self.q = lb, ub, q
-        self.weight = 1.
-        self.weight = 1. / (self.cdf(ub) - self.cdf(lb))
+        self._initialized = False
+        self._mu = mu
+        self._sigma = max(sigma, EPS)
+        self._init_domain_params(lb=lb, ub=ub, q=q)
+        self._norm_const = 1.
+        self._norm_const = 1. / (self.cdf(self.ub) - self.cdf(self.lb))
+        self._logpdf_const = np.log(self.norm_const / (SQR2PI * self.sigma))
 
-    def pdf(self, x):
-        """
-        Returning the value Probability density function of a given x.
-        """
+    def __repr__(self) -> str:
+        return 'GaussKernel(lb={}, ub={}, q={}, mu={}, sigma={})'.format(
+            self.lb, self.ub, self.q, self.mu, self.sigma
+        )
+
+    @property
+    def mu(self) -> NumericType:
+        return self._mu
+
+    @property
+    def sigma(self) -> NumericType:
+        return self._sigma
+
+    @property
+    def q(self) -> Optional[NumericType]:
+        return self._q
+
+    @property
+    def lb(self) -> NumericType:
+        return self._lb
+
+    @property
+    def ub(self) -> NumericType:
+        return self._ub
+
+    @property
+    def norm_const(self) -> NumericType:
+        return self._norm_const
+
+    @property
+    def logpdf_const(self) -> float:
+        return self._logpdf_const
+
+    def _init_domain_params(
+        self,
+        lb: NumericType,
+        ub: NumericType,
+        q: Optional[NumericType] = None,
+    ) -> None:
+
+        if self._initialized:
+            raise AttributeError("Cannot reset domain parameters.")
+
+        if lb > ub:
+            raise ValueError(
+                'Lower bound lb for GaussKernel must be smaller than Upper bound ub, '
+                'but got {:.4f} > {:.4f}.'.format(lb, ub)
+            )
+
+        self._initialized = True
+        self._lb, self._ub, self._q = lb, ub, q
+
+    def pdf(self, x: Union[NumericType, np.ndarray]) -> Union[NumericType, np.ndarray]:
+        """ Return the densities of a point or a set of points `x` """
 
         if self.q is None:
-            z = np.sqrt(2 * np.pi) * self.sigma
+            z = SQR2PI * self.sigma
             mahalanobis = ((x - self.mu) / self.sigma) ** 2
-            return self.weight / z * np.exp(-0.5 * mahalanobis)
+            return self.norm_const / z * np.exp(-0.5 * mahalanobis)
         else:
             integral_u = self.cdf(np.minimum(x + 0.5 * self.q, self.ub))
             integral_l = self.cdf(np.maximum(x + 0.5 * self.q, self.lb))
             return integral_u - integral_l
 
-    def cdf(self, x):
-        """
-        Returning the value of Cumulative distribution function at a given x.
-        """
+    def log_pdf(self, x: Union[NumericType, np.ndarray]) -> Union[NumericType, np.ndarray]:
+        """ This function is used to avoid numerical errors """
 
-        z = (x - self.mu) / (np.sqrt(2) * self.sigma)
-        return self.weight * 0.5 * (1. + erf(z))
-
-    def sample_from_kernel(self, rng):
-        """
-        Returning the random number sampled from this Gauss kernel.
-        """
-
-        while True:
-            sample = rng.normal(loc=self.mu, scale=self.sigma)
-            if self.lb <= sample <= self.ub:
-                return sample
-
-
-class AitchisonAitkenKernel():
-    def __init__(self, choice, n_choices, top=0.9):
-        """
-        Reference: http://www.ccsenet.org/journal/index.php/jmr/article/download/24994/15579
-
-        Hyperparameters of Aitchison Aitken Kernel.
-
-        n_choices: int
-            The number of choices.
-        choice: int
-            The ID of the target choice.
-        top: float (0. to 1.)
-            The hyperparameter controling the extent of the other choice's distribution.
-        """
-
-        self.n_choices = n_choices
-        self.choice = choice
-        self.top = top
-
-    def cdf(self, x):
-        """
-        Returning a probability of a given x.
-        """
-
-        if x == self.choice:
-            return self.top
-        elif 0 <= x <= self.n_choices - 1:
-            return (1. - self.top) / (self.n_choices - 1)
+        if self.q is None:
+            mahalanobis = ((x - self.mu) / self.sigma) ** 2
+            return self.logpdf_const - 0.5 * mahalanobis
         else:
-            raise ValueError("The choice must be between {} and {}, but {} was given.".format(0, self.n_choices - 1, x))
+            integral_u = self.cdf(np.minimum(x + 0.5 * self.q, self.ub))
+            integral_l = self.cdf(np.maximum(x + 0.5 * self.q, self.lb))
+            """TODO: Check why i got zero division"""
+            return np.log(integral_u - integral_l + EPS)
 
-    def cdf_for_numpy(self, xs):
+    def cdf(self, x: Union[NumericType, np.ndarray]) -> Union[NumericType, np.ndarray]:
+        """ Return the cumulative distribution value of a point or a set of points `x` """
+
+        z = (x - self.mu) / (SQR2 * self.sigma)
+        return self.norm_const * 0.5 * (1. + erf(z))
+
+    def sample(self, rng: np.random.RandomState) -> NumericType:
         """
-        Returning probabilities of a given list x.
+        Sample a value from the truncated Gauss kernel
+            truncnorm.rvs(standarized lb, stadarized ub, scale=1.0)
+            ==> val ~ N(0, 1.0) s.t. standarized lb <= val <= standarized ub
+
+            Reference: https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.truncnorm.html
+        """
+        trunc_lb, trunc_ub = (self.lb - self.mu) / self.sigma, (self.ub - self.mu) / self.sigma
+        val = truncnorm.rvs(trunc_lb, trunc_ub, scale=1.0, random_state=rng)
+        val = val * self.sigma + self.mu
+        return val if self.q is None else np.round(val / self.q) * self.q
+
+
+class CategoricalKernel():
+    @property
+    def choice(self) -> int:
+        return self._choice  # type: ignore
+
+    @property
+    def n_choices(self) -> int:
+        return self._n_choices  # type: ignore
+
+    @property
+    def top(self) -> float:
+        return self._top  # type: ignore
+
+    @property
+    def others(self) -> float:
+        return self._others  # type: ignore
+
+    @property
+    def probs(self) -> np.ndarray:
+        return self._probs  # type: ignore
+
+    def cdf(self, x: Union[int, np.ndarray]) -> Union[float, np.ndarray]:
+        """ Return the probability of a choice or a set of choices `x` """
+
+        err_msg = "The choice must be between {} and {}, but got ".format(0, self.n_choices)
+
+        if isinstance(x, int) and (x >= self.n_choices or x < 0):
+            raise ValueError("{}{}.".format(err_msg, x))
+        elif np.any(x < 0) or np.any(x >= self.n_choices):
+            raise ValueError("{}{}.".format(err_msg, x))
+
+        if isinstance(x, int):
+            return self.top if x == self.choice else self.others
+        else:
+            probs = np.full_like(x, self.others, dtype=np.float32)
+            probs[x == self.choice] = self.top
+            return probs
+
+    def pdf(self, x: Union[int, np.ndarray]) -> Union[float, np.ndarray]:
+        return self.cdf(x)
+
+    def log_pdf(self, x: Union[int, np.ndarray]) -> Union[float, np.ndarray]:
+        return np.log(self.cdf(x))
+
+    def sample(self, rng: np.random.RandomState) -> int:
+        """ Sample a category from this kernel """
+        return int(rng.multinomial(n=1, pvals=self.probs, size=1).argmax())
+
+
+class AitchisonAitkenKernel(CategoricalKernel):
+    def __init__(self, n_choices: int, choice: int, top: float):
+        """
+        The kernel for categorical parameters
+
+        Attributes:
+            n_choices (int):
+                The number of choices.
+            choice (int):
+                The index of the target choice.
+            top (float): (0., 1.)
+                The probability that `choice` is taken.
+                The hyperparameter that controls the exploration.
+                Lower values lead to more exploration.
+            others (float): (0., 1.)
+                The probability that another choice is taken.
+                This value is computed based on class variables.
+
+        Title: The Aitchison and Aitken Kernel Function Revisited
+        Reference: http://www.ccsenet.org/journal/index.php/jmr/article/download/24994/15579
         """
 
-        return_val = np.array([])
-        for x in xs:
-            np.append(return_val, self.cdf(x))
-        return return_val
+        if choice < 0 or choice >= n_choices:
+            raise ValueError('choice must be in [0, n_choices), but got {}.'.format(choice))
 
-    def probabilities(self):
-        """
-        Returning probabilities of every possible choices.
-        """
+        self._initialized = False
+        self._init_domain_params(n_choices=n_choices, top=top)
+        self._choice = choice
+        self._probs = np.full(self.n_choices, self.others)
+        self._probs[choice] = self.top
 
-        return np.array([self.cdf(n) for n in range(self.n_choices)])
+    def __repr__(self) -> str:
+        return 'AitchisonAitkenKernel(n_choices={}, choice={}, top={}, others={}, probs={})'.format(
+            self.n_choices, self.choice, self.top, self.others, self.probs
+        )
 
-    def sample_from_kernel(self, rng):
-        """
-        Returning random choice sampled from this Kernel.
-        """
+    def _init_domain_params(
+        self,
+        n_choices: int,
+        top: float = 0.9
+    ) -> None:
 
-        choice_one_hot = rng.multinomial(n=1, pvals=self.probabilities(), size=1)
-        return np.dot(choice_one_hot, np.arange(self.n_choices))
+        if self._initialized:
+            raise AttributeError("Cannot reset domain parameters.")
+
+        if top < 0 or top > 1:
+            raise ValueError(
+                'The top probability that `choice` is sampled must be '
+                'between 0. and 1., but got {}.'.format(top)
+            )
+
+        if n_choices < 2:
+            raise ValueError(
+                'The number of choices `n_choice` must be larger than 1, '
+                'but got {}.'.format(n_choices)
+            )
+
+        self._initialized = True
+        self._n_choices, self._top = n_choices, top
+        self._others = (1. - top) / (n_choices - 1)
+
+
+class UniformKernel(CategoricalKernel):
+    def __init__(self, n_choices: int):
+        self._initialized = False
+        self._init_domain_params(n_choices=n_choices)
+        self._choice = 0
+        self._probs = np.full(self.n_choices, self.others)
+        self._probs[self.choice] = self.top
+
+    def __repr__(self) -> str:
+        return 'UniformKernel(n_choices={}, choice={}, top={}, others={}, probs={})'.format(
+            self.n_choices, self.choice, self.top, self.others, self.probs
+        )
+
+    def _init_domain_params(
+        self,
+        n_choices: int,
+        force_change: bool = False
+    ) -> None:
+
+        if self._initialized:
+            raise AttributeError("Cannot reset domain parameters.")
+
+        if n_choices < 2:
+            raise ValueError(
+                'The number of choices `n_choice` must be larger than 1, '
+                'but got {}.'.format(n_choices)
+            )
+
+        self._initialized = True
+        self._n_choices, self._top = n_choices, 1.0 / n_choices
+        self._others = self._top

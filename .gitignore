@@ -1,11 +1,5 @@
-*.img
-history/
-__pycache__
-*/__pycache__
-*/*/__pycache__
-*/*/*/__pycache__
-*/*/*/*/__pycache__
-*/*/*/*/*/__pycache__
-*.sh.*
-svhn/
-cifar/
+**/__pycache__
+.vscode/
+results/
+log/
+opt_cfg.json

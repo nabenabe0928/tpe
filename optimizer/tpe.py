@@ -1,134 +1,280 @@
+from logging import Logger
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+
 import numpy as np
-import utils
-from optimizer.parzen_estimator import NumericalParzenEstimator, CategoricalParzenEstimator
-from optimizer import BaseOptimizer
+
+import json
+
+import ConfigSpace as CS
+
+from optimizer.parzen_estimator.loglikelihoods import compute_config_loglikelihoods_ratio
+from optimizer.parzen_estimator.parzen_estimator import (
+    CategoricalParzenEstimator,
+    NumericalParzenEstimator,
+    build_categorical_parzen_estimator,
+    build_numerical_parzen_estimator
+)
+from util.constants import (
+    CategoricalHPType,
+    NumericType,
+    NumericalHPType,
+    config2type,
+    default_percentile,
+    default_weights
+)
+from util.utils import get_random_sample, revert_eval_config, save_observations
 
 
-EPS = 1e-12
+ParzenEstimatorType = Union[NumericalParzenEstimator, CategoricalParzenEstimator]
+HPType = Union[CategoricalHPType, NumericalHPType]
 
 
-def default_gamma(x, n_samples_lower=25):
-
-    return min(int(np.ceil(0.25 * np.sqrt(x))), n_samples_lower)
-
-
-def default_weights(x, n_samples_lower=25):
-    if x == 0:
-        return np.asarray([])
-    elif x < n_samples_lower:
-        return np.ones(x)
-    else:
-        ramp = np.linspace(1.0 / x, 1.0, num=x - n_samples_lower)
-        flat = np.ones(n_samples_lower)
-        return np.concatenate([ramp, flat], axis=0)
-
-
-class TPE(BaseOptimizer):
-    def __init__(self,
-                 hp_utils,
-                 n_parallels=1,
-                 n_init=10,
-                 max_evals=100,
-                 n_experiments=0,
-                 restart=True,
-                 seed=None,
-                 verbose=True,
-                 print_freq=1,
-                 n_ei_candidates=24,
-                 rule="james",
-                 gamma_func=default_gamma,
-                 weight_func=default_weights):
+class TPE:
+    def __init__(self, obj_func: Callable, config_space: CS.ConfigurationSpace,
+                 resultfile: str, mutation_prob: float = 0.05, n_init: int = 10,
+                 max_evals: int = 100, seed: Optional[int] = None,
+                 n_ei_candidates: int = 24, percentile_func: Callable = default_percentile,
+                 weight_func: Callable = default_weights):
         """
-        n_ei_candidates: int
-            The number of points to evaluate the EI function.
-        gamma_func: callable
-            The function returning the number of a better group based on the total number of evaluations.
-        weight_func: callable
-            The function returning the coefficients of each kernel.
+        Attributes:
+            rng (np.random.RandomState): random state to maintain the reproducibility
+            resultfile (str): The name of the result file to output in the end
+            n_ei_candidates (int): The number of samplings to optimize the EI value
+            n_init (int): The number of random sampling before using TPE
+            obj_func (Callable): The objective function
+            hp_names (List[str]): The list of hyperparameter names
+            mutation_prob (float): The probablity to change a parameter to a different value
+            observations (Dict[str, Any]): The storage of the observations
+            config_space (CS.ConfigurationSpace): The searching space of the task
+            percentile_func (Callable):
+                The function that returns the number of a better group based on the total number of evaluations.
+            weight_func: callable
+                The function that returns the coefficients of each kernel.
         """
 
-        super().__init__(hp_utils,
-                         n_parallels=n_parallels,
-                         n_init=n_init,
-                         max_evals=max_evals,
-                         n_experiments=n_experiments,
-                         restart=restart,
-                         seed=seed,
-                         verbose=verbose,
-                         print_freq=print_freq
-                         )
+        self._rng = np.random.RandomState(seed)
+        self._n_init, self._max_evals = n_init, max_evals
+        self.resultfile = resultfile
+        self._n_ei_candidates = n_ei_candidates
+        self._obj_func = obj_func
+        self._mutation_prob = mutation_prob
+        self._hp_names = list(config_space._hyperparameters.keys())
 
-        self.n_ei_candidates = n_ei_candidates
-        self.gamma_func = gamma_func
-        self.weight_func = weight_func
-        self.opt = self.sample
-        self.rule = rule
+        self._observations = {hp_name: np.array([]) for hp_name in self._hp_names}
+        self._order = np.array([])
 
-    def sample(self):
-        hps_conf, _ = self.hp_utils.load_hps_conf(convert=True, do_sort=True, index_from_conf=False)
-        hp_conf = []
+        self._config_space = config_space
+        self._percentile_func = percentile_func
+        self._weight_func = weight_func
+        self._is_categorical = {
+            hp_name: self._config_space.get_hyperparameter(hp_name).__class__.__name__ == 'CategoricalHyperparameter'
+            for hp_name in self._hp_names
+        }
 
-        for idx, hps in enumerate(hps_conf):
-            n_lower = self.gamma_func(len(hps))
-            lower_vals, upper_vals = hps[:n_lower], hps[n_lower:]
-            var_name = self.hp_utils.config_space._idx_to_hyperparameter[idx]
-            var_type = utils.distribution_type(self.hp_utils.config_space, var_name)
+    def _update_observations(self, eval_config: Dict[str, NumericType], loss: float) -> None:
+        self._observations['loss'] = np.append(self._observations['loss'], loss)
+        self._order = np.argsort(self.observations['loss'])
 
-            if var_type in [float, int]:
-                hp_value = self._sample_numerical(var_name, var_type, lower_vals, upper_vals)
+        observations = self._observations
+        for hp_name in self.hp_names:
+            is_categorical = self.is_categorical[hp_name]
+            config = self.config_space.get_hyperparameter(hp_name)
+            config_type = config.__class__.__name__
+            val = eval_config[hp_name]
+
+            if is_categorical:
+                observations[hp_name] = np.append(observations[hp_name], val)
             else:
-                hp_value = self._sample_categorical(var_name, lower_vals, upper_vals)
-            hp_conf.append(hp_value)
+                dtype = config2type[config_type]
+                observations[hp_name] = np.append(observations[hp_name], val).astype(dtype)
 
-        return self.hp_utils.revert_hp_conf(hp_conf)
+    def _post_processing(self, best_config: Dict[str, np.ndarray], logger: Logger) -> None:
+        logger.info('\nThe observations: {}'.format(self.observations))
+        save_observations(filename=self.resultfile, observations=self.observations)
 
-    def _sample_numerical(self, var_name, var_type, lower_vals, upper_vals):
+        with open('opt_cfg.json', mode='w') as f:
+            json.dump(best_config, f, indent=4)
+
+    def optimize(self, logger: Logger) -> None:
+        """ Optimize obj_func using TPE Sampler. """
+        # TODO: Add test by benchmark functions
+        self._observations['loss'] = np.array([])
+
+        best_config, best_loss, t = {}, np.inf, 0
+
+        while True:
+            logger.info(f'\nIteration: {t + 1}')
+            eval_config = self.random_sample() if t < self.n_init else self.sample()
+
+            loss = self.obj_func(eval_config)
+            self._update_observations(eval_config=eval_config, loss=loss)
+
+            if best_loss > loss:
+                best_loss = loss
+                best_config = eval_config
+
+            logger.info('Cur. loss: {:.4f}, Cur. Config: {}'.format(loss, eval_config))
+            logger.info('Best loss: {:.4f}, Best Config: {}'.format(best_loss, best_config))
+            t += 1
+
+            if t >= self.max_evals:
+                break
+
+        self._post_processing(best_config=best_config, logger=logger)
+
+    def _get_config_candidates(self) -> List[np.ndarray]:
         """
-        Parameters
-        ----------
-        lower_vals: ndarray (N_lower, )
-            The values of better group.
-        upper_vals: ndarray (N_upper, )
-            The values of worse group.
-        var_name: str
-            The name of a hyperparameter
-        var_type: type
-            The type of a hyperparameter
+        Since we compute the probability improvement of each objective independently,
+        we need to sample the configurations in advance.
+
+        Returns:
+            (np.ndarray): An array of candidates in one dimension
         """
+        config_cands = []
+        n_evals = len(self.order)
+        n_lowers = self.percentile_func(n_evals)
 
-        hp = self.hp_utils.config_space._hyperparameters[var_name]
-        q, log, lb, ub, converted_q = hp.q, hp.log, 0., 1., None
+        for dim, hp_name in enumerate(self.hp_names):
+            lower_vals = self.observations[hp_name][self.order[:n_lowers]]
+            empty = np.array([lower_vals[0]])
 
-        if var_type is int or q is not None:
-            if not log:
-                converted_q = 1. / (hp.upper - hp.lower) if q is None else q / (hp.upper - hp.lower)
-                lb -= 0.5 * converted_q
-                ub += 0.5 * converted_q
+            is_categorical = self.is_categorical[hp_name]
+            config = self.config_space.get_hyperparameter(hp_name)
+            pe_lower, _ = self._get_parzen_estimator(lower_vals=lower_vals, upper_vals=empty, config=config,
+                                                     is_categorical=is_categorical)
 
-        pe_lower = NumericalParzenEstimator(lower_vals, lb, ub, self.weight_func, q=converted_q, rule=self.rule)
-        pe_upper = NumericalParzenEstimator(upper_vals, lb, ub, self.weight_func, q=converted_q, rule=self.rule)
+            config_cands.append(pe_lower.sample(self.rng, self.n_ei_candidates))
 
-        """
-        from optimizer.parzen_estimator import plot_density_estimators
-        plot_density_estimators(pe_lower, pe_upper, var_name, pr_basis=True, pr_basis_mu=True)
-        """
+        return config_cands
 
-        return self._compare_candidates(pe_lower, pe_upper)
+    def _compute_basis_loglikelihoods(self, hp_name: str, samples: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        is_categorical = self.is_categorical[hp_name]
+        ordered_observations = self.observations[hp_name][self.order]
+        n_evals = len(self.order)
+        n_lower = self.percentile_func(n_evals)
 
-    def _sample_categorical(self, var_name, lower_vals, upper_vals):
-        choices = self.hp_utils._hyperparameters[var_name].choices
-        n_choices = len(choices)
-        lower_vals = [choices.index(val) for val in lower_vals]
-        upper_vals = [choices.index(val) for val in upper_vals]
+        # split observations
+        lower_vals = ordered_observations[:n_lower]
+        upper_vals = ordered_observations[n_lower:]
 
-        pe_lower = CategoricalParzenEstimator(lower_vals, n_choices, self.weight_func)
-        pe_upper = CategoricalParzenEstimator(upper_vals, n_choices, self.weight_func)
+        config = self.config_space.get_hyperparameter(hp_name)
+        pe_lower, pe_upper = self._get_parzen_estimator(lower_vals=lower_vals, upper_vals=upper_vals,
+                                                        config=config, is_categorical=is_categorical)
 
-        best_choice_idx = int(self._compare_candidates(pe_lower, pe_upper))
+        return pe_lower.basis_loglikelihood(samples), pe_upper.basis_loglikelihood(samples)
 
-        return choices[best_choice_idx]
+    def _compute_probability_improvement(self, config_cands: List[np.ndarray]) -> np.ndarray:
+        """ TODO: Add test """
+        dim = len(self.hp_names)
+        n_evals = len(self.order)
+        n_lower = self.percentile_func(n_evals)
 
-    def _compare_candidates(self, pe_lower, pe_upper):
-        samples_lower = pe_lower.sample_from_density_estimator(self.rng, self.n_ei_candidates)
-        best_idx = np.argmax(pe_lower.log_likelihood(samples_lower) - pe_upper.log_likelihood(samples_lower))
-        return samples_lower[best_idx]
+        basis_loglikelihoods_lower = np.zeros((dim, n_lower + 1, self.n_ei_candidates))
+        weights_lower = self.weight_func(n_lower + 1)
+        basis_loglikelihoods_upper = np.zeros((dim, n_evals - n_lower + 1, self.n_ei_candidates))
+        weights_upper = self.weight_func(n_evals - n_lower + 1)
+
+        for dim, (hp_name, samples) in enumerate(zip(self.hp_names, config_cands)):
+            bll_lower, bll_upper = self._compute_basis_loglikelihoods(hp_name=hp_name, samples=samples)
+            basis_loglikelihoods_lower[dim] += bll_lower
+            basis_loglikelihoods_upper[dim] += bll_upper
+
+        return compute_config_loglikelihoods_ratio(
+            basis_loglikelihoods_lower=basis_loglikelihoods_lower,
+            basis_loglikelihoods_upper=basis_loglikelihoods_upper,
+            weights_lower=weights_lower,
+            weights_upper=weights_upper
+        )
+
+    def sample(self) -> Dict[str, Any]:
+        """ TODO: Add test """
+        config_cands = self._get_config_candidates()
+
+        pi_config = self._compute_probability_improvement(config_cands=config_cands)
+        best_idx = int(np.argmax(pi_config))
+        eval_config = {hp_name: self._get_random_sample(hp_name=hp_name)
+                       if self.rng.random() < self.mutation_prob
+                       else config_cands[dim][best_idx]
+                       for dim, hp_name in enumerate(self.hp_names)}
+
+        return self._revert_eval_config(eval_config=eval_config)
+
+    def _get_parzen_estimator(self, lower_vals: np.ndarray, upper_vals: np.ndarray, config: HPType,
+                              is_categorical: bool) -> ParzenEstimatorType:
+        """ TODO: Add test """
+        config_type = config.__class__.__name__
+        parzen_estimator_args = dict(config=config, weight_func=self.weight_func)
+
+        if is_categorical:
+            pe_lower = build_categorical_parzen_estimator(vals=lower_vals, **parzen_estimator_args)
+            pe_upper = build_categorical_parzen_estimator(vals=upper_vals, **parzen_estimator_args)
+        else:
+            parzen_estimator_args.update(dtype=config2type[config_type])
+            pe_lower = build_numerical_parzen_estimator(vals=lower_vals, **parzen_estimator_args)
+            pe_upper = build_numerical_parzen_estimator(vals=upper_vals, **parzen_estimator_args)
+
+        return pe_lower, pe_upper
+
+    def _get_random_sample(self, hp_name: str) -> NumericType:
+        return get_random_sample(hp_name=hp_name, rng=self.rng, config_space=self.config_space,
+                                 is_categorical=self.is_categorical[hp_name])
+
+    def _revert_eval_config(self, eval_config: Dict[str, Any]) -> Dict[str, Any]:
+        return revert_eval_config(eval_config=eval_config, config_space=self.config_space,
+                                  is_categoricals=self.is_categorical, hp_names=self.hp_names)
+
+    def random_sample(self) -> Dict[str, Any]:
+        eval_config = {hp_name: self._get_random_sample(hp_name=hp_name) for hp_name in self.hp_names}
+        return self._revert_eval_config(eval_config=eval_config)
+
+    @property
+    def config_space(self) -> CS.ConfigurationSpace:
+        return self._config_space
+
+    @property
+    def observations(self) -> List[Dict[str, np.ndarray]]:
+        return self._observations
+
+    @property
+    def hp_names(self) -> List[str]:
+        return self._hp_names
+
+    @property
+    def is_categorical(self) -> Dict[str, bool]:
+        return self._is_categorical
+
+    @property
+    def rng(self) -> np.random.RandomState:
+        return self._rng
+
+    @property
+    def max_evals(self) -> int:
+        return self._max_evals
+
+    @property
+    def n_init(self) -> int:
+        return self._n_init
+
+    @property
+    def obj_func(self) -> Callable:
+        return self._obj_func
+
+    @property
+    def order(self) -> np.ndarray:
+        return self._order
+
+    @property
+    def percentile_func(self) -> Callable:
+        return self._percentile_func
+
+    @property
+    def weight_func(self) -> Callable:
+        return self._weight_func
+
+    @property
+    def mutation_prob(self) -> float:
+        return self._mutation_prob
+
+    @property
+    def n_ei_candidates(self) -> int:
+        return self._n_ei_candidates
