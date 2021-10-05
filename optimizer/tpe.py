@@ -72,6 +72,15 @@ class TPE:
         }
 
     def _update_observations(self, eval_config: Dict[str, NumericType], loss: float) -> None:
+        """
+        Update the observations for the TPE construction
+
+        Args:
+            eval_config (Dict[str, NumericType]): The configuration to evaluate (after conversion)
+            loss (float): The loss value as a result of the evaluation
+
+        TODO: Test the change by the update
+        """
         self._observations['loss'] = np.append(self._observations['loss'], loss)
         self._order = np.argsort(self.observations['loss'])
 
@@ -88,7 +97,7 @@ class TPE:
                 dtype = config2type[config_type]
                 observations[hp_name] = np.append(observations[hp_name], val).astype(dtype)
 
-    def _post_processing(self, best_config: Dict[str, np.ndarray], logger: Logger) -> None:
+    def _store_results(self, best_config: Dict[str, np.ndarray], logger: Logger) -> None:
         logger.info('\nThe observations: {}'.format(self.observations))
         save_observations(filename=self.resultfile, observations=self.observations)
 
@@ -96,8 +105,14 @@ class TPE:
             json.dump(best_config, f, indent=4)
 
     def optimize(self, logger: Logger) -> None:
-        """ Optimize obj_func using TPE Sampler. """
-        # TODO: Add test by benchmark functions
+        """
+        Optimize obj_func using TPE Sampler and store the results in the end.
+
+        Args:
+            logger (Logger): The logging to write the intermediate results
+
+        TODO: Add test by benchmark functions
+        """
         self._observations['loss'] = np.array([])
 
         best_config, best_loss, t = {}, np.inf, 0
@@ -120,7 +135,7 @@ class TPE:
             if t >= self.max_evals:
                 break
 
-        self._post_processing(best_config=best_config, logger=logger)
+        self._store_results(best_config=best_config, logger=logger)
 
     def _get_config_candidates(self) -> List[np.ndarray]:
         """
@@ -129,6 +144,8 @@ class TPE:
 
         Returns:
             (np.ndarray): An array of candidates in one dimension
+
+        TODO: Test
         """
         config_cands = []
         n_evals = len(self.order)
@@ -148,6 +165,19 @@ class TPE:
         return config_cands
 
     def _compute_basis_loglikelihoods(self, hp_name: str, samples: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Compute the log likelihood of each basis of the provided hyperparameter
+
+        Args:
+            hp_name (str): The name of a hyperparameter
+            samples (np.ndarray): The samples to compute the basis loglikelihoods
+
+        Returns:
+            basis_loglikelihoods (np.ndarray):
+                The shape is (n_basis, n_samples).
+
+        TODO: Add test
+        """
         is_categorical = self.is_categorical[hp_name]
         ordered_observations = self.observations[hp_name][self.order]
         n_evals = len(self.order)
@@ -164,7 +194,22 @@ class TPE:
         return pe_lower.basis_loglikelihood(samples), pe_upper.basis_loglikelihood(samples)
 
     def _compute_probability_improvement(self, config_cands: List[np.ndarray]) -> np.ndarray:
-        """ TODO: Add test """
+        """
+        Compute the probability improvement given configurations
+
+        Args:
+            config_cands (List[np.ndarray]):
+                The list of candidate values for each dimension.
+                The length is the number of dimensions and
+                each array has the length of n_ei_candidates.
+
+        Returns:
+            config_ll_ratio (np.ndarray):
+                The log of the likelihood ratios of each configuration.
+                The shape is (n_ei_candidates, )
+
+        TODO: Add test
+        """
         dim = len(self.hp_names)
         n_evals = len(self.order)
         n_lower = self.percentile_func(n_evals)
@@ -187,7 +232,12 @@ class TPE:
         )
 
     def sample(self) -> Dict[str, Any]:
-        """ TODO: Add test """
+        """
+        Sample a configuration using tree-structured parzen estimator (TPE)
+
+        Returns:
+            eval_config (Dict[str, Any]): A sampled configuration from TPE
+        """
         config_cands = self._get_config_candidates()
 
         pi_config = self._compute_probability_improvement(config_cands=config_cands)
@@ -200,8 +250,20 @@ class TPE:
         return self._revert_eval_config(eval_config=eval_config)
 
     def _get_parzen_estimator(self, lower_vals: np.ndarray, upper_vals: np.ndarray, config: HPType,
-                              is_categorical: bool) -> ParzenEstimatorType:
-        """ TODO: Add test """
+                              is_categorical: bool) -> Tuple[ParzenEstimatorType, ParzenEstimatorType]:
+        """
+        Construct parzen estimators for the lower and the upper groups and return them
+
+        Args:
+            lower_vals (np.ndarray): The array of the values in the lower group
+            upper_vals (np.ndarray): The array of the values in the upper group
+            config (HPType): The hyperparameter information (ConfigSpace)
+            is_categorical (bool): Whether the given hyperparameter is categorical
+
+        Returns:
+            pe_lower (ParzenEstimatorType): The parzen estimator for the lower group
+            pe_upper (ParzenEstimatorType): The parzen estimator for the upper group
+        """
         config_type = config.__class__.__name__
         parzen_estimator_args = dict(config=config, weight_func=self.weight_func)
 
@@ -232,7 +294,7 @@ class TPE:
         return self._config_space
 
     @property
-    def observations(self) -> List[Dict[str, np.ndarray]]:
+    def observations(self) -> Dict[str, np.ndarray]:
         return self._observations
 
     @property

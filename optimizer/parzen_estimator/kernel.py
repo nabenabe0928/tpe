@@ -89,7 +89,16 @@ class GaussKernel():
         self._lb, self._ub, self._q = lb, ub, q
 
     def pdf(self, x: Union[NumericType, np.ndarray]) -> Union[NumericType, np.ndarray]:
-        """ Return the densities of a point or a set of points `x` """
+        """
+        Compute the probability density function values.
+
+        Args:
+            x (np.ndarray): Samples to compute the pdf
+
+        Returns:
+            pdf (np.ndarray):
+                The probability density function value for each sample
+        """
 
         if self.q is None:
             z = SQR2PI * self.sigma
@@ -101,7 +110,18 @@ class GaussKernel():
             return integral_u - integral_l
 
     def log_pdf(self, x: Union[NumericType, np.ndarray]) -> Union[NumericType, np.ndarray]:
-        """ This function is used to avoid numerical errors """
+        """
+        Compute the log of the probability density function values.
+        Log prevents the possibility of underflow
+
+        Args:
+            x (np.ndarray): Samples to compute the log pdf
+
+        Returns:
+            log_pdf (np.ndarray):
+                The log of the probability density function value
+                for each sample
+        """
 
         if self.q is None:
             mahalanobis = ((x - self.mu) / self.sigma) ** 2
@@ -113,7 +133,10 @@ class GaussKernel():
             return np.log(integral_u - integral_l + EPS)
 
     def cdf(self, x: Union[NumericType, np.ndarray]) -> Union[NumericType, np.ndarray]:
-        """ Return the cumulative distribution value of a point or a set of points `x` """
+        """
+        Return the cumulative distribution value of a point or a set of points `x`
+        
+        """
 
         z = (x - self.mu) / (SQR2 * self.sigma)
         return self.norm_const * 0.5 * (1. + erf(z))
@@ -125,6 +148,12 @@ class GaussKernel():
             ==> val ~ N(0, 1.0) s.t. standarized lb <= val <= standarized ub
 
             Reference: https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.truncnorm.html
+
+        Args:
+            rng (np.random.RandomState): The random state for numpy
+
+        Returns:
+            value (NumericType): A sampled value
         """
         trunc_lb, trunc_ub = (self.lb - self.mu) / self.sigma, (self.ub - self.mu) / self.sigma
         val = truncnorm.rvs(trunc_lb, trunc_ub, scale=1.0, random_state=rng)
@@ -154,7 +183,16 @@ class CategoricalKernel():
         return self._probs  # type: ignore
 
     def cdf(self, x: Union[int, np.ndarray]) -> Union[float, np.ndarray]:
-        """ Return the probability of a choice or a set of choices `x` """
+        """
+        Compute the probability of provided values.
+
+        Args:
+            x (np.ndarray): Samples to compute the pdf
+
+        Returns:
+            cdf (np.ndarray):
+                The the probability for each sample
+        """
 
         err_msg = "The choice must be between {} and {}, but got ".format(0, self.n_choices)
 
@@ -171,13 +209,33 @@ class CategoricalKernel():
             return probs
 
     def pdf(self, x: Union[int, np.ndarray]) -> Union[float, np.ndarray]:
+        """ In categorical parameters, pdf == cdf """
         return self.cdf(x)
 
     def log_pdf(self, x: Union[int, np.ndarray]) -> Union[float, np.ndarray]:
+        """
+        Compute the log of the probability density function values.
+
+        Args:
+            x (np.ndarray): Samples to compute the log pdf
+
+        Returns:
+            log_pdf (np.ndarray):
+                The log of the probability density function value
+                for each sample
+        """
         return np.log(self.cdf(x))
 
     def sample(self, rng: np.random.RandomState) -> int:
-        """ Sample a category from this kernel """
+        """
+        Sample a categorical symbol from this kernel
+
+        Args:
+            rng (np.random.RandomState): The random state for numpy
+
+        Returns:
+            index (int): Index of a symbol
+        """
         return int(rng.multinomial(n=1, pvals=self.probs, size=1).argmax())
 
 
