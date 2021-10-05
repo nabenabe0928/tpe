@@ -45,7 +45,21 @@ def get_logger(file_name: str, logger_name: str) -> Logger:
 
 def get_random_sample(hp_name: str, is_categorical: bool, rng: np.random.RandomState,
                       config_space: CS.ConfigurationSpace) -> NumericType:
-    """ TODO: Add test """
+    """
+    Random sample of a provided hyperparameter
+
+    Args:
+        config_space (CS.ConfigurationSpace): The searching space information
+        is_categorical (bool): Whether this hyperparameter is categorical
+        hp_name (str): The names of a hyperparameter
+        rng (np.random.RandomState): The random state for numpy
+
+    Returns:
+        value (NumericType): A sampled value before conversion
+            * categorical -> index of a symbol
+            * log -> a value in a log-scale
+            * q -> no quantization here
+    """
     config = config_space.get_hyperparameter(hp_name)
 
     if is_categorical:
@@ -68,7 +82,22 @@ def check_value_range(hp_name: str, config: CSH.Hyperparameter, val: NumericType
 
 def revert_eval_config(eval_config: Dict[str, Any], config_space: CS.ConfigurationSpace,
                        is_categoricals: Dict[str, bool], hp_names: List[str]) -> Dict[str, Any]:
-    """ TODO: Add test """
+    """
+    Revert the eval_config into the original value range.
+    For example,
+        * categorical: index of a symbol -> the symbol
+        * log float: log(value) -> exp(log(value)) = value
+        * quantized value: value -> steped by q, i.e. q, 2q, 3q, ...
+
+    Args:
+        eval_config (Dict[str, Any]): The configuration to evaluate and revert
+        config_space (CS.ConfigurationSpace): The searching space information
+        is_categoricals (Dict[str, bool]): Whether each hyperparameter is categorical
+        hp_names (List[str]): The list of the names of hyperparameters
+
+    Returns:
+        reverted_eval_config (Dict[str, Any])
+    """
     for hp_name in hp_names:
         is_categorical = is_categoricals[hp_name]
         config = config_space.get_hyperparameter(hp_name)
@@ -93,6 +122,13 @@ def revert_eval_config(eval_config: Dict[str, Any], config_space: CS.Configurati
 
 
 def save_observations(filename: str, observations: Dict[str, np.ndarray]) -> None:
+    """
+    Save the observations during the optimization procedure
+
+    Args:
+        filename (str): The name of the json file
+        observations (Dict[str, np.ndarray]): The observations to save
+    """
     dir_name = 'results/'
     if not os.path.exists(dir_name):
         os.makedirs(dir_name, exist_ok=True)
