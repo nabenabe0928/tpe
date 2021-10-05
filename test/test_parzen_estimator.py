@@ -1,16 +1,16 @@
 import numpy as np
 import unittest
 
-from src.optimizer.parzen_estimator.kernel import (
+from optimizer.parzen_estimator.kernel import (
     UniformKernel,
 )
-from src.optimizer.parzen_estimator.parzen_estimator import (
+from optimizer.parzen_estimator.parzen_estimator import (
     CategoricalParzenEstimator,
     CategoricalPriorType,
     NumericalParzenEstimator,
     NumericalPriorType
 )
-from src.optimizer.tpe import _default_weights
+from util.constants import default_weights
 
 
 class TestCategoricalPriorType(unittest.TestCase):
@@ -65,7 +65,7 @@ class TestNumericalParzenEstimator(unittest.TestCase):
         ]
         for samples in samples_set:
             try:
-                NumericalParzenEstimator(samples=samples, lb=-3.0, ub=3.0, weight_func=_default_weights)
+                NumericalParzenEstimator(samples=samples, lb=-3.0, ub=3.0, weight_func=default_weights)
             except ValueError:
                 pass
             except Exception:
@@ -78,9 +78,9 @@ class TestNumericalParzenEstimator(unittest.TestCase):
 
     def test_basis_loglikelihood(self) -> None:
         samples = np.array([0, 1, 2, 3] * 10)
-        pe = NumericalParzenEstimator(samples=samples, lb=-3.0, ub=3.0, weight_func=_default_weights)
+        pe = NumericalParzenEstimator(samples=samples, lb=-3.0, ub=3.0, weight_func=default_weights)
         assert pe.basis_loglikelihood(np.arange(4)).shape == (41, 4)
-        pe = NumericalParzenEstimator(samples=samples, lb=-3.0, ub=3.0, weight_func=_default_weights,
+        pe = NumericalParzenEstimator(samples=samples, lb=-3.0, ub=3.0, weight_func=default_weights,
                                       prior=NumericalPriorType.no_prior)
         assert pe.basis_loglikelihood(np.arange(4)).shape == (40, 4)
 
@@ -91,7 +91,7 @@ class TestNumericalParzenEstimator(unittest.TestCase):
             0.41424797, 0.49825133, 0.44741231, 0.5678886,  0.46689275, 0.48488553
         ])
         mus = np.array([0.4372727, 0.44549973])
-        pe = NumericalParzenEstimator(samples=mus, lb=0.0, ub=1.0, weight_func=_default_weights)
+        pe = NumericalParzenEstimator(samples=mus, lb=0.0, ub=1.0, weight_func=default_weights)
         assert np.allclose(pe.weights, [0.33333333, 0.33333333, 0.33333333])
         assert np.allclose([b.mu for b in pe.basis], [0.43727276, 0.44549973, 0.5])
         assert np.allclose([b.sigma for b in pe.basis], [0.02666232, 0.02666232, 1.])
@@ -123,7 +123,7 @@ class TestCategoricalParzenEstimator(unittest.TestCase):
         ]
         for samples in samples_set:
             try:
-                CategoricalParzenEstimator(samples=samples, n_choices=4, top=0.7, weight_func=_default_weights)
+                CategoricalParzenEstimator(samples=samples, n_choices=4, top=0.7, weight_func=default_weights)
             except ValueError:
                 pass
             except Exception:
@@ -161,7 +161,7 @@ class TestCategoricalParzenEstimator(unittest.TestCase):
         ]
         priors = [CategoricalPriorType.uniform] * 3 + [CategoricalPriorType.no_prior] * 3
         for samples, bound, prior, ll in zip(samples_set, bounds, priors, lls):
-            pe = CategoricalParzenEstimator(samples=samples, n_choices=4, top=0.7, weight_func=_default_weights,
+            pe = CategoricalParzenEstimator(samples=samples, n_choices=4, top=0.7, weight_func=default_weights,
                                             prior=prior)
             ll_est = pe.log_likelihood(np.arange(4))
             vals, counts = np.unique(pe.sample(rng, n_samples), return_counts=True)
@@ -179,9 +179,9 @@ class TestCategoricalParzenEstimator(unittest.TestCase):
 
     def test_basis_loglikelihood(self) -> None:
         samples = np.array([0, 1, 2, 3] * 10)
-        pe = CategoricalParzenEstimator(samples=samples, n_choices=4, top=0.7, weight_func=_default_weights)
+        pe = CategoricalParzenEstimator(samples=samples, n_choices=4, top=0.7, weight_func=default_weights)
         assert pe.basis_loglikelihood(np.arange(4)).shape == (41, 4)
-        pe = CategoricalParzenEstimator(samples=samples, n_choices=4, top=0.7, weight_func=_default_weights,
+        pe = CategoricalParzenEstimator(samples=samples, n_choices=4, top=0.7, weight_func=default_weights,
                                         prior=CategoricalPriorType.no_prior)
         assert pe.basis_loglikelihood(np.arange(4)).shape == (40, 4)
 

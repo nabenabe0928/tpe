@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Tuple, Type, Union
 import numpy as np
 import unittest
 
-from src.optimizer.parzen_estimator.kernel import AitchisonAitkenKernel, GaussKernel, UniformKernel
+from optimizer.parzen_estimator.kernel import AitchisonAitkenKernel, GaussKernel, UniformKernel
 
 
 class TestKernel(unittest.TestCase):
