@@ -1,6 +1,8 @@
 import numpy as np
 import unittest
 
+import ConfigSpace.hyperparameters as CSH
+
 from optimizer.parzen_estimator.kernel import (
     UniformKernel,
 )
@@ -8,9 +10,11 @@ from optimizer.parzen_estimator.parzen_estimator import (
     CategoricalParzenEstimator,
     CategoricalPriorType,
     NumericalParzenEstimator,
-    NumericalPriorType
+    NumericalPriorType,
+    build_categorical_parzen_estimator,
+    build_numerical_parzen_estimator
 )
-from util.constants import default_weights
+from util.constants import config2type, default_weights
 
 
 class TestCategoricalPriorType(unittest.TestCase):
@@ -74,7 +78,17 @@ class TestNumericalParzenEstimator(unittest.TestCase):
                 raise ValueError('The error was not raised.')
 
     def test_sample(self) -> None:
-        pass
+        rng = np.random.RandomState()
+        samples = np.array([0, 1, 2, 3] * 10)
+        pe = NumericalParzenEstimator(samples=samples, lb=-3.0, ub=3.0, weight_func=default_weights)
+        ss = pe.sample(rng, 10)
+        assert ss.shape == (10,)
+
+        samples = np.array([-1, 0, 1] * 10)
+        pe = NumericalParzenEstimator(samples=samples, lb=-1.25, ub=1.25, q=0.5, weight_func=default_weights)
+        ss = pe.sample(rng, 100)
+        choices = np.array([-1.0, -0.5, 0.0, 0.5, 1.0])
+        assert np.allclose(np.unique(ss), choices)
 
     def test_basis_loglikelihood(self) -> None:
         samples = np.array([0, 1, 2, 3] * 10)
@@ -163,11 +177,7 @@ class TestCategoricalParzenEstimator(unittest.TestCase):
         for samples, bound, prior, ll in zip(samples_set, bounds, priors, lls):
             pe = CategoricalParzenEstimator(samples=samples, n_choices=4, top=0.7, weight_func=default_weights,
                                             prior=prior)
-            ll_est = pe.log_likelihood(np.arange(4))
             vals, counts = np.unique(pe.sample(rng, n_samples), return_counts=True)
-
-            if not np.allclose(ll, np.log(np.ones(4) * 0.25)):
-                assert np.allclose(ll_est, ll)
 
             if prior == CategoricalPriorType.no_prior:
                 assert np.allclose(samples, np.array([b.choice for b in pe.basis]))
@@ -178,12 +188,120 @@ class TestCategoricalParzenEstimator(unittest.TestCase):
                 assert bound[i][0] <= counts[vals == i] / n_samples <= bound[i][1]
 
     def test_basis_loglikelihood(self) -> None:
-        samples = np.array([0, 1, 2, 3] * 10)
+        samples = np.array([0, 1, 2, 3] * 3)
         pe = CategoricalParzenEstimator(samples=samples, n_choices=4, top=0.7, weight_func=default_weights)
-        assert pe.basis_loglikelihood(np.arange(4)).shape == (41, 4)
+        bll = pe.basis_loglikelihood(np.arange(4))
+        assert bll.shape == (13, 4)
+
+        ans = [[-0.3566749393939972, -2.3025851249694824, -2.3025851249694824, -2.3025851249694824],
+               [-2.3025851249694824, -0.3566749393939972, -2.3025851249694824, -2.3025851249694824],
+               [-2.3025851249694824, -2.3025851249694824, -0.3566749393939972, -2.3025851249694824],
+               [-2.3025851249694824, -2.3025851249694824, -2.3025851249694824, -0.3566749393939972],
+               [-0.3566749393939972, -2.3025851249694824, -2.3025851249694824, -2.3025851249694824],
+               [-2.3025851249694824, -0.3566749393939972, -2.3025851249694824, -2.3025851249694824],
+               [-2.3025851249694824, -2.3025851249694824, -0.3566749393939972, -2.3025851249694824],
+               [-2.3025851249694824, -2.3025851249694824, -2.3025851249694824, -0.3566749393939972],
+               [-0.3566749393939972, -2.3025851249694824, -2.3025851249694824, -2.3025851249694824],
+               [-2.3025851249694824, -0.3566749393939972, -2.3025851249694824, -2.3025851249694824],
+               [-2.3025851249694824, -2.3025851249694824, -0.3566749393939972, -2.3025851249694824],
+               [-2.3025851249694824, -2.3025851249694824, -2.3025851249694824, -0.3566749393939972],
+               [-1.3862943649291992, -1.3862943649291992, -1.3862943649291992, -1.3862943649291992]]
+
+        assert np.allclose(ans, bll)
+
         pe = CategoricalParzenEstimator(samples=samples, n_choices=4, top=0.7, weight_func=default_weights,
                                         prior=CategoricalPriorType.no_prior)
-        assert pe.basis_loglikelihood(np.arange(4)).shape == (40, 4)
+        bll = pe.basis_loglikelihood(np.arange(4))
+        assert bll.shape == (12, 4)
+
+        ans = [[-0.3566749393939972, -2.3025851249694824, -2.3025851249694824, -2.3025851249694824],
+               [-2.3025851249694824, -0.3566749393939972, -2.3025851249694824, -2.3025851249694824],
+               [-2.3025851249694824, -2.3025851249694824, -0.3566749393939972, -2.3025851249694824],
+               [-2.3025851249694824, -2.3025851249694824, -2.3025851249694824, -0.3566749393939972],
+               [-0.3566749393939972, -2.3025851249694824, -2.3025851249694824, -2.3025851249694824],
+               [-2.3025851249694824, -0.3566749393939972, -2.3025851249694824, -2.3025851249694824],
+               [-2.3025851249694824, -2.3025851249694824, -0.3566749393939972, -2.3025851249694824],
+               [-2.3025851249694824, -2.3025851249694824, -2.3025851249694824, -0.3566749393939972],
+               [-0.3566749393939972, -2.3025851249694824, -2.3025851249694824, -2.3025851249694824],
+               [-2.3025851249694824, -0.3566749393939972, -2.3025851249694824, -2.3025851249694824],
+               [-2.3025851249694824, -2.3025851249694824, -0.3566749393939972, -2.3025851249694824],
+               [-2.3025851249694824, -2.3025851249694824, -2.3025851249694824, -0.3566749393939972]]
+
+        assert np.allclose(ans, bll)
+
+
+class TestBuildParzenEstimators(unittest.TestCase):
+    def build_npe(self, vals, config):
+        config_type = config.__class__.__name__
+        return build_numerical_parzen_estimator(
+            vals=vals,
+            config=config,
+            dtype=config2type[config_type],
+            weight_func=default_weights
+        )
+
+    def _check(self, lb_diff, ub_diff):
+        self.assertAlmostEqual(lb_diff, 0)
+        self.assertAlmostEqual(ub_diff, 0)
+
+    def test_build_categorical_parzen_estimator(self):
+        C = CSH.CategoricalHyperparameter('c1', choices=['a', 'b', 'c'])
+        vals = [1]
+
+        try:
+            build_categorical_parzen_estimator(
+                config=C,
+                vals=vals,
+                weight_func=default_weights
+            )
+        except ValueError:
+            pass
+        else:
+            raise ValueError('The error was not raised.')
+
+        vals = ['a', 'b', 'c']
+        try:
+            build_categorical_parzen_estimator(
+                config=C,
+                vals=vals,
+                weight_func=default_weights
+            )
+        except Exception:
+            raise ValueError('test_build_numerical_parzen_estimator failed.')
+
+    def test_build_numerical_parzen_estimator(self):
+        lb, ub, q = 1, 100, 0.5
+        x = CSH.UniformFloatHyperparameter('x', lower=lb, upper=ub)
+        vals = np.arange(1, 20)
+        pe = self.build_npe(vals, x)
+        assert pe.q is None
+        self._check(pe.lb - lb, pe.ub - ub)
+
+        x = CSH.UniformFloatHyperparameter('x', lower=lb, upper=ub, log=True)
+        pe = self.build_npe(vals, x)
+
+        assert pe.q is None
+        self._check(pe.lb - np.log(lb), pe.ub - np.log(ub))
+
+        x = CSH.UniformFloatHyperparameter('x', lower=lb, upper=ub, q=q)
+        pe = self.build_npe(vals, x)
+        assert pe.q == q
+        self._check(pe.lb - (lb - 0.5 * q), pe.ub - (ub + 0.5 * q))
+
+        x = CSH.UniformFloatHyperparameter('x', lower=lb, upper=ub, q=q, log=True)
+        pe = self.build_npe(vals, x)
+        assert pe.q is None
+        self._check(pe.lb - np.log(lb), pe.ub - np.log(ub))
+
+        x = CSH.UniformIntegerHyperparameter('x', lower=lb, upper=ub)
+        pe = self.build_npe(vals, x)
+        assert pe.q == 1
+        self._check(pe.lb - (lb - 0.5), pe.ub - (ub + 0.5))
+
+        x = CSH.UniformIntegerHyperparameter('x', lower=lb, upper=ub, log=True)
+        pe = self.build_npe(vals, x)
+        assert pe.q is None
+        self._check(pe.lb - np.log(lb), pe.ub - np.log(ub))
 
 
 if __name__ == '__main__':

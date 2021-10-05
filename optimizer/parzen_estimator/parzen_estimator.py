@@ -4,7 +4,7 @@ from typing import Callable, List, Optional, Tuple, Type, Union
 import numpy as np
 
 from optimizer.parzen_estimator.kernel import AitchisonAitkenKernel, GaussKernel, UniformKernel
-from util.constants import CategoricalHPType, EPS, NumericType, NumericalHPType
+from util.constants import CategoricalHPType, NumericType, NumericalHPType
 
 
 class NumericalPriorType(IntEnum):
@@ -68,7 +68,19 @@ class BaseParzenEstimator:
         return self._basis
 
     def _sample(self, rng: np.random.RandomState, n_ei_candidates: int) -> np.ndarray:
-        """ Modify here and categorical pe's sample accordingly """
+        """
+        The method to sample from the parzen estimator.
+        This method needs to be wrapped by a child class.
+
+        Args:
+            rng (np.random.RandomState): The random seed
+            n_ei_candidates (int): The number of samples
+
+        Returns:
+            samples (np.ndarray):
+                Samples from the parzen estimator.
+                The shape is (n_ei_candidates, ).
+        """
         # TODO: Add tests for shape and type
         samples = [
             self.basis[active].sample(rng)
@@ -80,16 +92,30 @@ class BaseParzenEstimator:
         return np.array(samples, dtype=self.dtype)
 
     def basis_loglikelihood(self, xs: np.ndarray) -> np.ndarray:
-        # TODO: Add tests for shape
+        """
+        Compute the kernel value for each basis in the parzen estimator.
+
+        Args:
+            xs (np.ndarray): The sampled values to compute each kernel value
+                             The shape is (n_samples, )
+
+        Returns:
+            basis_loglikelihoods (np.ndarray):
+                The kernel values for each basis given sampled values
+                The shape is (B, n_samples)
+                where B is the number of basis and n_samples = xs.size
+
+        NOTE:
+            When the parzen estimator is computed by:
+                p(x) = sum[i = 0 to B] weights[i] * basis[i](x)
+            where basis[i] is the i-th kernel function.
+            Then this function returns the following:
+                [log(basis[0](xs)), ..., log(basis[B - 1](xs))]
+        """
+        if len(xs.shape) > 1:
+            raise ValueError('xs must be 1D array, but got {}D'.format(len(xs.shape)))
+
         return np.array([b.log_pdf(xs) for b in self.basis])
-
-    def log_likelihood(self, xs: np.ndarray) -> np.ndarray:
-        # TODO: Add tests for shape
-        ps = np.zeros_like(xs, dtype=np.float64)
-        for w, b in zip(self.weights, self.basis):
-            ps += w * b.pdf(xs)
-
-        return np.log(ps + EPS)
 
 
 class NumericalParzenEstimator(BaseParzenEstimator):
@@ -129,20 +155,8 @@ class NumericalParzenEstimator(BaseParzenEstimator):
 
         return ret + ')'
 
-    @property
-    def lb(self) -> NumericType:
-        return self._lb
-
-    @property
-    def ub(self) -> NumericType:
-        return self._ub
-
-    @property
-    def q(self) -> Optional[NumericType]:
-        return self._q
-
     def sample(self, rng: np.random.RandomState, n_ei_candidates: int) -> np.ndarray:
-        # TODO: Add tests for type
+        """ the wrapper method of _sample """
         samples = self._sample(rng=rng, n_ei_candidates=n_ei_candidates)
         return samples
 
@@ -151,8 +165,23 @@ class NumericalParzenEstimator(BaseParzenEstimator):
         """
         Calculate a bandwidth based on Scott's rule
 
-        References: Scott, D.W. (1992) Multivariate Density Estimation:
-                    Theory, Practice, and Visualization.
+        Args:
+            samples (np.ndarray): Samples to use for the construction of
+                                  the parzen estimator
+            weight_func (Callable: int -> np.ndarray):
+                The function to calculate the weights of each basis.
+                The default is a uniform distribution.
+            prior (NumericalPriorType): What prior to use.
+
+        Returns:
+            weights (np.ndarray): Weights for each basis
+            basis (List[GaussKernel]):
+                Kernel functions for the corresponding basis
+
+        NOTE:
+            The bandwidth is computed using the following reference:
+                Scott, D.W. (1992) Multivariate Density Estimation:
+                Theory, Practice, and Visualization.
         """
         # TODO: Add tests
         domain_range = self.ub - self.lb
@@ -173,6 +202,18 @@ class NumericalParzenEstimator(BaseParzenEstimator):
             basis.append(prior.get_kernel(lb=self.lb, ub=self.ub, q=self.q))
 
         return weights, basis
+
+    @property
+    def lb(self) -> NumericType:
+        return self._lb
+
+    @property
+    def ub(self) -> NumericType:
+        return self._ub
+
+    @property
+    def q(self) -> Optional[NumericType]:
+        return self._q
 
 
 class CategoricalParzenEstimator(BaseParzenEstimator):
@@ -212,6 +253,7 @@ class CategoricalParzenEstimator(BaseParzenEstimator):
         return self._top
 
     def sample(self, rng: np.random.RandomState, n_ei_candidates: int) -> np.ndarray:
+        """ the wrapper method of _sample """
         return self._sample(rng=rng, n_ei_candidates=n_ei_candidates)
 
 
@@ -227,8 +269,6 @@ def build_numerical_parzen_estimator(config: NumericalHPType, dtype: Type[Union[
 
     Returns:
         pe (NumericalParzenEstimator): Parzen estimator given a set of observations
-
-    TODO: Add test
     """
 
     q, log, lb, ub = config.q, config.log, config.lower, config.upper
@@ -261,16 +301,19 @@ def build_categorical_parzen_estimator(config: CategoricalHPType, vals: np.ndarr
 
     Args:
         config (CategoricalHPType): Hyperparameter information from the ConfigSpace
-        lower_vals (np.ndarray): The observed hyperparameter values
+        vals (np.ndarray): The observed hyperparameter values (i.e. symbols, but not indices)
 
     Returns:
         pe (CategoricalParzenEstimator): Parzen estimators given a set of observations
-
-    TODO: Add test
     """
     choices = config.choices
     n_choices = len(choices)
-    choice_indices = np.array([choices.index(val) for val in vals], dtype=np.int32)
+
+    try:
+        choice_indices = np.array([choices.index(val) for val in vals], dtype=np.int32)
+    except ValueError:
+        raise ValueError('vals to build categorical parzen estimator must be '
+                         'the list of symbols {}, but got the list of indices.'.format(choices))
 
     pe = CategoricalParzenEstimator(samples=choice_indices, n_choices=n_choices, weight_func=weight_func)
 

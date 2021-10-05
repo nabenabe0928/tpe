@@ -45,7 +45,7 @@ def get_logger(file_name: str, logger_name: str) -> Logger:
 
 def get_random_sample(hp_name: str, is_categorical: bool, rng: np.random.RandomState,
                       config_space: CS.ConfigurationSpace) -> NumericType:
-
+    """ TODO: Add test """
     config = config_space.get_hyperparameter(hp_name)
 
     if is_categorical:
