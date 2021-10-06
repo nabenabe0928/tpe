@@ -1,3 +1,4 @@
+import os
 from logging import Logger
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
@@ -78,8 +79,6 @@ class TPE:
         Args:
             eval_config (Dict[str, NumericType]): The configuration to evaluate (after conversion)
             loss (float): The loss value as a result of the evaluation
-
-        TODO: Test the change by the update
         """
         self._observations['loss'] = np.append(self._observations['loss'], loss)
         self._order = np.argsort(self.observations['loss'])
@@ -101,17 +100,20 @@ class TPE:
         logger.info('\nThe observations: {}'.format(self.observations))
         save_observations(filename=self.resultfile, observations=self.observations)
 
-        with open('opt_cfg.json', mode='w') as f:
+        os.makedirs('incumbents/', exist_ok=True)
+        with open(f'incumbents/opt_{self.resultfile}.json', mode='w') as f:
             json.dump(best_config, f, indent=4)
 
-    def optimize(self, logger: Logger) -> None:
+    def optimize(self, logger: Logger) -> Tuple[Dict[str, Any], float]:
         """
         Optimize obj_func using TPE Sampler and store the results in the end.
 
         Args:
             logger (Logger): The logging to write the intermediate results
 
-        TODO: Add test by benchmark functions
+        Returns:
+            best_config (Dict[str, Any]): The configuration that has the best loss
+            best_loss (float): The best loss value during the optimization
         """
         self._observations['loss'] = np.array([])
 
@@ -137,15 +139,15 @@ class TPE:
 
         self._store_results(best_config=best_config, logger=logger)
 
+        return best_config, best_loss
+
     def _get_config_candidates(self) -> List[np.ndarray]:
         """
         Since we compute the probability improvement of each objective independently,
         we need to sample the configurations in advance.
 
         Returns:
-            (np.ndarray): An array of candidates in one dimension
-
-        TODO: Test
+            config_cands (List[np.ndarray]): arrays of candidates in each dimension
         """
         config_cands = []
         n_evals = len(self.order)
@@ -175,8 +177,6 @@ class TPE:
         Returns:
             basis_loglikelihoods (np.ndarray):
                 The shape is (n_basis, n_samples).
-
-        TODO: Add test
         """
         is_categorical = self.is_categorical[hp_name]
         ordered_observations = self.observations[hp_name][self.order]
@@ -207,16 +207,15 @@ class TPE:
             config_ll_ratio (np.ndarray):
                 The log of the likelihood ratios of each configuration.
                 The shape is (n_ei_candidates, )
-
-        TODO: Add test
         """
         dim = len(self.hp_names)
         n_evals = len(self.order)
         n_lower = self.percentile_func(n_evals)
 
-        basis_loglikelihoods_lower = np.zeros((dim, n_lower + 1, self.n_ei_candidates))
+        n_candidates = config_cands[0].size
+        basis_loglikelihoods_lower = np.zeros((dim, n_lower + 1, n_candidates))
         weights_lower = self.weight_func(n_lower + 1)
-        basis_loglikelihoods_upper = np.zeros((dim, n_evals - n_lower + 1, self.n_ei_candidates))
+        basis_loglikelihoods_upper = np.zeros((dim, n_evals - n_lower + 1, n_candidates))
         weights_upper = self.weight_func(n_evals - n_lower + 1)
 
         for dim, (hp_name, samples) in enumerate(zip(self.hp_names, config_cands)):

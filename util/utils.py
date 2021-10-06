@@ -1,6 +1,6 @@
 import os
 from logging import basicConfig, getLogger, DEBUG, FileHandler, Formatter, Logger
-from typing import Any, Dict, List, Literal, Optional, Type, TypedDict, Union
+from typing import Any, Dict, List, Literal
 
 import json
 
@@ -15,22 +15,10 @@ from util.constants import NumericType, config2type
 bool_json = Literal['True', 'False']
 
 
-class ParameterSettings(TypedDict):
-    param_type: Union[Type[int], Type[float], Type[str], Type[bool]]  # parameter type
-    ignore: bool_json  # Whether we ignore this parameter or not
-    lower: Optional[NumericType]  # The lower bound of parameters
-    upper: Optional[NumericType]  # The upper bound of parameters
-    log: Optional[Union[bool_json, bool]]  # scale: If True, log, otherwise uniform
-    q: Optional[NumericType]  # The quantization parameter"
-    choices: Optional[List[str]]  # The choices for categorical parameters. Must be str for config space
-    dataclass: Optional[str]  # The choices for categorical parameters in dataclass
-    default_value: Optional[Union[NumericType, str]]  # The default value for this parameter
-
-
 def get_logger(file_name: str, logger_name: str) -> Logger:
     os.makedirs('log/', exist_ok=True)
 
-    file_path = f'log/{file_name}'
+    file_path = f'log/{file_name}.log'
     fmt = "%(asctime)s [%(levelname)s/%(filename)s:%(lineno)d] %(message)s"
     basicConfig(filename=file_path, format=fmt, level=DEBUG)
     logger = getLogger(logger_name)
