@@ -280,7 +280,7 @@ class TPE:
         return get_random_sample(hp_name=hp_name, rng=self.rng, config_space=self.config_space,
                                  is_categorical=self.is_categorical[hp_name])
 
-    def _revert_eval_config(self, eval_config: Dict[str, Any]) -> Dict[str, Any]:
+    def _revert_eval_config(self, eval_config: Dict[str, NumericType]) -> Dict[str, Any]:
         return revert_eval_config(eval_config=eval_config, config_space=self.config_space,
                                   is_categoricals=self.is_categorical, hp_names=self.hp_names)
 

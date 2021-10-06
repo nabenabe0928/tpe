@@ -68,7 +68,7 @@ def check_value_range(hp_name: str, config: CSH.Hyperparameter, val: NumericType
         ))
 
 
-def revert_eval_config(eval_config: Dict[str, Any], config_space: CS.ConfigurationSpace,
+def revert_eval_config(eval_config: Dict[str, NumericType], config_space: CS.ConfigurationSpace,
                        is_categoricals: Dict[str, bool], hp_names: List[str]) -> Dict[str, Any]:
     """
     Revert the eval_config into the original value range.
@@ -78,7 +78,7 @@ def revert_eval_config(eval_config: Dict[str, Any], config_space: CS.Configurati
         * quantized value: value -> steped by q, i.e. q, 2q, 3q, ...
 
     Args:
-        eval_config (Dict[str, Any]): The configuration to evaluate and revert
+        eval_config (Dict[str, NumericType]): The configuration to evaluate and revert
         config_space (CS.ConfigurationSpace): The searching space information
         is_categoricals (Dict[str, bool]): Whether each hyperparameter is categorical
         hp_names (List[str]): The list of the names of hyperparameters
@@ -86,13 +86,14 @@ def revert_eval_config(eval_config: Dict[str, Any], config_space: CS.Configurati
     Returns:
         reverted_eval_config (Dict[str, Any])
     """
+    converted_eval_config: Dict[str, Any] = {}
     for hp_name in hp_names:
         is_categorical = is_categoricals[hp_name]
         config = config_space.get_hyperparameter(hp_name)
         val = eval_config[hp_name]
 
         if is_categorical:
-            eval_config[hp_name] = config.choices[val]
+            converted_eval_config[hp_name] = config.choices[val]
         else:
             dtype = config2type[config.__class__.__name__]
             q = config.q
@@ -104,9 +105,9 @@ def revert_eval_config(eval_config: Dict[str, Any], config_space: CS.Configurati
 
             check_value_range(hp_name=hp_name, config=config, val=val)
 
-            eval_config[hp_name] = dtype(val)
+            converted_eval_config[hp_name] = dtype(val)
 
-    return eval_config
+    return converted_eval_config
 
 
 def save_observations(filename: str, observations: Dict[str, np.ndarray]) -> None:
