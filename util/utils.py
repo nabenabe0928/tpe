@@ -110,6 +110,16 @@ def revert_eval_config(eval_config: Dict[str, NumericType], config_space: CS.Con
     return converted_eval_config
 
 
+def store_results(best_config: Dict[str, np.ndarray], logger: Logger,
+                  observations: Dict[str, np.ndarray], file_name: str) -> None:
+    logger.info('\nThe observations: {}'.format(observations))
+    save_observations(filename=file_name, observations=observations)
+
+    os.makedirs('incumbents/', exist_ok=True)
+    with open(f'incumbents/opt_{file_name}.json', mode='w') as f:
+        json.dump(best_config, f, indent=4)
+
+
 def save_observations(filename: str, observations: Dict[str, np.ndarray]) -> None:
     """
     Save the observations during the optimization procedure

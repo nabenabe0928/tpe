@@ -59,25 +59,24 @@ class BaseParzenEstimator:
     _weights: np.ndarray
     dtype: Type[np.number]
 
-    def _sample(self, rng: np.random.RandomState, n_ei_candidates: int) -> np.ndarray:
+    def _sample(self, rng: np.random.RandomState, n_samples: int) -> np.ndarray:
         """
         The method to sample from the parzen estimator.
         This method needs to be wrapped by a child class.
 
         Args:
             rng (np.random.RandomState): The random seed
-            n_ei_candidates (int): The number of samples
+            n_samples (int): The number of samples
 
         Returns:
             samples (np.ndarray):
                 Samples from the parzen estimator.
-                The shape is (n_ei_candidates, ).
+                The shape is (n_samples, ).
         """
-        # TODO: Add tests for shape and type
         samples = [
             self.basis[active].sample(rng)
             for active in np.argmax(
-                rng.multinomial(n=1, pvals=self.weights, size=n_ei_candidates),
+                rng.multinomial(n=1, pvals=self.weights, size=n_samples),
                 axis=-1
             )
         ]
@@ -155,9 +154,9 @@ class NumericalParzenEstimator(BaseParzenEstimator):
 
         return ret + ')'
 
-    def sample(self, rng: np.random.RandomState, n_ei_candidates: int) -> np.ndarray:
+    def sample(self, rng: np.random.RandomState, n_samples: int) -> np.ndarray:
         """ the wrapper method of _sample """
-        samples = self._sample(rng=rng, n_ei_candidates=n_ei_candidates)
+        samples = self._sample(rng=rng, n_samples=n_samples)
         return samples
 
     def _calculate(self, samples: np.ndarray, weight_func: Callable,
@@ -183,7 +182,6 @@ class NumericalParzenEstimator(BaseParzenEstimator):
                 Scott, D.W. (1992) Multivariate Density Estimation:
                 Theory, Practice, and Visualization.
         """
-        # TODO: Add tests
         domain_range = self.ub - self.lb
         no_prior = prior == NumericalPriorType.no_prior
         observed = samples if no_prior else np.append(samples, 0.5 * (self.lb + self.ub))
@@ -252,9 +250,9 @@ class CategoricalParzenEstimator(BaseParzenEstimator):
     def top(self) -> float:
         return self._top
 
-    def sample(self, rng: np.random.RandomState, n_ei_candidates: int) -> np.ndarray:
+    def sample(self, rng: np.random.RandomState, n_samples: int) -> np.ndarray:
         """ the wrapper method of _sample """
-        return self._sample(rng=rng, n_ei_candidates=n_ei_candidates)
+        return self._sample(rng=rng, n_samples=n_samples)
 
 
 def build_numerical_parzen_estimator(config: NumericalHPType, dtype: Type[Union[float, int]],
