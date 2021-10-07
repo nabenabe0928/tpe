@@ -59,14 +59,6 @@ class BaseParzenEstimator:
     _weights: np.ndarray
     dtype: Type[np.number]
 
-    @property
-    def weights(self) -> np.ndarray:
-        return self._weights
-
-    @property
-    def basis(self) -> List[Union[GaussKernel, AitchisonAitkenKernel, UniformKernel]]:
-        return self._basis
-
     def _sample(self, rng: np.random.RandomState, n_ei_candidates: int) -> np.ndarray:
         """
         The method to sample from the parzen estimator.
@@ -116,6 +108,14 @@ class BaseParzenEstimator:
             raise ValueError('xs must be 1D array, but got {}D'.format(len(xs.shape)))
 
         return np.array([b.log_pdf(xs) for b in self.basis])
+
+    @property
+    def weights(self) -> np.ndarray:
+        return self._weights
+
+    @property
+    def basis(self) -> List[Union[GaussKernel, AitchisonAitkenKernel, UniformKernel]]:
+        return self._basis
 
 
 class NumericalParzenEstimator(BaseParzenEstimator):

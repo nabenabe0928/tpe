@@ -41,34 +41,6 @@ class GaussKernel():
             self.lb, self.ub, self.q, self.mu, self.sigma
         )
 
-    @property
-    def mu(self) -> NumericType:
-        return self._mu
-
-    @property
-    def sigma(self) -> NumericType:
-        return self._sigma
-
-    @property
-    def q(self) -> Optional[NumericType]:
-        return self._q
-
-    @property
-    def lb(self) -> NumericType:
-        return self._lb
-
-    @property
-    def ub(self) -> NumericType:
-        return self._ub
-
-    @property
-    def norm_const(self) -> NumericType:
-        return self._norm_const
-
-    @property
-    def logpdf_const(self) -> float:
-        return self._logpdf_const
-
     def _init_domain_params(
         self,
         lb: NumericType,
@@ -134,8 +106,15 @@ class GaussKernel():
 
     def cdf(self, x: Union[NumericType, np.ndarray]) -> Union[NumericType, np.ndarray]:
         """
-        Return the cumulative distribution value of a point or a set of points `x`
-        
+        Compute the cumulative density function values.
+
+        Args:
+            x (np.ndarray): Samples to compute the cdf
+
+        Returns:
+            cdf (np.ndarray):
+                The cumulative density function value for each sample
+                cdf[i] = integral[from -inf to x[i]] pdf(x') dx'
         """
 
         z = (x - self.mu) / (SQR2 * self.sigma)
@@ -160,28 +139,36 @@ class GaussKernel():
         val = val * self.sigma + self.mu
         return val if self.q is None else np.round(val / self.q) * self.q
 
+    @property
+    def mu(self) -> NumericType:
+        return self._mu
+
+    @property
+    def sigma(self) -> NumericType:
+        return self._sigma
+
+    @property
+    def q(self) -> Optional[NumericType]:
+        return self._q
+
+    @property
+    def lb(self) -> NumericType:
+        return self._lb
+
+    @property
+    def ub(self) -> NumericType:
+        return self._ub
+
+    @property
+    def norm_const(self) -> NumericType:
+        return self._norm_const
+
+    @property
+    def logpdf_const(self) -> float:
+        return self._logpdf_const
+
 
 class CategoricalKernel():
-    @property
-    def choice(self) -> int:
-        return self._choice  # type: ignore
-
-    @property
-    def n_choices(self) -> int:
-        return self._n_choices  # type: ignore
-
-    @property
-    def top(self) -> float:
-        return self._top  # type: ignore
-
-    @property
-    def others(self) -> float:
-        return self._others  # type: ignore
-
-    @property
-    def probs(self) -> np.ndarray:
-        return self._probs  # type: ignore
-
     def cdf(self, x: Union[int, np.ndarray]) -> Union[float, np.ndarray]:
         """
         Compute the probability of provided values.
@@ -237,6 +224,26 @@ class CategoricalKernel():
             index (int): Index of a symbol
         """
         return int(rng.multinomial(n=1, pvals=self.probs, size=1).argmax())
+
+    @property
+    def choice(self) -> int:
+        return self._choice  # type: ignore
+
+    @property
+    def n_choices(self) -> int:
+        return self._n_choices  # type: ignore
+
+    @property
+    def top(self) -> float:
+        return self._top  # type: ignore
+
+    @property
+    def others(self) -> float:
+        return self._others  # type: ignore
+
+    @property
+    def probs(self) -> np.ndarray:
+        return self._probs  # type: ignore
 
 
 class AitchisonAitkenKernel(CategoricalKernel):
