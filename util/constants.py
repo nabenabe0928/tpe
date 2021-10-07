@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Callable, Union
 
 import ConfigSpace.hyperparameters as CSH
 
@@ -25,8 +25,11 @@ type2config = {
 }
 
 
-def default_percentile(size: int, n_samples_lower: int = 26) -> int:
-    return min(int(np.ceil(0.25 * np.sqrt(size))), n_samples_lower)
+def default_percentile_maker(n_samples_lower: int = 26) -> Callable[[np.ndarray], int]:
+    def _imp(vals: np.ndarray) -> int:
+        size = vals.size
+        return min(int(np.ceil(0.25 * np.sqrt(size))), n_samples_lower)
+    return _imp
 
 
 def default_weights(size: int, n_samples_lower: int = 26) -> np.ndarray:

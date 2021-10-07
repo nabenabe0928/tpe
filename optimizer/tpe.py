@@ -1,5 +1,5 @@
 from logging import Logger
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Protocol, Tuple, Union
 
 import numpy as np
 
@@ -17,7 +17,7 @@ from util.constants import (
     NumericType,
     NumericalHPType,
     config2type,
-    default_percentile,
+    default_percentile_maker,
     default_weights
 )
 from util.utils import (
@@ -31,12 +31,17 @@ ParzenEstimatorType = Union[NumericalParzenEstimator, CategoricalParzenEstimator
 HPType = Union[CategoricalHPType, NumericalHPType]
 
 
+class PercentileFuncMaker(Protocol):
+    def __call__(self, **kwargs: Dict[str, Any]) -> Callable[[np.ndarray], int]:
+        ...
+
+
 class TreeStructuredParzenEstimator:
     def __init__(self, config_space: CS.ConfigurationSpace,
+                 percentile_func: Callable[[np.ndarray], int],
+                 weight_func: Callable[[int, int], np.ndarray],
                  metric_name: str = 'loss',
-                 n_ei_candidates: int = 24, seed: Optional[int] = None,
-                 percentile_func: Callable = default_percentile,
-                 weight_func: Callable = default_weights):
+                 n_ei_candidates: int = 24, seed: Optional[int] = None):
         """
         Attributes:
             rng (np.random.RandomState): random state to maintain the reproducibility
@@ -47,9 +52,9 @@ class TreeStructuredParzenEstimator:
             observations (Dict[str, Any]): The storage of the observations
             sorted_observations (Dict[str, Any]): The storage of the observations sorted based on loss
             is_categoricals (Dict[str, bool]): Whether the given hyperparameter is categorical
-            percentile_func (Callable):
+            percentile_func (Callable[[np.ndarray], int]):
                 The function that returns the number of a better group based on the total number of evaluations.
-            weight_func: callable
+            weight_func (Callable[[int, int], np.ndarray]):
                 The function that returns the coefficients of each kernel.
         """
         self._rng = np.random.RandomState(seed)
@@ -57,6 +62,7 @@ class TreeStructuredParzenEstimator:
         self._config_space = config_space
         self._hp_names = list(config_space._hyperparameters.keys())
         self._metric_name = metric_name
+        self._n_lower = 0
 
         self._observations = {hp_name: np.array([]) for hp_name in self._hp_names}
         self._sorted_observations = {hp_name: np.array([]) for hp_name in self._hp_names}
@@ -83,6 +89,7 @@ class TreeStructuredParzenEstimator:
         insert_loc = np.searchsorted(sorted_losses, loss, side='right')
         self._observations[self.metric_name] = np.append(losses, loss)
         self._sorted_observations[self.metric_name] = np.insert(sorted_losses, insert_loc, loss)
+        self._n_lower = self.percentile_func(self._sorted_observations[self.metric_name])
 
         observations, sorted_observations = self._observations, self._sorted_observations
         for hp_name in self.hp_names:
@@ -108,11 +115,10 @@ class TreeStructuredParzenEstimator:
             config_cands (List[np.ndarray]): arrays of candidates in each dimension
         """
         config_cands = []
-        n_evals = self.sorted_observations[self.metric_name].size
-        n_lowers = self.percentile_func(n_evals)
+        n_lower = self.n_lower
 
-        for dim, hp_name in enumerate(self.hp_names):
-            lower_vals = self.sorted_observations[hp_name][:n_lowers]
+        for hp_name in self.hp_names:
+            lower_vals = self.sorted_observations[hp_name][:n_lower]
             empty = np.array([lower_vals[0]])
 
             is_categorical = self.is_categoricals[hp_name]
@@ -137,8 +143,7 @@ class TreeStructuredParzenEstimator:
         """
         is_categorical = self.is_categoricals[hp_name]
         sorted_observations = self.sorted_observations[hp_name]
-        n_evals = self.sorted_observations[self.metric_name].size
-        n_lower = self.percentile_func(n_evals)
+        n_lower = self.n_lower
 
         # split observations
         lower_vals = sorted_observations[:n_lower]
@@ -168,7 +173,7 @@ class TreeStructuredParzenEstimator:
         """
         dim = len(self.hp_names)
         n_evals = self.sorted_observations[self.metric_name].size
-        n_lower = self.percentile_func(n_evals)
+        n_lower = self.n_lower
 
         n_candidates = config_cands[0].size
         basis_loglikelihoods_lower = np.zeros((dim, n_lower + 1, n_candidates))
@@ -258,6 +263,10 @@ class TreeStructuredParzenEstimator:
         return self._n_ei_candidates
 
     @property
+    def n_lower(self) -> int:
+        return self._n_lower
+
+    @property
     def hp_names(self) -> List[str]:
         return self._hp_names
 
@@ -278,8 +287,9 @@ class TPEOptimizer:
     def __init__(self, obj_func: Callable, config_space: CS.ConfigurationSpace,
                  resultfile: str, mutation_prob: float = 0.05, n_init: int = 10,
                  max_evals: int = 100, seed: Optional[int] = None, metric_name: str = 'loss',
-                 n_ei_candidates: int = 24, percentile_func: Callable = default_percentile,
-                 weight_func: Callable = default_weights):
+                 n_ei_candidates: int = 24,
+                 percentile_func_maker: PercentileFuncMaker = default_percentile_maker,
+                 weight_func: Callable[[int, int], np.ndarray] = default_weights):
         """
         Attributes:
             rng (np.random.RandomState): random state to maintain the reproducibility
@@ -291,10 +301,6 @@ class TPEOptimizer:
             observations (Dict[str, Any]): The storage of the observations
             config_space (CS.ConfigurationSpace): The searching space of the task
             is_categoricals (Dict[str, bool]): Whether the given hyperparameter is categorical
-            percentile_func (Callable):
-                The function that returns the number of a better group based on the total number of evaluations.
-            weight_func: callable
-                The function that returns the coefficients of each kernel.
         """
 
         self._rng = np.random.RandomState(seed)
@@ -315,7 +321,7 @@ class TPEOptimizer:
             metric_name=metric_name,
             n_ei_candidates=n_ei_candidates,
             seed=seed,
-            percentile_func=percentile_func,
+            percentile_func=percentile_func_maker(),
             weight_func=weight_func
         )
 

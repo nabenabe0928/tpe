@@ -7,7 +7,7 @@ import unittest
 
 from optimizer.tpe import TPEOptimizer
 from util.utils import get_logger
-from util.constants import default_percentile
+from util.constants import default_percentile_maker
 
 
 def sphere(eval_config):
@@ -122,7 +122,8 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
             samples=samples
         )
 
-        n_lower = default_percentile(max_evals)
+        percentile_func = default_percentile_maker()
+        n_lower = percentile_func(opt.tpe.observations['loss'])
         n_upper = max_evals - n_lower
 
         assert bll_low.shape == (n_lower + 1, n_samples)
