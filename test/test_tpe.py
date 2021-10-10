@@ -72,6 +72,35 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
 
         cleanup()
 
+    def test_set_prior_observations(self):
+        metric_name = 'loss'
+        opt = TPEOptimizer(
+            obj_func=sphere,
+            config_space=self.cs,
+            max_evals=10,
+            mutation_prob=0.0,
+            metric_name=metric_name,
+            resultfile='test'
+        )
+        ob = {}
+        n_samples = 10
+        rng = np.random.RandomState(0)
+        ob[metric_name] = rng.random(n_samples)
+        for hp_name in self.hp_names:
+            ob[hp_name] = rng.random(n_samples)
+
+        order = np.argsort(ob[metric_name])
+        opt.tpe.set_prior_observations(ob)
+
+        for hp_name in ob.keys():
+            cnt = np.count_nonzero(opt.tpe.observations[hp_name] != ob[hp_name])
+            assert cnt == 0
+
+        sorted_ob = {k: x[order] for k, x in ob.items()}
+        for hp_name in ob.keys():
+            cnt = np.count_nonzero(opt.tpe.sorted_observations[hp_name] != sorted_ob[hp_name])
+            assert cnt == 0
+
     def test_get_config_candidates(self):
         max_evals = 5
         opt = TPEOptimizer(

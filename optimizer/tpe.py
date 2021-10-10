@@ -77,6 +77,17 @@ class TreeStructuredParzenEstimator:
             for hp_name in self._hp_names
         }
 
+    def set_prior_observations(self, observations: Dict[str, np.ndarray]) -> None:
+        if self.observations[self.metric_name].size != 0:
+            raise ValueError('Prior observations must be set before the optimization.')
+
+        self._observations = observations
+        order = np.argsort(self.observations[self.metric_name])
+        self._sorted_observations = {
+            hp_name: observations[order]
+            for hp_name, observations in self.observations.items()
+        }
+
     def update_observations(self, eval_config: Dict[str, NumericType], loss: float) -> None:
         """
         Update the observations for the TPE construction
