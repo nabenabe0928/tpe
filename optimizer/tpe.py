@@ -111,7 +111,10 @@ class TreeStructuredParzenEstimator:
 
             if is_categorical:
                 observations[hp_name] = np.append(observations[hp_name], val)
-                sorted_observations[hp_name] = np.insert(sorted_observations[hp_name], insert_loc, val)
+                if sorted_observations[hp_name].size == 0:  # cannot cast str to float!
+                    sorted_observations[hp_name] = np.array([val], dtype='U32')
+                else:
+                    sorted_observations[hp_name] = np.insert(sorted_observations[hp_name], insert_loc, val)
             else:
                 dtype = config2type[config_type]
                 observations[hp_name] = np.append(observations[hp_name], val).astype(dtype)
