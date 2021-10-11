@@ -1,6 +1,6 @@
 import os
 
-from typing import Dict
+from typing import Dict, Union
 
 import ConfigSpace as CS
 import ConfigSpace.hyperparameters as CSH
@@ -29,6 +29,13 @@ def rosen(eval_config: Dict[str, float]) -> float:
     return val
 
 
+def mix_func(eval_config: Dict[str, Union[str, float]]) -> float:
+    func_dict = {'cosine': np.cos, 'sine': np.sin}
+    vals = np.array([v for v in eval_config.values() if isinstance(v, float)])
+    vals *= vals
+    return 1 - func_dict[eval_config['func']](vals.sum()) ** 2
+
+
 def cleanup() -> None:
     os.remove('log/test.log')
     os.remove('results/test.json')
@@ -38,18 +45,30 @@ def cleanup() -> None:
 class TestTreeStructuredParzenEstimator(unittest.TestCase):
     def setUp(self) -> None:
         dim = 10
+        self.cs_cat = CS.ConfigurationSpace()
         self.cs = CS.ConfigurationSpace()
+        self.cs_cat.add_hyperparameter(CSH.CategoricalHyperparameter('func', choices=['sine', 'cosine']))
         for d in range(dim):
             self.cs.add_hyperparameter(CSH.UniformFloatHyperparameter(f'x{d}', lower=-5, upper=5))
+            if d < dim - 1:
+                self.cs_cat.add_hyperparameter(CSH.UniformFloatHyperparameter(f'x{d}', lower=-5, upper=5))
+            else:
+                self.cs_cat.add_hyperparameter(CSH.OrdinalHyperparameter(
+                        f'x{d}',
+                        sequence=list(range(-5, 6)),
+                        meta={'lower': -5, 'upper': 5}
+                    )
+                )
 
         self.hp_names = list(self.cs._hyperparameters.keys())
+        self.hp_names_cat = list(self.cs_cat._hyperparameters.keys())
         self.logger = get_logger(file_name='test', logger_name='test')
 
     def test_update_observations(self) -> None:
         max_evals, metric_name = 20, 'loss'
         opt = TPEOptimizer(
-            obj_func=sphere,
-            config_space=self.cs,
+            obj_func=mix_func,
+            config_space=self.cs_cat,
             max_evals=max_evals,
             mutation_prob=0.0,
             metric_name=metric_name,
@@ -57,7 +76,8 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
         )
         opt.optimize(self.logger)
 
-        eval_config = {hp_name: 0.0 for hp_name in self.hp_names}
+        eval_config = {hp_name: 0.0 for hp_name in self.hp_names_cat}
+        eval_config['func'] = 'cosine'
         opt.tpe.update_observations(eval_config=eval_config, loss=0)
         assert opt.tpe.sorted_observations[metric_name][0] == 0.0
         assert opt.tpe.sorted_observations[metric_name].size == max_evals + 1
@@ -133,6 +153,43 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
                [-2.3906083300437304, -0.3234225699230498, -1.5374589912835055]]
 
         assert np.allclose(ans, config_cands)
+
+        max_evals = 5
+        opt = TPEOptimizer(
+            obj_func=mix_func,
+            config_space=self.cs_cat,
+            max_evals=max_evals,
+            mutation_prob=0.0,
+            resultfile='test',
+            seed=0
+        )
+        opt.optimize(self.logger)
+
+        opt.tpe._n_ei_candidates = 5
+        config_cands = opt.tpe.get_config_candidates()
+        assert len(config_cands) == len(self.hp_names_cat)
+        assert config_cands[0].size == opt.tpe.n_ei_candidates
+
+        ans = [
+            [0, 0, 1, 1, 1],
+            [-0.4292062936377955, -0.5132230470889889, -0.14657438123122993, -0.17073356719780441, 3.6297139379162733],
+            [3.330241948294638, 1.463115677574857, 4.406721260474024, 2.947887888286006, -0.8200358837154326],
+            [1.1315348442999413, 0.23325333601086667, 1.1247585066034038, 0.3634786818265787, 1.7541576737760938],
+            [1.645260846074287, -2.8167004005339753, 0.8557998084937999, -1.7809823117239185, 1.5013505165128298],
+            [1.198382157298241, 1.4749412997717923, 1.528431200120444, -0.3234225699230498, -2.478268504181421],
+            [-1.2633949745100692, 3.131491033668064, 0.329362518021425, 3.3028457767583435, -3.979432364310714],
+            [0.07049671291066206, -2.1000631288626677, 0.1714814018182706, 0.2814734641974796, 0.1702124142878986],
+            [-2.271288155092453, 0.22316506530894623, -4.001861660854562, 2.77700863464274, 4.17987337950341],
+            [-3.0893344667008367, -2.97643654651492, -4.782469654709937, -1.8349970380379617, -4.9489943835675785],
+            [2.1763029445963484, 0.8846172861038786, 2.1671251872872914, 1.2972697690185329, 4.492348642293887]
+        ]
+
+        assert np.allclose(ans, config_cands)
+        for i in range(opt.tpe.n_ei_candidates):
+            eval_config = {hp: a[-1] for a, hp in zip(ans, self.hp_names_cat)}
+            ord_v = opt._revert_eval_config(eval_config)[self.hp_names_cat[-1]]
+            assert ord_v in self.cs_cat.get_hyperparameter(self.hp_names_cat[-1]).sequence
+
         cleanup()
 
     def test_compute_basis_loglikelihoods(self) -> None:

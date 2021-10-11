@@ -217,8 +217,12 @@ def get_random_sample(hp_name: str, is_categorical: bool, is_ordinal: bool,
         choices = config.choices
         sample = rng.randint(len(choices))
     elif is_ordinal:
-        # TODO: Test
-        log = config.meta['log']
+        if config.meta is None:
+            raise ValueError(
+                'The meta information of the ordinal hyperparameter must be provided'
+            )
+
+        log = config.meta.get('log', False)
         seq = config.sequence
         sample = seq[rng.randint(len(seq))]
         sample = np.log(sample) if log else sample
@@ -266,8 +270,12 @@ def revert_eval_config(eval_config: Dict[str, NumericType], config_space: CS.Con
         if is_categorical:
             converted_eval_config[hp_name] = config.choices[val]
         elif is_ordinal:
-            # TODO: Test
-            log = config.meta['log']
+            if config.meta is None:
+                raise ValueError(
+                    'The meta information of the ordinal hyperparameter must be provided'
+                )
+
+            log = config.meta.get('log', False)
             vals = np.log(config.sequence) if log else np.array(config.sequence)
             diff = np.abs(vals - val)
             converted_eval_config[hp_name] = config.sequence[diff.argmin()]

@@ -4,7 +4,12 @@ import ConfigSpace.hyperparameters as CSH
 import numpy as np
 import unittest
 
-from util.utils import get_random_sample, revert_eval_config
+from util.utils import (
+    get_hyperparameter,
+    get_config_space,
+    get_random_sample,
+    revert_eval_config
+)
 
 
 class TestFuncs(unittest.TestCase):
@@ -33,6 +38,20 @@ class TestFuncs(unittest.TestCase):
 
         self.config_space.add_hyperparameter(
             CSH.CategoricalHyperparameter('c', choices=['x', 'y', 'z'])
+        )
+
+        self.config_space.add_hyperparameter(
+            CSH.OrdinalHyperparameter(
+                'o',
+                sequence=list(range(1, 101)),
+                meta={'lower': 1, 'upper': 100, 'log': False})
+        )
+
+        self.config_space.add_hyperparameter(
+            CSH.OrdinalHyperparameter(
+                'ol',
+                sequence=[1, 10, 100],
+                meta={'lower': 1, 'upper': 100, 'log': True})
         )
 
         self.hp_names = self.config_space.get_hyperparameter_names()
@@ -69,10 +88,13 @@ class TestFuncs(unittest.TestCase):
 
             for hp_name, value in eval_config.items():
                 is_categorical = self.is_categoricals[hp_name]
+                is_ordinal = self.is_ordinals[hp_name]
                 config = self.config_space.get_hyperparameter(hp_name)
 
                 if is_categorical:
                     assert value in config.choices
+                elif is_ordinal:
+                    assert value in config.sequence
                 else:
                     q = config.q
                     assert config.lower <= value <= config.upper
@@ -81,6 +103,7 @@ class TestFuncs(unittest.TestCase):
                         self.assertAlmostEqual(int((value + 1e-12) / q), (value + 1e-12) / q)
 
     def test_revert_eval_config(self) -> None:
+        """ TODO: Ordinal """
         eval_config = {
             'c': 0,
             'f': 10.1,
@@ -88,7 +111,9 @@ class TestFuncs(unittest.TestCase):
             'fq': 10.1,
             'fql': np.log(10.1),
             'i': 10.1,
-            'il': np.log(10.1)
+            'il': np.log(10.1),
+            'o': 5.4,
+            'ol': np.log(40)
         }
 
         config = revert_eval_config(
@@ -106,7 +131,9 @@ class TestFuncs(unittest.TestCase):
             'fq': 10.0,
             'fql': 10.0,
             'i': 10,
-            'il': 10
+            'il': 10,
+            'o': 5,
+            'ol': 100
         }
 
         for a, v in zip(ans.values(), config.values()):
@@ -122,7 +149,9 @@ class TestFuncs(unittest.TestCase):
             'fq': 10.3,
             'fql': np.log(10.3),
             'i': 10.3,
-            'il': np.log(10.6)
+            'il': np.log(10.6),
+            'o': 5.6,
+            'ol': np.log(30)
         }
 
         config = revert_eval_config(
@@ -140,7 +169,9 @@ class TestFuncs(unittest.TestCase):
             'fq': 10.5,
             'fql': 10.5,
             'i': 10,
-            'il': 11
+            'il': 11,
+            'o': 6,
+            'ol': 10
         }
 
         for a, v in zip(ans.values(), config.values()):
@@ -148,6 +179,12 @@ class TestFuncs(unittest.TestCase):
                 self.assertAlmostEqual(float(a), float(v))
             else:
                 assert a == v
+
+    def test_get_hyperparameter(self) -> None:
+        pass
+
+    def test_get_config_space(self) -> None:
+        pass
 
 
 if __name__ == '__main__':

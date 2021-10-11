@@ -273,7 +273,7 @@ def build_numerical_parzen_estimator(config: NumericalHPType, dtype: Type[Union[
 
     if is_ordinal:
         info = config.meta
-        q, log, lb, ub = info.get('q', None), info['log'], info['lower'], info['upper']
+        q, log, lb, ub = info.get('q', None), info.get('log', False), info['lower'], info['upper']
     else:
         q, log, lb, ub = config.q, config.log, config.lower, config.upper
 
