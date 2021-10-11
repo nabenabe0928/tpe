@@ -52,6 +52,7 @@ class TreeStructuredParzenEstimator:
             observations (Dict[str, Any]): The storage of the observations
             sorted_observations (Dict[str, Any]): The storage of the observations sorted based on loss
             is_categoricals (Dict[str, bool]): Whether the given hyperparameter is categorical
+            is_ordinals (Dict[str, bool]): Whether the given hyperparameter is ordinal
             percentile_func (Callable[[np.ndarray], int]):
                 The function that returns the number of a better group based on the total number of evaluations.
             weight_func (Callable[[int, int], np.ndarray]):
@@ -74,6 +75,11 @@ class TreeStructuredParzenEstimator:
 
         self._is_categoricals = {
             hp_name: self._config_space.get_hyperparameter(hp_name).__class__.__name__ == 'CategoricalHyperparameter'
+            for hp_name in self._hp_names
+        }
+
+        self._is_ordinals = {
+            hp_name: self._config_space.get_hyperparameter(hp_name).__class__.__name__ == 'OrdinalHyperparameter'
             for hp_name in self._hp_names
         }
 
@@ -240,13 +246,14 @@ class TreeStructuredParzenEstimator:
         """
         config = self.config_space.get_hyperparameter(hp_name)
         config_type = config.__class__.__name__
+        is_ordinal = self.is_ordinals[hp_name]
         parzen_estimator_args = dict(config=config, weight_func=self.weight_func)
 
         if is_categorical:
             pe_lower = build_categorical_parzen_estimator(vals=lower_vals, **parzen_estimator_args)
             pe_upper = build_categorical_parzen_estimator(vals=upper_vals, **parzen_estimator_args)
         else:
-            parzen_estimator_args.update(dtype=config2type[config_type])
+            parzen_estimator_args.update(dtype=config2type[config_type], is_ordinal=is_ordinal)
             pe_lower = build_numerical_parzen_estimator(vals=lower_vals, **parzen_estimator_args)
             pe_upper = build_numerical_parzen_estimator(vals=upper_vals, **parzen_estimator_args)
 
@@ -267,6 +274,10 @@ class TreeStructuredParzenEstimator:
     @property
     def is_categoricals(self) -> Dict[str, bool]:
         return self._is_categoricals
+
+    @property
+    def is_ordinals(self) -> Dict[str, bool]:
+        return self._is_ordinals
 
     @property
     def rng(self) -> np.random.RandomState:
@@ -315,6 +326,7 @@ class TPEOptimizer:
             observations (Dict[str, Any]): The storage of the observations
             config_space (CS.ConfigurationSpace): The searching space of the task
             is_categoricals (Dict[str, bool]): Whether the given hyperparameter is categorical
+            is_ordinals (Dict[str, bool]): Whether the given hyperparameter is ordinal
         """
 
         self._rng = np.random.RandomState(seed)
@@ -327,6 +339,10 @@ class TPEOptimizer:
         self._config_space = config_space
         self._is_categoricals = {
             hp_name: self._config_space.get_hyperparameter(hp_name).__class__.__name__ == 'CategoricalHyperparameter'
+            for hp_name in self._hp_names
+        }
+        self._is_ordinals = {
+            hp_name: self._config_space.get_hyperparameter(hp_name).__class__.__name__ == 'OrdinalHyperparameter'
             for hp_name in self._hp_names
         }
 
@@ -396,11 +412,13 @@ class TPEOptimizer:
 
     def _get_random_sample(self, hp_name: str) -> NumericType:
         return get_random_sample(hp_name=hp_name, rng=self.rng, config_space=self.config_space,
-                                 is_categorical=self.is_categoricals[hp_name])
+                                 is_categorical=self.is_categoricals[hp_name],
+                                 is_ordinal=self.is_ordinals[hp_name])
 
     def _revert_eval_config(self, eval_config: Dict[str, NumericType]) -> Dict[str, Any]:
         return revert_eval_config(eval_config=eval_config, config_space=self.config_space,
-                                  is_categoricals=self.is_categoricals, hp_names=self.hp_names)
+                                  is_categoricals=self.is_categoricals, is_ordinals=self.is_ordinals,
+                                  hp_names=self.hp_names)
 
     def random_sample(self) -> Dict[str, Any]:
         eval_config = {hp_name: self._get_random_sample(hp_name=hp_name) for hp_name in self.hp_names}
@@ -417,6 +435,10 @@ class TPEOptimizer:
     @property
     def is_categoricals(self) -> Dict[str, bool]:
         return self._is_categoricals
+
+    @property
+    def is_ordinals(self) -> Dict[str, bool]:
+        return self._is_ordinals
 
     @property
     def rng(self) -> np.random.RandomState:

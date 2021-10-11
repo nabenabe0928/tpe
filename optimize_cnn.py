@@ -12,7 +12,7 @@ if __name__ == '__main__':
     searching_space: Dict[str, ParameterSettings] = json.load(js)
     config_space = get_config_space(searching_space, hp_module_path='cnn')
 
-    logger = get_logger(file_name='hoge', logger_name='cnn')
+    logger = get_logger(file_name='cnn', logger_name='cnn')
     obj_func = get_objective_func(
         logger=logger,
         searching_space=searching_space,

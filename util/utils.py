@@ -15,6 +15,13 @@ from util.constants import CategoricalHPType, NumericalHPType, NumericType, conf
 bool_json = Literal['True', 'False']
 
 
+class MetaInformation(TypedDict):
+    lower: Optional[NumericType]  # The lower bound of parameters
+    upper: Optional[NumericType]  # The upper bound of parameters
+    log: Optional[Union[bool_json, bool]]  # scale: If True, log, otherwise uniform
+    q: Optional[NumericType]  # The quantization parameter"
+
+
 class ParameterSettings(TypedDict):
     param_type: Union[Type[int], Type[float], Type[str], Type[bool]]  # parameter type
     ignore: bool_json  # Whether we ignore this parameter or not
@@ -22,9 +29,11 @@ class ParameterSettings(TypedDict):
     upper: Optional[NumericType]  # The upper bound of parameters
     log: Optional[Union[bool_json, bool]]  # scale: If True, log, otherwise uniform
     q: Optional[NumericType]  # The quantization parameter"
+    sequence: Optional[List[NumericType]]  # The choices for numerical parameters.
     choices: Optional[List[str]]  # The choices for categorical parameters. Must be str for config space
     dataclass: Optional[str]  # The choices for categorical parameters in dataclass
     default_value: Optional[Union[NumericType, str]]  # The default value for this parameter
+    meta: Optional[MetaInformation]  # Any information that is useful
 
 
 def get_hyperparameter_module(hp_module_path: str) -> Any:
@@ -53,13 +62,19 @@ def get_hyperparameter(
 
     TODO: Add tests
     """
-    config_dict = {key: val for key, val in settings.items() if key not in ['ignore', 'param_type', 'dataclass']}
+    config_dict = {key: val for key, val in settings.items()
+                   if key not in ['ignore', 'param_type', 'dataclass']}
     hp_module = get_hyperparameter_module(hp_module_path)
 
     if 'dataclass' in settings.keys():
         assert(isinstance(settings['dataclass'], str))
         choices = getattr(hp_module, settings['dataclass'])
         config_dict['choices'] = [c.name for c in choices]
+
+    if 'meta' in settings.keys():
+        # TODO: Test
+        assert isinstance(config_dict['meta'], dict)  # <== MetaInformation
+        config_dict['meta']['log'] = eval(config_dict['meta'].get('log', False))
 
     hyperparameter = getattr(CSH, config_type)(name=param_name, **config_dict)
 
@@ -105,7 +120,11 @@ def get_config_space(searching_space: Dict[str, ParameterSettings],
                                  'but got {}.'.format(settings['log']))
             settings['log'] = eval(settings['log'])  # type: ignore
 
-        config_type = type2config[eval(settings['param_type'])]  # type: ignore
+        if 'sequence' in settings.keys():
+            config_type = 'OrdinalHyperparameter'
+        else:
+            config_type = type2config[eval(settings['param_type'])]  # type: ignore
+
         cs.add_hyperparameter(get_hyperparameter(param_name=param_name, config_type=config_type,
                                                  settings=settings, hp_module_path=hp_module_path))
 
@@ -133,16 +152,37 @@ def extract_hyperparameter(eval_config: Dict[str, Any],
                            searching_space: Dict[str, ParameterSettings],
                            hp_module_path: str,
                            ) -> Dict[str, Any]:
+    """
+    Extract categorical values from another module
 
+    Args:
+        eval_config (Dict[str, Any]):
+            The configuration to evaluate.
+            The categorical is provided by one of the key strings.
+        config_space (CS.ConfigurationSpace):
+            The configuration space
+        searching_space (Dict[str, ParameterSettings]):
+            Dict information taken from a prepared json file.
+        hp_module_path (str):
+            The path where the `hyperparameters.py` for the target
+            objective exists.
+
+    Returns:
+        return_config (Dict[str, Any]):
+            The configuration that is created by replacing
+            all the categorical keys to the object of interests
+            such as function
+    """
     return_config = {}
     hp_module = get_hyperparameter_module(hp_module_path)
     for key, val in eval_config.items():
+        hp_info = searching_space[key]
         if not isinstance(val, str):
             return_config[key] = val
             continue
 
-        if 'dataclass' in searching_space[key].keys():
-            choices_class_name = searching_space[key]['dataclass']
+        if 'dataclass' in hp_info.keys():
+            choices_class_name = hp_info['dataclass']
             assert(isinstance(choices_class_name, str))
             choices = getattr(hp_module, choices_class_name)
             return_config[key] = getattr(choices, val)
@@ -152,7 +192,8 @@ def extract_hyperparameter(eval_config: Dict[str, Any],
     return return_config
 
 
-def get_random_sample(hp_name: str, is_categorical: bool, rng: np.random.RandomState,
+def get_random_sample(hp_name: str, is_categorical: bool, is_ordinal: bool,
+                      rng: np.random.RandomState,
                       config_space: CS.ConfigurationSpace) -> NumericType:
     """
     Random sample of a provided hyperparameter
@@ -160,6 +201,7 @@ def get_random_sample(hp_name: str, is_categorical: bool, rng: np.random.RandomS
     Args:
         config_space (CS.ConfigurationSpace): The searching space information
         is_categorical (bool): Whether this hyperparameter is categorical
+        is_ordinal (bool): Whether this hyperparameter is ordinal
         hp_name (str): The names of a hyperparameter
         rng (np.random.RandomState): The random state for numpy
 
@@ -174,6 +216,12 @@ def get_random_sample(hp_name: str, is_categorical: bool, rng: np.random.RandomS
     if is_categorical:
         choices = config.choices
         sample = rng.randint(len(choices))
+    elif is_ordinal:
+        # TODO: Test
+        log = config.meta['log']
+        seq = config.sequence
+        sample = seq[rng.randint(len(seq))]
+        sample = np.log(sample) if log else sample
     else:
         lb = np.log(config.lower) if config.log else config.lower
         ub = np.log(config.upper) if config.log else config.upper
@@ -190,7 +238,8 @@ def check_value_range(hp_name: str, config: CSH.Hyperparameter, val: NumericType
 
 
 def revert_eval_config(eval_config: Dict[str, NumericType], config_space: CS.ConfigurationSpace,
-                       is_categoricals: Dict[str, bool], hp_names: List[str]) -> Dict[str, Any]:
+                       is_categoricals: Dict[str, bool], is_ordinals: Dict[str, bool],
+                       hp_names: List[str]) -> Dict[str, Any]:
     """
     Revert the eval_config into the original value range.
     For example,
@@ -202,6 +251,7 @@ def revert_eval_config(eval_config: Dict[str, NumericType], config_space: CS.Con
         eval_config (Dict[str, NumericType]): The configuration to evaluate and revert
         config_space (CS.ConfigurationSpace): The searching space information
         is_categoricals (Dict[str, bool]): Whether each hyperparameter is categorical
+        is_ordinals (Dict[str, bool]): Whether each hyperparameter is ordinal
         hp_names (List[str]): The list of the names of hyperparameters
 
     Returns:
@@ -209,12 +259,18 @@ def revert_eval_config(eval_config: Dict[str, NumericType], config_space: CS.Con
     """
     converted_eval_config: Dict[str, Any] = {}
     for hp_name in hp_names:
-        is_categorical = is_categoricals[hp_name]
+        is_categorical, is_ordinal = is_categoricals[hp_name], is_ordinals[hp_name]
         config = config_space.get_hyperparameter(hp_name)
         val = eval_config[hp_name]
 
         if is_categorical:
             converted_eval_config[hp_name] = config.choices[val]
+        elif is_ordinal:
+            # TODO: Test
+            log = config.meta['log']
+            vals = np.log(config.sequence) if log else np.array(config.sequence)
+            diff = np.abs(vals - val)
+            converted_eval_config[hp_name] = config.sequence[diff.argmin()]
         else:
             dtype = config2type[config.__class__.__name__]
             q = config.q

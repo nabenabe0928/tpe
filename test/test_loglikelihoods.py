@@ -8,7 +8,7 @@ class TestFuncs(unittest.TestCase):
     def test_compute_config_loglikelihoods(self) -> None:
         dim, n_basis, n_samples = 2, 3, 4
         bll = np.arange(dim * n_basis * n_samples).reshape(dim, n_basis, n_samples)
-        ws = np.ones(n_basis) / n_basis
+        ws: np.ndarray = np.ones(n_basis) / n_basis
         ll = compute_config_loglikelihoods(basis_loglikelihoods=bll, weights=ws)
         assert ll.size == n_samples
 

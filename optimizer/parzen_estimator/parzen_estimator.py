@@ -256,7 +256,8 @@ class CategoricalParzenEstimator(BaseParzenEstimator):
 
 
 def build_numerical_parzen_estimator(config: NumericalHPType, dtype: Type[Union[float, int]],
-                                     vals: np.ndarray, weight_func: Callable) -> NumericalParzenEstimator:
+                                     vals: np.ndarray, weight_func: Callable,
+                                     is_ordinal: bool) -> NumericalParzenEstimator:
     """
     Build a numerical parzen estimator
 
@@ -264,12 +265,17 @@ def build_numerical_parzen_estimator(config: NumericalHPType, dtype: Type[Union[
         config (NumericalHPType): Hyperparameter information from the ConfigSpace
         dtype (Type[np.number]): The data type of the hyperparameter
         vals (np.ndarray): The observed hyperparameter values
+        is_ordinal (bool): Whether the configuration is ordinal
 
     Returns:
         pe (NumericalParzenEstimator): Parzen estimator given a set of observations
     """
 
-    q, log, lb, ub = config.q, config.log, config.lower, config.upper
+    if is_ordinal:
+        info = config.meta
+        q, log, lb, ub = info.get('q', None), info['log'], info['lower'], info['upper']
+    else:
+        q, log, lb, ub = config.q, config.log, config.lower, config.upper
 
     if dtype is int or q is not None:
         if not log:

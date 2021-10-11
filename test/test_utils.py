@@ -40,8 +40,12 @@ class TestFuncs(unittest.TestCase):
             hp_name: self.config_space.get_hyperparameter(hp_name).__class__.__name__ == 'CategoricalHyperparameter'
             for hp_name in self.hp_names
         }
+        self.is_ordinals = {
+            hp_name: self.config_space.get_hyperparameter(hp_name).__class__.__name__ == 'OrdinalHyperparameter'
+            for hp_name in self.hp_names
+        }
 
-    def test_get_random_sample(self):
+    def test_get_random_sample(self) -> None:
         rng = np.random.RandomState(0)
 
         for _ in range(30):
@@ -50,6 +54,7 @@ class TestFuncs(unittest.TestCase):
                     hp_name=hp_name,
                     config_space=self.config_space,
                     is_categorical=self.is_categoricals[hp_name],
+                    is_ordinal=self.is_ordinals[hp_name],
                     rng=rng
                 )
                 for hp_name in self.hp_names
@@ -58,6 +63,7 @@ class TestFuncs(unittest.TestCase):
                 eval_config=eval_config,
                 config_space=self.config_space,
                 is_categoricals=self.is_categoricals,
+                is_ordinals=self.is_ordinals,
                 hp_names=self.hp_names
             )
 
@@ -74,7 +80,7 @@ class TestFuncs(unittest.TestCase):
                     if q is not None:
                         self.assertAlmostEqual(int((value + 1e-12) / q), (value + 1e-12) / q)
 
-    def test_revert_eval_config(self):
+    def test_revert_eval_config(self) -> None:
         eval_config = {
             'c': 0,
             'f': 10.1,
@@ -89,6 +95,7 @@ class TestFuncs(unittest.TestCase):
             eval_config=eval_config,
             config_space=self.config_space,
             is_categoricals=self.is_categoricals,
+            is_ordinals=self.is_ordinals,
             hp_names=self.hp_names
         )
 
@@ -103,7 +110,10 @@ class TestFuncs(unittest.TestCase):
         }
 
         for a, v in zip(ans.values(), config.values()):
-            self.assertAlmostEqual(a, v)
+            if isinstance(a, float):
+                self.assertAlmostEqual(float(a), float(v))
+            else:
+                assert a == v
 
         eval_config = {
             'c': 1,
@@ -119,6 +129,7 @@ class TestFuncs(unittest.TestCase):
             eval_config=eval_config,
             config_space=self.config_space,
             is_categoricals=self.is_categoricals,
+            is_ordinals=self.is_ordinals,
             hp_names=self.hp_names
         )
 
@@ -133,7 +144,10 @@ class TestFuncs(unittest.TestCase):
         }
 
         for a, v in zip(ans.values(), config.values()):
-            self.assertAlmostEqual(a, v)
+            if isinstance(a, float):
+                self.assertAlmostEqual(float(a), float(v))
+            else:
+                assert a == v
 
 
 if __name__ == '__main__':

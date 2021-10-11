@@ -5,3 +5,4 @@ scikit-learn
 ConfigSpace
 unittest
 pytest
+h5py

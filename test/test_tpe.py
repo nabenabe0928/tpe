@@ -1,5 +1,7 @@
 import os
 
+from typing import Dict
+
 import ConfigSpace as CS
 import ConfigSpace.hyperparameters as CSH
 import numpy as np
@@ -10,12 +12,13 @@ from util.utils import get_logger
 from util.constants import default_percentile_maker
 
 
-def sphere(eval_config):
+def sphere(eval_config: Dict[str, float]) -> float:
     vals = np.array(list(eval_config.values()))
-    return (vals ** 2).sum()
+    vals *= vals
+    return vals.sum()
 
 
-def rosen(eval_config):
+def rosen(eval_config: Dict[str, float]) -> float:
     val = 0
     vals = np.array(list(eval_config.values()))
     dim = len(vals)
@@ -26,7 +29,7 @@ def rosen(eval_config):
     return val
 
 
-def cleanup():
+def cleanup() -> None:
     os.remove('log/test.log')
     os.remove('results/test.json')
     os.remove('incumbents/opt_test.json')
@@ -42,7 +45,7 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
         self.hp_names = list(self.cs._hyperparameters.keys())
         self.logger = get_logger(file_name='test', logger_name='test')
 
-    def test_update_observations(self):
+    def test_update_observations(self) -> None:
         max_evals, metric_name = 20, 'loss'
         opt = TPEOptimizer(
             obj_func=sphere,
@@ -72,7 +75,7 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
 
         cleanup()
 
-    def test_set_prior_observations(self):
+    def test_set_prior_observations(self) -> None:
         metric_name = 'loss'
         opt = TPEOptimizer(
             obj_func=sphere,
@@ -101,7 +104,7 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
             cnt = np.count_nonzero(opt.tpe.sorted_observations[hp_name] != sorted_ob[hp_name])
             assert cnt == 0
 
-    def test_get_config_candidates(self):
+    def test_get_config_candidates(self) -> None:
         max_evals = 5
         opt = TPEOptimizer(
             obj_func=sphere,
@@ -132,7 +135,7 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
         assert np.allclose(ans, config_cands)
         cleanup()
 
-    def test_compute_basis_loglikelihoods(self):
+    def test_compute_basis_loglikelihoods(self) -> None:
         max_evals = 5
         opt = TPEOptimizer(
             obj_func=sphere,
@@ -170,7 +173,7 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
                [-2.2728572925030956, -2.2616072925030957, -2.2728572925030956]]
         assert np.allclose(bll_up, ans)
 
-    def test_compute_probability_improvement(self):
+    def test_compute_probability_improvement(self) -> None:
         max_evals = 5
         opt = TPEOptimizer(
             obj_func=sphere,

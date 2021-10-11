@@ -1,3 +1,5 @@
+from typing import Dict
+
 import ConfigSpace as CS
 import ConfigSpace.hyperparameters as CSH
 from util.utils import get_logger
@@ -6,9 +8,10 @@ import numpy as np
 from optimizer.tpe import TPEOptimizer
 
 
-def sphere(eval_config):
+def sphere(eval_config: Dict[str, float]) -> float:
     vals = np.array(list(eval_config.values()))
-    return (vals ** 2).sum()
+    vals *= vals
+    return np.sum(vals)
 
 
 if __name__ == '__main__':

@@ -14,7 +14,7 @@ from optimizer.parzen_estimator.parzen_estimator import (
     build_categorical_parzen_estimator,
     build_numerical_parzen_estimator
 )
-from util.constants import config2type, default_weights
+from util.constants import config2type, default_weights, NumericalHPType
 
 
 class TestCategoricalPriorType(unittest.TestCase):
@@ -231,20 +231,21 @@ class TestCategoricalParzenEstimator(unittest.TestCase):
 
 
 class TestBuildParzenEstimators(unittest.TestCase):
-    def build_npe(self, vals, config):
+    def build_npe(self, vals: np.ndarray, config: NumericalHPType) -> NumericalParzenEstimator:
         config_type = config.__class__.__name__
         return build_numerical_parzen_estimator(
             vals=vals,
             config=config,
             dtype=config2type[config_type],
-            weight_func=default_weights
+            weight_func=default_weights,
+            is_ordinal=(config.__class__.__name__ == 'OrdinalHyperparameter')
         )
 
-    def _check(self, lb_diff, ub_diff):
+    def _check(self, lb_diff: float, ub_diff: float) -> None:
         self.assertAlmostEqual(lb_diff, 0)
         self.assertAlmostEqual(ub_diff, 0)
 
-    def test_build_categorical_parzen_estimator(self):
+    def test_build_categorical_parzen_estimator(self) -> None:
         C = CSH.CategoricalHyperparameter('c1', choices=['a', 'b', 'c'])
         vals = [1]
 
@@ -259,17 +260,17 @@ class TestBuildParzenEstimators(unittest.TestCase):
         else:
             raise ValueError('The error was not raised.')
 
-        vals = ['a', 'b', 'c']
+        s_vals = ['a', 'b', 'c']
         try:
             build_categorical_parzen_estimator(
                 config=C,
-                vals=vals,
+                vals=s_vals,
                 weight_func=default_weights
             )
         except Exception:
             raise ValueError('test_build_numerical_parzen_estimator failed.')
 
-    def test_build_numerical_parzen_estimator(self):
+    def test_build_numerical_parzen_estimator(self) -> None:
         lb, ub, q = 1, 100, 0.5
         x = CSH.UniformFloatHyperparameter('x', lower=lb, upper=ub)
         vals = np.arange(1, 20)

@@ -10,11 +10,14 @@ NumericType = Union[float, int]
 SQR2, SQR2PI = np.sqrt(2), np.sqrt(2 * np.pi)
 
 CategoricalHPType = CSH.CategoricalHyperparameter
-NumericalHPType = Union[CSH.UniformIntegerHyperparameter, CSH.UniformFloatHyperparameter]
+NumericalHPType = Union[CSH.UniformIntegerHyperparameter,
+                        CSH.UniformFloatHyperparameter,
+                        CSH.OrdinalHyperparameter]
 
 config2type = {
     'UniformFloatHyperparameter': float,
-    'UniformIntegerHyperparameter': int
+    'UniformIntegerHyperparameter': int,
+    'OrdinalHyperparameter': float
 }
 
 type2config = {
