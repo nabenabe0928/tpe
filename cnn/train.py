@@ -54,7 +54,7 @@ def get_objective_func(
     searching_space: Dict[str, ParameterSettings],
     config_space: CS.ConfigurationSpace,
     hp_module_path: str = 'cnn',
-    data_dir: str = f'{os.environ["HOME"]}/research/micro17flower/'
+    data_dir: str = f'{os.environ["HOME"]}/data/research/micro17flower/'
 ) -> Callable:
     """
     Args:
