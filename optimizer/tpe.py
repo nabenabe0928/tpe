@@ -321,8 +321,8 @@ class TreeStructuredParzenEstimator:
 
 class TPEOptimizer:
     def __init__(self, obj_func: Callable, config_space: CS.ConfigurationSpace,
-                 resultfile: str, mutation_prob: float = 0.05, n_init: int = 10,
-                 max_evals: int = 100, seed: Optional[int] = None, metric_name: str = 'loss',
+                 resultfile: str, n_init: int = 10, max_evals: int = 100,
+                 seed: Optional[int] = None, metric_name: str = 'loss',
                  n_ei_candidates: int = 24,
                  percentile_func_maker: PercentileFuncMaker = default_percentile_maker,
                  weight_func: Callable[[int, int], np.ndarray] = default_weights):
@@ -333,7 +333,6 @@ class TPEOptimizer:
             n_init (int): The number of random sampling before using TPE
             obj_func (Callable): The objective function
             hp_names (List[str]): The list of hyperparameter names
-            mutation_prob (float): The probablity to change a parameter to a different value
             observations (Dict[str, Any]): The storage of the observations
             config_space (CS.ConfigurationSpace): The searching space of the task
             is_categoricals (Dict[str, bool]): Whether the given hyperparameter is categorical
@@ -344,7 +343,6 @@ class TPEOptimizer:
         self._n_init, self._max_evals = n_init, max_evals
         self.resultfile = resultfile
         self._obj_func = obj_func
-        self._mutation_prob = mutation_prob
         self._hp_names = list(config_space._hyperparameters.keys())
 
         self._config_space = config_space
@@ -414,9 +412,7 @@ class TPEOptimizer:
 
         pi_config = self.tpe.compute_probability_improvement(config_cands=config_cands)
         best_idx = int(np.argmax(pi_config))
-        eval_config = {hp_name: self._get_random_sample(hp_name=hp_name)
-                       if self.rng.random() < self.mutation_prob
-                       else config_cands[dim][best_idx]
+        eval_config = {hp_name: config_cands[dim][best_idx]
                        for dim, hp_name in enumerate(self.hp_names)}
 
         return self._revert_eval_config(eval_config=eval_config)
@@ -466,7 +462,3 @@ class TPEOptimizer:
     @property
     def obj_func(self) -> Callable:
         return self._obj_func
-
-    @property
-    def mutation_prob(self) -> float:
-        return self._mutation_prob

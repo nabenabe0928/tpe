@@ -70,7 +70,6 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
             obj_func=mix_func,
             config_space=self.cs_cat,
             max_evals=max_evals,
-            mutation_prob=0.0,
             metric_name=metric_name,
             resultfile='test'
         )
@@ -101,7 +100,6 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
             obj_func=sphere,
             config_space=self.cs,
             max_evals=10,
-            mutation_prob=0.0,
             metric_name=metric_name,
             resultfile='test'
         )
@@ -130,7 +128,6 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
             obj_func=sphere,
             config_space=self.cs,
             max_evals=max_evals,
-            mutation_prob=0.0,
             resultfile='test',
             seed=0
         )
@@ -168,7 +165,6 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
             obj_func=mix_func,
             config_space=self.cs_cat,
             max_evals=max_evals,
-            mutation_prob=0.0,
             resultfile='test',
             seed=0
         )
@@ -206,7 +202,6 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
             obj_func=sphere,
             config_space=self.cs,
             max_evals=max_evals,
-            mutation_prob=0.0,
             resultfile='test',
             seed=0
         )
@@ -244,7 +239,6 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
             obj_func=sphere,
             config_space=self.cs,
             max_evals=max_evals,
-            mutation_prob=0.0,
             resultfile='test',
             seed=0
         )
@@ -268,7 +262,7 @@ class TestTPEOptimizer(unittest.TestCase):
         self.logger = get_logger(file_name='test', logger_name='test')
 
     def test_optimize(self) -> None:
-        n_experiments = 10
+        n_experiments = 5
         losses = np.ones(n_experiments)
         max_evals = 100
 
@@ -280,7 +274,6 @@ class TestTPEOptimizer(unittest.TestCase):
                     obj_func=sphere,
                     config_space=self.cs,
                     max_evals=max_evals,
-                    mutation_prob=0.0,
                     resultfile='test'
                 )
                 _, best_loss = opt.optimize(self.logger)
