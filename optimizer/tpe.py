@@ -40,8 +40,8 @@ class TreeStructuredParzenEstimator:
     def __init__(self, config_space: CS.ConfigurationSpace,
                  percentile_func: Callable[[np.ndarray], int],
                  weight_func: Callable[[int, int], np.ndarray],
-                 metric_name: str = 'loss',
-                 n_ei_candidates: int = 24, seed: Optional[int] = None):
+                 n_ei_candidates: int, metric_name: str = 'loss',
+                 min_bandwidth_factor: float = 1e-2, seed: Optional[int] = None):
         """
         Attributes:
             rng (np.random.RandomState): random state to maintain the reproducibility
@@ -51,6 +51,7 @@ class TreeStructuredParzenEstimator:
             metric_name (str): The name of the metric (or objective function value)
             observations (Dict[str, Any]): The storage of the observations
             sorted_observations (Dict[str, Any]): The storage of the observations sorted based on loss
+            min_bandwidth_factor (float): The minimum bandwidth for numerical parameters
             is_categoricals (Dict[str, bool]): Whether the given hyperparameter is categorical
             is_ordinals (Dict[str, bool]): Whether the given hyperparameter is ordinal
             percentile_func (Callable[[np.ndarray], int]):
@@ -64,6 +65,7 @@ class TreeStructuredParzenEstimator:
         self._hp_names = list(config_space._hyperparameters.keys())
         self._metric_name = metric_name
         self._n_lower = 0
+        self._min_bandwidth_factor = min_bandwidth_factor
 
         self._observations = {hp_name: np.array([]) for hp_name in self._hp_names}
         self._sorted_observations = {hp_name: np.array([]) for hp_name in self._hp_names}
@@ -253,7 +255,12 @@ class TreeStructuredParzenEstimator:
             pe_lower = build_categorical_parzen_estimator(vals=lower_vals, **parzen_estimator_args)
             pe_upper = build_categorical_parzen_estimator(vals=upper_vals, **parzen_estimator_args)
         else:
-            parzen_estimator_args.update(dtype=config2type[config_type], is_ordinal=is_ordinal)
+            min_bandwidth_factor = 1.0 / len(config.sequence) if is_ordinal else self.min_bandwidth_factor
+            parzen_estimator_args.update(
+                dtype=config2type[config_type],
+                is_ordinal=is_ordinal,
+                min_bandwidth_factor=min_bandwidth_factor
+            )
             pe_lower = build_numerical_parzen_estimator(vals=lower_vals, **parzen_estimator_args)
             pe_upper = build_numerical_parzen_estimator(vals=upper_vals, **parzen_estimator_args)
 
@@ -298,6 +305,10 @@ class TreeStructuredParzenEstimator:
     @property
     def metric_name(self) -> str:
         return self._metric_name
+
+    @property
+    def min_bandwidth_factor(self) -> float:
+        return self._min_bandwidth_factor
 
     @property
     def weight_func(self) -> Callable:

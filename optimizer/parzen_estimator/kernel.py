@@ -282,11 +282,7 @@ class AitchisonAitkenKernel(CategoricalKernel):
             self.n_choices, self.choice, self.top, self.others, self.probs
         )
 
-    def _init_domain_params(
-        self,
-        n_choices: int,
-        top: float = 0.9
-    ) -> None:
+    def _init_domain_params(self, n_choices: int, top: float) -> None:
 
         if self._initialized:
             raise AttributeError("Cannot reset domain parameters.")
@@ -321,11 +317,7 @@ class UniformKernel(CategoricalKernel):
             self.n_choices, self.choice, self.top, self.others, self.probs
         )
 
-    def _init_domain_params(
-        self,
-        n_choices: int,
-        force_change: bool = False
-    ) -> None:
+    def _init_domain_params(self, n_choices: int) -> None:
 
         if self._initialized:
             raise AttributeError("Cannot reset domain parameters.")

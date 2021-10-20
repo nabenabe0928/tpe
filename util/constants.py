@@ -5,7 +5,7 @@ import ConfigSpace.hyperparameters as CSH
 import numpy as np
 
 
-EPS = 1.0e-12
+EPS = 1.0e-300
 NumericType = Union[float, int]
 SQR2, SQR2PI = np.sqrt(2), np.sqrt(2 * np.pi)
 
@@ -28,13 +28,13 @@ type2config = {
 }
 
 
-def default_percentile_maker(n_samples_lower: int = 26) -> Callable[[np.ndarray], int]:
+def default_percentile_maker() -> Callable[[np.ndarray], int]:
     def _imp(vals: np.ndarray) -> int:
         size = vals.size
-        return min(int(np.ceil(0.25 * np.sqrt(size))), n_samples_lower)
+        return int(np.ceil(0.25 * np.sqrt(size)))
     return _imp
 
 
-def default_weights(size: int, n_samples_lower: int = 26) -> np.ndarray:
+def default_weights(size: int) -> np.ndarray:
     weights = np.ones(size)
     return weights / weights.sum()

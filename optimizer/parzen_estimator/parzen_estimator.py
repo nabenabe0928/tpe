@@ -121,6 +121,7 @@ class NumericalParzenEstimator(BaseParzenEstimator):
     def __init__(self, samples: np.ndarray, lb: NumericType, ub: NumericType,
                  weight_func: Callable, q: Optional[NumericType] = None,
                  dtype: Type[Union[np.number, int, float]] = np.float64,
+                 min_bandwidth_factor: float = 1e-2,
                  prior: NumericalPriorType = NumericalPriorType.gaussian):
 
         self._lb, self._ub, self._q = lb, ub, q
@@ -142,6 +143,7 @@ class NumericalParzenEstimator(BaseParzenEstimator):
         self._weights, self._basis = self._calculate(
             samples=samples,
             weight_func=weight_func,
+            min_bandwidth_factor=min_bandwidth_factor,
             prior=prior
         )
 
@@ -160,7 +162,8 @@ class NumericalParzenEstimator(BaseParzenEstimator):
         return samples
 
     def _calculate(self, samples: np.ndarray, weight_func: Callable,
-                   prior: NumericalPriorType) -> Tuple[np.ndarray, List[GaussKernel]]:
+                   min_bandwidth_factor: float, prior: NumericalPriorType
+                   ) -> Tuple[np.ndarray, List[GaussKernel]]:
         """
         Calculate a bandwidth based on Scott's rule
 
@@ -179,8 +182,13 @@ class NumericalParzenEstimator(BaseParzenEstimator):
 
         NOTE:
             The bandwidth is computed using the following reference:
-                Scott, D.W. (1992) Multivariate Density Estimation:
-                Theory, Practice, and Visualization.
+                * Scott, D.W. (1992) Multivariate Density Estimation:
+                  Theory, Practice, and Visualization.
+                * Berwin, A.T. (1993) Bandwidth Selection in Kernel
+                  Density Estimation: A Review. (page 12)
+                * Nils, B.H, (2013) Bandwidth selection for kernel
+                  density estimation: a review of fully automatic selector
+                * Wolfgang, H (2005) Nonparametric and Semiparametric Models
         """
         domain_range = self.ub - self.lb
         no_prior = prior == NumericalPriorType.no_prior
@@ -189,9 +197,10 @@ class NumericalParzenEstimator(BaseParzenEstimator):
         observed_std = observed.std(ddof=1)
 
         IQR = np.subtract.reduce(np.percentile(observed, [75, 25]))
-        sigmas = 1.059 * min(IQR, observed_std) * observed.size ** (-0.2)
+        sigmas = 1.059 * min(IQR / 1.34, observed_std) * observed.size ** (-0.2)
         # 99% of samples will be confined in mean \pm 0.025 * domain_range (2.5 sigma)
-        sigmas = np.ones_like(samples) * np.clip(sigmas, 1e-2 * domain_range, 0.5 * domain_range)
+        min_bandwidth = min_bandwidth_factor * domain_range
+        sigmas = np.ones_like(samples) * np.clip(sigmas, min_bandwidth, 0.5 * domain_range)
 
         fixed_params = dict(lb=self.lb, ub=self.ub, q=self.q)
         basis = [GaussKernel(mu=mu, sigma=sigma, **fixed_params) for mu, sigma in zip(samples, sigmas)]
@@ -257,7 +266,8 @@ class CategoricalParzenEstimator(BaseParzenEstimator):
 
 def build_numerical_parzen_estimator(config: NumericalHPType, dtype: Type[Union[float, int]],
                                      vals: np.ndarray, weight_func: Callable,
-                                     is_ordinal: bool) -> NumericalParzenEstimator:
+                                     is_ordinal: bool, min_bandwidth_factor: float = 1e-2
+                                     ) -> NumericalParzenEstimator:
     """
     Build a numerical parzen estimator
 
@@ -293,7 +303,7 @@ def build_numerical_parzen_estimator(config: NumericalHPType, dtype: Type[Union[
         vals = np.log(vals)
 
     pe = NumericalParzenEstimator(samples=vals, lb=lb, ub=ub, weight_func=weight_func,
-                                  q=q, dtype=dtype)
+                                  q=q, dtype=dtype, min_bandwidth_factor=min_bandwidth_factor)
 
     return pe
 
