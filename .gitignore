@@ -3,7 +3,5 @@
 results/
 log/
 incumbents/
-cifar10/
 **/.mypy_cache
 **/.pytest_cache
-micro17flower/

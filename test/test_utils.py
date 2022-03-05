@@ -5,8 +5,6 @@ import numpy as np
 import unittest
 
 from util.utils import (
-    get_hyperparameter,
-    get_config_space,
     get_random_sample,
     revert_eval_config
 )

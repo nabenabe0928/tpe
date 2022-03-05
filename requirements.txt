@@ -3,6 +3,5 @@ numpy
 scipy==1.4.1
 scikit-learn
 ConfigSpace
-unittest
 pytest
 h5py

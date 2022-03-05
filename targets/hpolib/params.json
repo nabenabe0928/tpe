@@ -14,7 +14,14 @@
     },
     "init_lr": {
         "param_type": "float",
-        "sequence": [5e-4, 1e-3, 5e-3, 1e-2, 5e-2, 1e-1],
+        "sequence": [
+            5e-4,
+            1e-3,
+            5e-3,
+            1e-2,
+            5e-2,
+            1e-1
+        ],
         "ignore": "False",
         "default_value": 5e-2,
         "meta": {
@@ -34,10 +41,15 @@
     },
     "batch_size": {
         "param_type": "int",
-        "sequence": [8, 16, 32, 64],
+        "sequence": [
+            8,
+            16,
+            32,
+            64
+        ],
         "ignore": "False",
         "default_value": 32,
-        "meta":{
+        "meta": {
             "lower": 8,
             "upper": 64,
             "log": "True"
@@ -63,10 +75,14 @@
     },
     "dropout_1": {
         "param_type": "float",
-        "sequence": [0.0, 0.3, 0.6],
+        "sequence": [
+            0.0,
+            0.3,
+            0.6
+        ],
         "ignore": "False",
         "default_value": 0.3,
-        "meta":{
+        "meta": {
             "lower": 0.0,
             "upper": 0.6,
             "q": 0.3,
@@ -75,10 +91,14 @@
     },
     "dropout_2": {
         "param_type": "float",
-        "sequence": [0.0, 0.3, 0.6],
+        "sequence": [
+            0.0,
+            0.3,
+            0.6
+        ],
         "ignore": "False",
         "default_value": 0.3,
-        "meta":{
+        "meta": {
             "lower": 0.0,
             "upper": 0.6,
             "q": 0.3,
@@ -87,10 +107,17 @@
     },
     "n_units_1": {
         "param_type": "int",
-        "sequence": [16, 32, 64, 128, 256, 512],
+        "sequence": [
+            16,
+            32,
+            64,
+            128,
+            256,
+            512
+        ],
         "ignore": "False",
         "default_value": 64,
-        "meta":{
+        "meta": {
             "lower": 16,
             "upper": 512,
             "log": "True"
@@ -98,10 +125,17 @@
     },
     "n_units_2": {
         "param_type": "int",
-        "sequence": [16, 32, 64, 128, 256, 512],
+        "sequence": [
+            16,
+            32,
+            64,
+            128,
+            256,
+            512
+        ],
         "ignore": "False",
         "default_value": 64,
-        "meta":{
+        "meta": {
             "lower": 16,
             "upper": 512,
             "log": "True"

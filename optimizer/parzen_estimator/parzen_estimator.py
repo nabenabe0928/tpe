@@ -1,94 +1,80 @@
-from enum import IntEnum
-from typing import Callable, List, Optional, Tuple, Type, Union
+from typing import Optional, Tuple, Type, Union
 
 import numpy as np
 
-from optimizer.parzen_estimator.kernel import AitchisonAitkenKernel, GaussKernel, UniformKernel
-from util.constants import CategoricalHPType, NumericType, NumericalHPType
+from scipy.special import erf
+
+from util.constants import CategoricalHPType, EPS, NumericType, NumericalHPType, SQR2PI, SQR2, uniform_weight
 
 
-class NumericalPriorType(IntEnum):
-    uniform = 0
-    gaussian = 1
-    no_prior = 2
+def calculate_norm_consts(
+    lb: NumericType, ub: NumericType, means: np.ndarray, stds: np.ndarray
+) -> Tuple[NumericType, NumericType]:
+    """
+    Args:
+        lb (NumericType):
+            The lower bound of a parameter.
+        ub (NumericType):
+            The upper bound of a parameter.
+        means (np.ndarray):
+            The mean value for each kernel basis. The shape is (n_samples, ).
+        stds (np.ndarray):
+            The bandwidth value for each kernel basis. The shape is (n_samples, ).
 
-    def get_kernel(self, lb: NumericType, ub: NumericType,
-                   q: Optional[NumericType] = None) -> GaussKernel:
-        if lb == -np.inf and ub == np.inf:
-            mu, sigma = 0.0, 1.0
-        elif lb != -np.inf and ub != np.inf:
-            mu, sigma = 0.5 * (lb + ub), ub - lb
+    Returns:
+        norm_consts (NumericType):
+            The normalization constant of each kernel due to the truncation.
+        logpdf_consts (NumericType):
+            The constant for loglikelihood computation.
+    """
+    zl = (lb - means) / (SQR2 * stds)
+    zu = (ub - means) / (SQR2 * stds)
+    norm_consts = 2.0 / (erf(zu) - erf(zl))
+    logpdf_consts = np.log(norm_consts / (SQR2PI * stds))
+    return norm_consts, logpdf_consts
+
+
+class NumericalParzenEstimator:
+    def __init__(
+        self,
+        samples: np.ndarray,
+        lb: NumericType,
+        ub: NumericType,
+        q: Optional[NumericType] = None,
+        dtype: Type[Union[np.number, int, float]] = np.float64,
+        min_bandwidth_factor: float = 1e-2,
+    ):
+
+        self.lb, self.ub, self.q = lb, ub, q
+        # TODO: Add tests
+        dtype_choices = (np.int32, np.int64, np.float32, np.float64)
+        self.dtype: Type[np.number]
+        if dtype is int:
+            self.dtype = np.int32
+        elif dtype is float:
+            self.dtype = np.float64
+        elif dtype in dtype_choices:
+            self.dtype = dtype  # type: ignore
         else:
-            raise ValueError('Invalid domain for numerical parameters: [{}, {}]'.format(
-                lb, ub
-            ))
+            raise ValueError(f"dtype for NumericalParzenEstimator must be {dtype_choices}, but got {dtype}")
+        if np.any(samples < lb) or np.any(samples > ub):
+            raise ValueError(f"All the samples must be in [{lb}, {ub}].")
 
-        if self.name == 'gaussian':
-            return GaussKernel(mu=mu, sigma=sigma, lb=lb, ub=ub, q=q)
-        elif self.name == 'uniform':
-            return GaussKernel(mu=mu, sigma=100 * sigma, lb=lb, ub=ub, q=q)
-        else:
-            pt_names = [pt.name for pt in NumericalPriorType if pt.name != 'no_prior']
-            raise ValueError(
-                'prior name must be {}, but got {}.'.format(
-                    pt_names,
-                    self.name
-                )
-            )
+        self._calculate(samples=samples, min_bandwidth_factor=min_bandwidth_factor)
 
+    def __repr__(self) -> str:
+        ret = f"NumericalParzenEstimator(\n\tlb={self.lb}, ub={self.ub}, q={self.q},\n"
+        for i, (w, m, s) in enumerate(zip(self.weights, self.means, self.stds)):
+            ret += f"\t({i + 1}) weight: {w}, basis: GaussKernel(mean={m}, std={s}),\n"
+        return ret + ")"
 
-class CategoricalPriorType(IntEnum):
-    uniform = 0
-    no_prior = 1
-
-    def get_kernel(self, n_choices: int) -> UniformKernel:
-        if self.name == 'uniform':
-            return UniformKernel(n_choices=n_choices)
-        else:
-            pt_names = [pt.name for pt in CategoricalPriorType if pt.name != 'no_prior']
-            raise ValueError(
-                'prior name must be {}, but got {}.'.format(
-                    pt_names,
-                    self.name
-                )
-            )
-
-
-class BaseParzenEstimator:
-    _basis: List[Union[GaussKernel, AitchisonAitkenKernel, UniformKernel]]
-    _weights: np.ndarray
-    dtype: Type[np.number]
-
-    def _sample(self, rng: np.random.RandomState, n_samples: int) -> np.ndarray:
-        """
-        The method to sample from the parzen estimator.
-        This method needs to be wrapped by a child class.
-
-        Args:
-            rng (np.random.RandomState): The random seed
-            n_samples (int): The number of samples
-
-        Returns:
-            samples (np.ndarray):
-                Samples from the parzen estimator.
-                The shape is (n_samples, ).
-        """
-        samples = [
-            self.basis[active].sample(rng)
-            for active in np.argmax(
-                rng.multinomial(n=1, pvals=self.weights, size=n_samples),
-                axis=-1
-            )
-        ]
-        return np.array(samples, dtype=self.dtype)
-
-    def basis_loglikelihood(self, xs: np.ndarray) -> np.ndarray:
+    def basis_loglikelihood(self, x: np.ndarray) -> np.ndarray:
         """
         Compute the kernel value for each basis in the parzen estimator.
 
         Args:
-            xs (np.ndarray): The sampled values to compute each kernel value
-                             The shape is (n_samples, )
+            x (np.ndarray): The sampled values to compute each kernel value
+                            The shape is (n_samples, )
 
         Returns:
             basis_loglikelihoods (np.ndarray):
@@ -103,82 +89,48 @@ class BaseParzenEstimator:
             Then this function returns the following:
                 [log(basis[0](xs)), ..., log(basis[B - 1](xs))]
         """
-        if len(xs.shape) > 1:
-            raise ValueError('xs must be 1D array, but got {}D'.format(len(xs.shape)))
-
-        return np.array([b.log_pdf(xs) for b in self.basis])
-
-    @property
-    def weights(self) -> np.ndarray:
-        return self._weights
-
-    @property
-    def basis(self) -> List[Union[GaussKernel, AitchisonAitkenKernel, UniformKernel]]:
-        return self._basis
-
-
-class NumericalParzenEstimator(BaseParzenEstimator):
-    def __init__(self, samples: np.ndarray, lb: NumericType, ub: NumericType,
-                 weight_func: Callable, q: Optional[NumericType] = None,
-                 dtype: Type[Union[np.number, int, float]] = np.float64,
-                 min_bandwidth_factor: float = 1e-2,
-                 prior: NumericalPriorType = NumericalPriorType.gaussian):
-
-        self._lb, self._ub, self._q = lb, ub, q
-        # TODO: Add tests
-        dtype_choices = (np.int32, np.int64, np.float32, np.float64)
-        if dtype is int:
-            self.dtype = np.int32
-        elif dtype is float:
-            self.dtype = np.float64
-        elif dtype in dtype_choices:
-            self.dtype = dtype  # type: ignore
+        if self.q is None:
+            mahalanobis = ((x - self.means[:, np.newaxis]) / self.stds[:, np.newaxis]) ** 2
+            return self.logpdf_consts[:, np.newaxis] - 0.5 * mahalanobis
         else:
-            raise ValueError('dtype for NumericalParzenEstimator must be {}, but got {}'.format(
-                dtype_choices, dtype
-            ))
-        if np.any(samples < lb) or np.any(samples > ub):
-            raise ValueError('All the samples must be in [{}, {}].'.format(lb, ub))
+            integral_u = self.cdf(np.minimum(x + 0.5 * self.q, self.ub))
+            integral_l = self.cdf(np.maximum(x + 0.5 * self.q, self.lb))
+            return np.log(integral_u - integral_l + EPS)
 
-        self._weights, self._basis = self._calculate(
-            samples=samples,
-            weight_func=weight_func,
-            min_bandwidth_factor=min_bandwidth_factor,
-            prior=prior
-        )
+    def cdf(self, x: np.ndarray) -> np.ndarray:
+        """
+        Compute the cumulative density function values.
 
-    def __repr__(self) -> str:
-        ret = 'NumericalParzenEstimator(\n\tlb={}, ub={}, q={},\n'.format(
-            self.lb, self.ub, self.q
-        )
-        for i, (w, b) in enumerate(zip(self.weights, self.basis)):
-            ret += '\t({}) weight: {}, basis: {},\n'.format(i + 1, w, b)
+        Args:
+            x (np.ndarray): Samples to compute the cdf
 
-        return ret + ')'
+        Returns:
+            cdf (np.ndarray):
+                The cumulative density function value for each sample
+                cdf[i] = integral[from -inf to x[i]] pdf(x') dx'
+        """
+        z = (x - self.means[:, np.newaxis]) / (SQR2 * self.stds[:, np.newaxis])
+        return self.norm_consts[:, np.newaxis] * 0.5 * (1.0 + erf(z))
+
+    def _sample(self, rng: np.random.RandomState, idx: int) -> NumericType:
+        while True:
+            val = rng.normal(loc=self.means[idx], scale=self.stds[idx])
+            if self.lb <= val <= self.ub:
+                return val if self.q is None else np.round(val / self.q) * self.q
 
     def sample(self, rng: np.random.RandomState, n_samples: int) -> np.ndarray:
-        """ the wrapper method of _sample """
-        samples = self._sample(rng=rng, n_samples=n_samples)
-        return samples
+        samples = [
+            self._sample(rng, active) for active in rng.choice(self.weights.size, p=self.weights, size=n_samples)
+        ]
+        return np.array(samples, dtype=self.dtype)
 
-    def _calculate(self, samples: np.ndarray, weight_func: Callable,
-                   min_bandwidth_factor: float, prior: NumericalPriorType
-                   ) -> Tuple[np.ndarray, List[GaussKernel]]:
+    def _calculate(self, samples: np.ndarray, min_bandwidth_factor: float) -> None:
         """
-        Calculate a bandwidth based on Scott's rule
+        Calculate parameters of KDE based on Scott's rule
 
         Args:
             samples (np.ndarray): Samples to use for the construction of
                                   the parzen estimator
-            weight_func (Callable: int -> np.ndarray):
-                The function to calculate the weights of each basis.
-                The default is a uniform distribution.
-            prior (NumericalPriorType): What prior to use.
-
-        Returns:
-            weights (np.ndarray): Weights for each basis
-            basis (List[GaussKernel]):
-                Kernel functions for the corresponding basis
 
         NOTE:
             The bandwidth is computed using the following reference:
@@ -191,83 +143,92 @@ class NumericalParzenEstimator(BaseParzenEstimator):
                 * Wolfgang, H (2005) Nonparametric and Semiparametric Models
         """
         domain_range = self.ub - self.lb
-        no_prior = prior == NumericalPriorType.no_prior
-        observed = samples if no_prior else np.append(samples, 0.5 * (self.lb + self.ub))
-        weights = weight_func(observed.size)
-        observed_std = observed.std(ddof=1)
+        means = np.append(samples, 0.5 * (self.lb + self.ub))  # Add prior at the end
+        weights = uniform_weight(means.size)
+        std = means.std(ddof=1)
 
-        IQR = np.subtract.reduce(np.percentile(observed, [75, 25]))
-        sigmas = 1.059 * min(IQR / 1.34, observed_std) * observed.size ** (-0.2)
+        IQR = np.subtract.reduce(np.percentile(means, [75, 25]))
+        bandwidth = 1.059 * min(IQR / 1.34, std) * means.size ** (-0.2)
         # 99% of samples will be confined in mean \pm 0.025 * domain_range (2.5 sigma)
         min_bandwidth = min_bandwidth_factor * domain_range
-        sigmas = np.ones_like(samples) * np.clip(sigmas, min_bandwidth, 0.5 * domain_range)
+        clipped_bandwidth = np.ones_like(means) * np.clip(bandwidth, min_bandwidth, 0.5 * domain_range)
+        clipped_bandwidth[-1] = domain_range  # The bandwidth for the prior
 
-        fixed_params = dict(lb=self.lb, ub=self.ub, q=self.q)
-        basis = [GaussKernel(mu=mu, sigma=sigma, **fixed_params) for mu, sigma in zip(samples, sigmas)]
-
-        if not no_prior:
-            basis.append(prior.get_kernel(lb=self.lb, ub=self.ub, q=self.q))
-
-        return weights, basis
-
-    @property
-    def lb(self) -> NumericType:
-        return self._lb
-
-    @property
-    def ub(self) -> NumericType:
-        return self._ub
-
-    @property
-    def q(self) -> Optional[NumericType]:
-        return self._q
+        self.means, self.stds = means, clipped_bandwidth
+        self.norm_consts, self.logpdf_consts = calculate_norm_consts(
+            lb=self.lb, ub=self.ub, means=self.means, stds=self.stds
+        )
+        self.weights = weights
 
 
-class CategoricalParzenEstimator(BaseParzenEstimator):
-    def __init__(self, samples: np.ndarray, n_choices: int, weight_func: Callable,
-                 top: float = 0.8, prior: CategoricalPriorType = CategoricalPriorType.uniform):
+class CategoricalParzenEstimator:
+    def __init__(self, samples: np.ndarray, n_choices: int, top: float = 0.8):
 
         if samples.dtype not in [np.int32, np.int64]:
-            raise ValueError('samples for CategoricalParzenEstimator must be np.ndarray[np.int32/64], '
-                             'but got {}.'.format(samples.dtype))
+            raise ValueError(
+                "samples for CategoricalParzenEstimator must be np.ndarray[np.int32/64], " f"but got {samples.dtype}."
+            )
         if np.any(samples < 0) or np.any(samples >= n_choices):
-            raise ValueError('All the samples must be in [0, n_choices).')
+            raise ValueError("All the samples must be in [0, n_choices).")
 
         self.dtype = np.int32
-        self._n_choices, self._top = n_choices, top
-        self._basis = [AitchisonAitkenKernel(n_choices=n_choices, choice=c, top=top) for c in samples]
+        self.n_choices = n_choices
+        # AitchisonAitkenKernel: p = top or (1 - top) / (c - 1)
+        # UniformKernel: p = 1 / c
+        self.top, self.bottom, self.uniform = top, (1 - top) / (n_choices - 1), 1.0 / n_choices
+        self.weight = uniform_weight(samples.size + 1)[0]
+        indices, counts = np.unique(samples, return_counts=True)
+        self.probs = np.full(n_choices, self.uniform)  # uniform prior, so the initial value is 1 / c.
 
-        if prior != CategoricalPriorType.no_prior:
-            self._basis.append(prior.get_kernel(n_choices=self.n_choices))
+        slicer = np.arange(n_choices)
+        for idx, count in zip(indices, counts):
+            self.probs[slicer != idx] += count * self.bottom
+            self.probs[slicer == idx] += count * self.top
 
-        self._weights = weight_func(samples.size + (prior != CategoricalPriorType.no_prior))
+        self.probs *= self.weight
+        likelihood_choices = np.array(
+            [[self.top if i == j else self.bottom for j in range(n_choices)] for i in range(n_choices)]
+        )
+        bls = np.vstack([likelihood_choices[samples], np.full(n_choices, self.uniform)])
+        self.basis_loglikelihoods = np.log(bls)  # shape = (n_basis, n_choices)
 
     def __repr__(self) -> str:
-        ret = 'CategoricalParzenEstimator(\n\tn_choices={}, top={},\n'.format(
-            self.n_choices, self.top
-        )
-        for i, (w, b) in enumerate(zip(self.weights, self.basis)):
-            ret += '\t({}) weight: {}, basis: {},\n'.format(i + 1, w, b)
+        return f"CategoricalParzenEstimator(n_choices={self.n_choices}, top={self.top}, probs={self.probs})"
 
-        return ret + ')'
+    def basis_loglikelihood(self, x: np.ndarray) -> np.ndarray:
+        """
+        Compute the kernel value for each basis in the parzen estimator.
 
-    @property
-    def n_choices(self) -> int:
-        return self._n_choices
+        Args:
+            x (np.ndarray): The sampled values to compute each kernel value
+                            The shape is (n_samples, )
 
-    @property
-    def top(self) -> float:
-        return self._top
+        Returns:
+            basis_loglikelihoods (np.ndarray):
+                The kernel values for each basis given sampled values
+                The shape is (B, n_samples)
+                where B is the number of basis and n_samples = xs.size
+
+        NOTE:
+            When the parzen estimator is computed by:
+                p(x) = sum[i = 0 to B] weights[i] * basis[i](x)
+            where basis[i] is the i-th kernel function.
+            Then this function returns the following:
+                [log(basis[0](xs)), ..., log(basis[B - 1](xs))]
+        """
+        return self.basis_loglikelihoods[:, x]
 
     def sample(self, rng: np.random.RandomState, n_samples: int) -> np.ndarray:
-        """ the wrapper method of _sample """
-        return self._sample(rng=rng, n_samples=n_samples)
+        return rng.choice(self.n_choices, p=self.probs, size=n_samples)
 
 
-def build_numerical_parzen_estimator(config: NumericalHPType, dtype: Type[Union[float, int]],
-                                     vals: np.ndarray, weight_func: Callable,
-                                     is_ordinal: bool, min_bandwidth_factor: float = 1e-2
-                                     ) -> NumericalParzenEstimator:
+def build_numerical_parzen_estimator(
+    config: NumericalHPType,
+    dtype: Type[Union[float, int]],
+    vals: np.ndarray,
+    is_ordinal: bool,
+    min_bandwidth_factor: float = 1e-2,
+) -> NumericalParzenEstimator:
     """
     Build a numerical parzen estimator
 
@@ -283,33 +244,32 @@ def build_numerical_parzen_estimator(config: NumericalHPType, dtype: Type[Union[
 
     if is_ordinal:
         info = config.meta
-        q, log, lb, ub = info.get('q', None), info.get('log', False), info['lower'], info['upper']
+        q, log, lb, ub = info.get("q", None), info.get("log", False), info["lower"], info["upper"]
     else:
         q, log, lb, ub = config.q, config.log, config.lower, config.upper
 
     if dtype is int or q is not None:
-        if not log:
-            if q is None:
-                q = 1
-
+        if log:
+            q = None
+        elif q is None:
+            q = 1
+        if q is not None:
             lb -= 0.5 * q
             ub += 0.5 * q
-        else:
-            q = None
 
     if log:
         dtype = float
         lb, ub = np.log(lb), np.log(ub)
         vals = np.log(vals)
 
-    pe = NumericalParzenEstimator(samples=vals, lb=lb, ub=ub, weight_func=weight_func,
-                                  q=q, dtype=dtype, min_bandwidth_factor=min_bandwidth_factor)
+    pe = NumericalParzenEstimator(
+        samples=vals, lb=lb, ub=ub, q=q, dtype=dtype, min_bandwidth_factor=min_bandwidth_factor
+    )
 
     return pe
 
 
-def build_categorical_parzen_estimator(config: CategoricalHPType, vals: np.ndarray,
-                                       weight_func: Callable) -> CategoricalParzenEstimator:
+def build_categorical_parzen_estimator(config: CategoricalHPType, vals: np.ndarray) -> CategoricalParzenEstimator:
     """
     Build a categorical parzen estimator
 
@@ -326,9 +286,11 @@ def build_categorical_parzen_estimator(config: CategoricalHPType, vals: np.ndarr
     try:
         choice_indices = np.array([choices.index(val) for val in vals], dtype=np.int32)
     except ValueError:
-        raise ValueError('vals to build categorical parzen estimator must be '
-                         'the list of symbols {}, but got the list of indices.'.format(choices))
+        raise ValueError(
+            "vals to build categorical parzen estimator must be "
+            f"the list of symbols {choices}, but got the list of indices."
+        )
 
-    pe = CategoricalParzenEstimator(samples=choice_indices, n_choices=n_choices, weight_func=weight_func)
+    pe = CategoricalParzenEstimator(samples=choice_indices, n_choices=n_choices)
 
     return pe

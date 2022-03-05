@@ -1,4 +1,6 @@
 import os
+from argparse import ArgumentParser, Namespace
+from enum import Enum
 from logging import basicConfig, getLogger, DEBUG, FileHandler, Formatter, Logger
 from typing import Any, Dict, List, Literal, Optional, Type, TypedDict, Union
 
@@ -9,10 +11,16 @@ import numpy as np
 import ConfigSpace as CS
 import ConfigSpace.hyperparameters as CSH
 
-from util.constants import CategoricalHPType, NumericalHPType, NumericType, config2type, type2config
+from util.constants import (
+    CategoricalHPType,
+    NumericalHPType,
+    NumericType,
+    config2type,
+    type2config,
+)
 
 
-bool_json = Literal['True', 'False']
+bool_json = Literal["True", "False"]
 
 
 class MetaInformation(TypedDict):
@@ -36,15 +44,34 @@ class ParameterSettings(TypedDict):
     meta: Optional[MetaInformation]  # Any information that is useful
 
 
+def get_args_from_parser(Choices: Enum, opts: Dict) -> Namespace:
+    parser = ArgumentParser()
+    parser.add_argument("--opt_name", choices=list(opts.keys()), default="tpe")
+    parser.add_argument("--exp_id", type=int, default=0)
+    parser.add_argument("--max_evals", type=int, default=100)
+
+    default_choice = getattr(Choices, Choices._member_names_[0]).name
+    parser.add_argument("--dataset", choices=list([c.name for c in Choices]), default=default_choice)  # type: ignore
+
+    args = parser.parse_args()
+    return args
+
+
+def get_filename_from_args(bench_name: str, constraints: List[Enum], args: Namespace) -> str:
+    name = os.path.join(bench_name, args.dataset, args.opt_name, f"{args.exp_id:0>3}")
+    return name
+
+
 def get_hyperparameter_module(hp_module_path: str) -> Any:
-    return getattr(__import__(hp_module_path), 'hyperparameters')
+    depth = len(hp_module_path.split("."))
+    return getattr(__import__(hp_module_path, fromlist=[""] * depth), "hyperparameters")
 
 
 def get_hyperparameter(
     param_name: str,
     config_type: Union[CategoricalHPType, NumericalHPType],
     settings: ParameterSettings,
-    hp_module_path: str
+    hp_module_path: str,
 ) -> Union[CategoricalHPType, NumericalHPType]:
     """
     Create a hyperparameter class by CSH.<config_type>
@@ -59,30 +86,25 @@ def get_hyperparameter(
     Returns:
         hp (Union[CategoricalHPType, NumericalHPType]):
             The hyperparameter for ConfigurationSpace
-
-    TODO: Add tests
     """
-    config_dict = {key: val for key, val in settings.items()
-                   if key not in ['ignore', 'param_type', 'dataclass']}
+    config_dict = {key: val for key, val in settings.items() if key not in ["ignore", "param_type", "dataclass"]}
     hp_module = get_hyperparameter_module(hp_module_path)
 
-    if 'dataclass' in settings.keys():
-        assert(isinstance(settings['dataclass'], str))
-        choices = getattr(hp_module, settings['dataclass'])
-        config_dict['choices'] = [c.name for c in choices]
+    if "dataclass" in settings.keys():
+        assert isinstance(settings["dataclass"], str)
+        choices = getattr(hp_module, settings["dataclass"])
+        config_dict["choices"] = [c.name for c in choices]
 
-    if 'meta' in settings.keys():
-        # TODO: Test
-        assert isinstance(config_dict['meta'], dict)  # <== MetaInformation
-        config_dict['meta']['log'] = eval(config_dict['meta'].get('log', False))
+    if "meta" in settings.keys():
+        assert isinstance(config_dict["meta"], dict)  # <== MetaInformation
+        config_dict["meta"]["log"] = eval(config_dict["meta"].get("log", False))
 
     hyperparameter = getattr(CSH, config_type)(name=param_name, **config_dict)
 
     return hyperparameter
 
 
-def get_config_space(searching_space: Dict[str, ParameterSettings],
-                     hp_module_path: str) -> CS.ConfigurationSpace:
+def get_config_space(searching_space: Dict[str, ParameterSettings], hp_module_path: str) -> CS.ConfigurationSpace:
     """
     Create the config space by CS.ConfigurationSpace based on searching space dict
 
@@ -94,51 +116,54 @@ def get_config_space(searching_space: Dict[str, ParameterSettings],
     Returns:
         cs (CS.ConfigurationSpace):
             The configuration space that includes the parameters specified in searching_space
-
-    TODO: Add tests
     """
 
     settings_keys = set(ParameterSettings.__annotations__.keys())
     cs = CS.ConfigurationSpace()
-    type_choices = ['int', 'float', 'bool', 'str']
+    type_choices = ["int", "float", "bool", "str"]
     for param_name, settings in searching_space.items():
-        if param_name.startswith('_') or settings['ignore'] == 'True':
+        if param_name.startswith("_") or settings["ignore"] == "True":
             continue
 
-        if settings['param_type'] not in type_choices:
-            raise ValueError('`param_type` in params.json must have one of {}, '
-                             'but got {}.'.format(type_choices, settings['param_type']))
+        if settings["param_type"] not in type_choices:
+            raise ValueError(
+                f"`param_type` in params.json must have one of {type_choices}, " f"but got {settings['param_type']}."
+            )
 
         if len(set(settings.keys()) - settings_keys) >= 1:
-            raise ValueError('params.json must not include the keys not specified in {}.'.format(
-                settings_keys
-            ))
+            raise ValueError(f"params.json must not include the keys not specified in {settings_keys}.")
 
-        if 'log' in settings.keys():
-            if settings['log'] not in bool_json.__args__:  # type: ignore
-                raise ValueError('`log` in params.json must have either "True" or "False", '
-                                 'but got {}.'.format(settings['log']))
-            settings['log'] = eval(settings['log'])  # type: ignore
+        if "log" in settings.keys():
+            if settings["log"] not in bool_json.__args__:  # type: ignore
+                raise ValueError("`log` in params.json must have either True or False, " f"but got {settings['log']}.")
+            settings["log"] = eval(settings["log"])  # type: ignore
 
-        if 'sequence' in settings.keys():
-            config_type = 'OrdinalHyperparameter'
+        if "sequence" in settings.keys():
+            config_type = "OrdinalHyperparameter"
         else:
-            config_type = type2config[eval(settings['param_type'])]  # type: ignore
+            config_type = type2config[eval(settings["param_type"])]  # type: ignore
 
-        cs.add_hyperparameter(get_hyperparameter(param_name=param_name, config_type=config_type,
-                                                 settings=settings, hp_module_path=hp_module_path))
+        cs.add_hyperparameter(
+            get_hyperparameter(
+                param_name=param_name,
+                config_type=config_type,
+                settings=settings,
+                hp_module_path=hp_module_path,
+            )
+        )
 
     return cs
 
 
 def get_logger(file_name: str, logger_name: str) -> Logger:
-    os.makedirs('log/', exist_ok=True)
+    subdirs = "/".join(file_name.split("/")[:-1])
+    os.makedirs(f"log/{subdirs}", exist_ok=True)
 
-    file_path = f'log/{file_name}.log'
+    file_path = f"log/{file_name}.log"
     fmt = "%(asctime)s [%(levelname)s/%(filename)s:%(lineno)d] %(message)s"
     basicConfig(filename=file_path, format=fmt, level=DEBUG)
     logger = getLogger(logger_name)
-    file_handler = FileHandler(file_path, mode='a')
+    file_handler = FileHandler(file_path, mode="a")
     file_handler.setLevel(DEBUG)
     file_handler.setFormatter(Formatter(fmt))
     logger.propagate = False
@@ -147,11 +172,12 @@ def get_logger(file_name: str, logger_name: str) -> Logger:
     return logger
 
 
-def extract_hyperparameter(eval_config: Dict[str, Any],
-                           config_space: CS.ConfigurationSpace,
-                           searching_space: Dict[str, ParameterSettings],
-                           hp_module_path: str,
-                           ) -> Dict[str, Any]:
+def extract_hyperparameter(
+    eval_config: Dict[str, Any],
+    config_space: CS.ConfigurationSpace,
+    searching_space: Dict[str, ParameterSettings],
+    hp_module_path: str,
+) -> Dict[str, Any]:
     """
     Extract categorical values from another module
 
@@ -181,20 +207,24 @@ def extract_hyperparameter(eval_config: Dict[str, Any],
             return_config[key] = val
             continue
 
-        if 'dataclass' in hp_info.keys():
-            choices_class_name = hp_info['dataclass']
-            assert(isinstance(choices_class_name, str))
+        if "dataclass" in hp_info.keys():
+            choices_class_name = hp_info["dataclass"]
+            assert isinstance(choices_class_name, str)
             choices = getattr(hp_module, choices_class_name)
             return_config[key] = getattr(choices, val)
-        elif hasattr(config_space.get_hyperparameter(key), 'choices'):
+        elif hasattr(config_space.get_hyperparameter(key), "choices"):
             return_config[key] = eval(val)
 
     return return_config
 
 
-def get_random_sample(hp_name: str, is_categorical: bool, is_ordinal: bool,
-                      rng: np.random.RandomState,
-                      config_space: CS.ConfigurationSpace) -> NumericType:
+def get_random_sample(
+    hp_name: str,
+    is_categorical: bool,
+    is_ordinal: bool,
+    rng: np.random.RandomState,
+    config_space: CS.ConfigurationSpace,
+) -> NumericType:
     """
     Random sample of a provided hyperparameter
 
@@ -218,11 +248,9 @@ def get_random_sample(hp_name: str, is_categorical: bool, is_ordinal: bool,
         sample = rng.randint(len(choices))
     elif is_ordinal:
         if config.meta is None:
-            raise ValueError(
-                'The meta information of the ordinal hyperparameter must be provided'
-            )
+            raise ValueError("The meta information of the ordinal hyperparameter must be provided")
 
-        log = config.meta.get('log', False)
+        log = config.meta.get("log", False)
         seq = config.sequence
         sample = seq[rng.randint(len(seq))]
         sample = np.log(sample) if log else sample
@@ -236,14 +264,16 @@ def get_random_sample(hp_name: str, is_categorical: bool, is_ordinal: bool,
 
 def check_value_range(hp_name: str, config: CSH.Hyperparameter, val: NumericType) -> None:
     if val < config.lower or val > config.upper:
-        raise ValueError('The sampled value for {} must be [{},{}], but got {}.'.format(
-            hp_name, config.lower, config.upper, val
-        ))
+        raise ValueError(f"The sampled value for {hp_name} must be [{config.lower},{config.upper}], but got {val}.")
 
 
-def revert_eval_config(eval_config: Dict[str, NumericType], config_space: CS.ConfigurationSpace,
-                       is_categoricals: Dict[str, bool], is_ordinals: Dict[str, bool],
-                       hp_names: List[str]) -> Dict[str, Any]:
+def revert_eval_config(
+    eval_config: Dict[str, NumericType],
+    config_space: CS.ConfigurationSpace,
+    is_categoricals: Dict[str, bool],
+    is_ordinals: Dict[str, bool],
+    hp_names: List[str],
+) -> Dict[str, Any]:
     """
     Revert the eval_config into the original value range.
     For example,
@@ -271,11 +301,9 @@ def revert_eval_config(eval_config: Dict[str, NumericType], config_space: CS.Con
             converted_eval_config[hp_name] = config.choices[val]
         elif is_ordinal:
             if config.meta is None:
-                raise ValueError(
-                    'The meta information of the ordinal hyperparameter must be provided'
-                )
+                raise ValueError("The meta information of the ordinal hyperparameter must be provided")
 
-            log = config.meta.get('log', False)
+            log = config.meta.get("log", False)
             vals = np.log(config.sequence) if log else np.array(config.sequence)
             diff = np.abs(vals - val)
             converted_eval_config[hp_name] = config.sequence[diff.argmin()]
@@ -295,13 +323,18 @@ def revert_eval_config(eval_config: Dict[str, NumericType], config_space: CS.Con
     return converted_eval_config
 
 
-def store_results(best_config: Dict[str, np.ndarray], logger: Logger,
-                  observations: Dict[str, np.ndarray], file_name: str) -> None:
-    logger.info('\nThe observations: {}'.format(observations))
+def store_results(
+    best_config: Dict[str, np.ndarray],
+    logger: Logger,
+    observations: Dict[str, np.ndarray],
+    file_name: str,
+) -> None:
+    logger.info(f"\nThe observations: {observations}")
     save_observations(filename=file_name, observations=observations)
 
-    os.makedirs('incumbents/', exist_ok=True)
-    with open(f'incumbents/opt_{file_name}.json', mode='w') as f:
+    subdirs = "/".join(file_name.split("/")[:-1])
+    os.makedirs(f"incumbents/{subdirs}", exist_ok=True)
+    with open(f"incumbents/{file_name}.json", mode="w") as f:
         json.dump(best_config, f, indent=4)
 
 
@@ -313,9 +346,8 @@ def save_observations(filename: str, observations: Dict[str, np.ndarray]) -> Non
         filename (str): The name of the json file
         observations (Dict[str, np.ndarray]): The observations to save
     """
-    dir_name = 'results/'
-    if not os.path.exists(dir_name):
-        os.makedirs(dir_name, exist_ok=True)
+    subdirs = "/".join(filename.split("/")[:-1])
+    os.makedirs(f"results/{subdirs}", exist_ok=True)
 
-    with open(f'{dir_name}{filename}.json', mode='w') as f:
+    with open(f"results/{filename}.json", mode="w") as f:
         json.dump({k: v.tolist() for k, v in observations.items()}, f, indent=4)

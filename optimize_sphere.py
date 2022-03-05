@@ -21,5 +21,5 @@ if __name__ == '__main__':
         cs.add_hyperparameter(CSH.UniformFloatHyperparameter(f'x{d}', lower=-5, upper=5))
 
     logger = get_logger(file_name='sphere', logger_name='sphere')
-    opt = TPEOptimizer(obj_func=sphere, config_space=cs, mutation_prob=0.0, resultfile='sphere')
+    opt = TPEOptimizer(obj_func=sphere, config_space=cs, resultfile='sphere')
     opt.optimize(logger)

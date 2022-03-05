@@ -1,0 +1,87 @@
+{
+    "_comment": {
+        "lower": "The lower bound of parameters",
+        "upper": "The upper bound of parameters",
+        "param_type": "int, float, str, bool",
+        "log": "scale: If True, log, otherwise uniform",
+        "q": "The quantization parameter",
+        "sequence": "List of numbers that can be taken",
+        "choices": "The choices for categorical parameters",
+        "dataclass": "The choices for categorical parameters in dataclass",
+        "ignore": "Whether we ignore this parameter or not",
+        "default_value": "The default value for this parameter",
+        "meta": "Meta information such as log-scale for ordinal"
+    },
+    "edge_0_1": {
+        "param_type": "str",
+        "choices": [
+            "none",
+            "skip_connect",
+            "nor_conv_1x1",
+            "nor_conv_3x3",
+            "avg_pool_3x3"
+        ],
+        "ignore": "False",
+        "default_value": "skip_connect"
+    },
+    "edge_0_2": {
+        "param_type": "str",
+        "choices": [
+            "none",
+            "skip_connect",
+            "nor_conv_1x1",
+            "nor_conv_3x3",
+            "avg_pool_3x3"
+        ],
+        "ignore": "False",
+        "default_value": "skip_connect"
+    },
+    "edge_0_3": {
+        "param_type": "str",
+        "choices": [
+            "none",
+            "skip_connect",
+            "nor_conv_1x1",
+            "nor_conv_3x3",
+            "avg_pool_3x3"
+        ],
+        "ignore": "False",
+        "default_value": "skip_connect"
+    },
+    "edge_1_2": {
+        "param_type": "str",
+        "choices": [
+            "none",
+            "skip_connect",
+            "nor_conv_1x1",
+            "nor_conv_3x3",
+            "avg_pool_3x3"
+        ],
+        "ignore": "False",
+        "default_value": "skip_connect"
+    },
+    "edge_1_3": {
+        "param_type": "str",
+        "choices": [
+            "none",
+            "skip_connect",
+            "nor_conv_1x1",
+            "nor_conv_3x3",
+            "avg_pool_3x3"
+        ],
+        "ignore": "False",
+        "default_value": "skip_connect"
+    },
+    "edge_2_3": {
+        "param_type": "str",
+        "choices": [
+            "none",
+            "skip_connect",
+            "nor_conv_1x1",
+            "nor_conv_3x3",
+            "avg_pool_3x3"
+        ],
+        "ignore": "False",
+        "default_value": "skip_connect"
+    }
+}

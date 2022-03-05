@@ -33,13 +33,15 @@ def mix_func(eval_config: Dict[str, Union[str, float]]) -> float:
     func_dict = {'cosine': np.cos, 'sine': np.sin}
     vals = np.array([v for v in eval_config.values() if isinstance(v, float)])
     vals *= vals
-    return 1 - func_dict[eval_config['func']](vals.sum()) ** 2
+    assert isinstance(eval_config['func'], str)
+    func_name: str = eval_config['func']
+    return 1 - func_dict[func_name](vals.sum()) ** 2
 
 
 def cleanup() -> None:
     os.remove('log/test.log')
     os.remove('results/test.json')
-    os.remove('incumbents/opt_test.json')
+    os.remove('incumbents/test.json')
 
 
 class TestTreeStructuredParzenEstimator(unittest.TestCase):
@@ -76,24 +78,25 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
         opt.optimize(self.logger)
 
         eval_config = {hp_name: 0.0 for hp_name in self.hp_names_cat}
-        eval_config['func'] = 'cosine'
+        eval_config['func'] = 'cosine'  # type: ignore
         opt.tpe.update_observations(eval_config=eval_config, loss=0)
-        assert opt.tpe.sorted_observations[metric_name][0] == 0.0
-        assert opt.tpe.sorted_observations[metric_name].size == max_evals + 1
+        assert opt.tpe._sorted_observations[metric_name][0] == 0.0
+        assert opt.tpe._sorted_observations[metric_name].size == max_evals + 1
         for hp_name in self.hp_names:
             assert opt.tpe.observations[hp_name].size == max_evals + 1
             assert opt.tpe.observations[hp_name][-1] == 0.0
-            assert opt.tpe.sorted_observations[hp_name].size == max_evals + 1
-            assert opt.tpe.sorted_observations[hp_name][0] == 0.0
+            assert opt.tpe._sorted_observations[hp_name].size == max_evals + 1
+            assert opt.tpe._sorted_observations[hp_name][0] == 0.0
 
         min_value = np.inf
         # The sorted_observations must be sorted
-        for v in opt.tpe.sorted_observations[metric_name]:
+        for v in opt.tpe._sorted_observations[metric_name]:
             assert min_value >= v
             min_value = min(min_value, np.inf)
 
         cleanup()
 
+    @unittest.skip("Deprecated set prior observations at Feb 10 2022, check the commits before.")
     def test_set_prior_observations(self) -> None:
         metric_name = 'loss'
         opt = TPEOptimizer(
@@ -119,7 +122,7 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
 
         sorted_ob = {k: x[order] for k, x in ob.items()}
         for hp_name in ob.keys():
-            cnt = np.count_nonzero(opt.tpe.sorted_observations[hp_name] != sorted_ob[hp_name])
+            cnt = np.count_nonzero(opt.tpe._sorted_observations[hp_name] != sorted_ob[hp_name])
             assert cnt == 0
 
     def test_get_config_candidates(self) -> None:
@@ -136,28 +139,18 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
         opt.tpe._n_ei_candidates = 3
         config_cands = opt.tpe.get_config_candidates()
         assert len(config_cands) == len(self.hp_names)
-        assert config_cands[0].size == opt.tpe.n_ei_candidates
+        assert config_cands[0].size == opt.tpe._n_ei_candidates
 
-        ans = [[0.5135034241147703, 0.4448090311534248, 0.5723466512713232],
-               [-1.121131319925264, 2.952173904420133, 2.2211060220605847],
-               [0.3840503560941645, 0.05691106986981964, 3.2489156267078263],
-               [0.6223354593074132, 0.42882383641275457, 0.6089624088247492],
-               [4.406721260474024, -0.7441693444777707, -0.8200358837154326],
-               [0.6573366338079927, 0.060519759177582566, 1.1315348442999413],
-               [-0.48810672560449186, -0.7276334971302549, -0.6697272781333232],
-               [3.856861350505235, -2.8167004005339753, 1.535239936783603],
-               [-0.5896751970671259, 4.873942440726309, 1.2756781156033692],
-               [-2.3906083300437304, -0.3234225699230498, -1.5374589912835055]]
-        ans = [[0.5070666697519959, 0.4558021973927828, 0.5509795258389757],
-               [-1.121131319925264, 2.7531632482776374, 2.2054970575747674],
-               [0.5473476378639954, 0.3032138421741859, 3.2489156267078263],
-               [0.5783121503707929, 0.433900491494182, 0.5683322619508944],
-               [4.406721260474024, -0.7490619602429065, -0.8200358837154326],
-               [0.6573366338079927, 0.41534310660203366, 1.1315348442999413],
-               [-0.5226195576950279, -0.7013708797291794, -0.6581572834628125],
-               [4.016299983407916, -2.8167004005339753, 2.20377314901946],
-               [-0.5896751970671259, 4.873942440726309, 2.1596893935632857],
-               [-2.3906083300437304, -0.3234225699230498, -1.4431028561764772]]
+        ans = [[4.8431215412066475, -1.8158257273119596, -3.744716909802062],
+               [2.7519831557632024, 0.2620535804840036, 0.45758517301446067],
+               [-1.871838500258336, 1.7538653266921242, -4.625055394360726],
+               [-4.380743016111864, 0.2554040035802357, 0.5688739967604989],
+               [-0.6816800079423969, -0.9672547770712823, -0.8441738465209289],
+               [1.27499304070942, -0.2818222833865487, 1.6739088876074935],
+               [-3.643343119343121, -3.536278564808815, -1.3278425612003888],
+               [0.5194539579613895, 1.2898291075741066, 2.2535688848821986],
+               [2.6414792686135344, 3.77160611108241, 4.524089680601648],
+               [-4.031769469731796, 2.082749780768603, -0.7739934294417338]]
         assert np.allclose(ans, config_cands)
 
         max_evals = 5
@@ -173,23 +166,24 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
         opt.tpe._n_ei_candidates = 5
         config_cands = opt.tpe.get_config_candidates()
         assert len(config_cands) == len(self.hp_names_cat)
-        assert config_cands[0].size == opt.tpe.n_ei_candidates
+        assert config_cands[0].size == opt.tpe._n_ei_candidates
 
         ans = [
-            [0, 0, 1, 1, 1],
-            [-0.3997842077734217, -0.46884544792241656, -0.16746256268845255, -0.1873212608088347, 3.6297139379162733],
-            [3.332129979747979, 1.8882868085097795, 4.406721260474024, 3.028942770254184, -0.8200358837154326],
-            [1.1315348442999413, 0.23325333601086667, 1.1247585066034038, 0.3634786818265787, 1.7541576737760938],
-            [1.645260846074287, -2.8167004005339753, 1.0925485350114006, -1.7809823117239185, 1.574313549266766],
-            [1.4555780233748792, 1.4749412997717923, 1.702173221175793, -0.3234225699230498, -2.478268504181421],
-            [-1.2633949745100692, 3.131491033668064, 0.45390284408715614, 3.3028457767583435, -3.979432364310714],
-            [0.14743708435619274, -2.1000631288626677, 0.22279879249619908, 0.30488242113739983, 0.22185178687651852],
-            [-2.271288155092453, 0.22316506530894623, -4.001861660854562, 2.752196102383606, 3.874402236886159],
-            [-3.0893344667008367, -3.3205757757834165, -4.782469654709937, -2.438539888476503, -4.9489943835675785],
-            [2.1739649922107147, 0.8846172861038786, 2.1649138974002167, 1.3071014710109234, 4.492348642293887]
+            [0, 1, 0, 0, 0],
+            [1.4404357116087798, -0.11849219656659751, 1.2167501649282841, 4.438632327454257, -0.23055211452546834],
+            [3.769269749952829, 0.33438928508628574, 3.7135798107341955, -2.421495142426032, 4.576692069111804],
+            [1.549474256969163, 0.24259104747226518, -3.479121493261526, 1.5634896910398006, -3.8732681740795227],
+            [1.6027760417483585, 1.702971261665361, -1.906559792126414, 2.064860340169603, -2.2593965569142895],
+            [0.9505559670000259, 1.8186404615462093, 1.3102614209223287, -0.2818222833865487, 2.531417847363128],
+            [-3.643343119343121, -3.536278564808815, -1.3278425612003888, 0.9950722847078508, 1.3255688597976647],
+            [0.5202169959079599, 4.02341641177549, 0.28569109611261634, -3.1155253212737266, 0.5616534222974544],
+            [3.77160611108241, 2.5233863422088034, 4.721489975165859, 3.3155801154568216, -2.546080917850404],
+            [1.2691209270361992, 4.019893634447016, -4.136189807597473, -2.680033709513804, -1.550100930908342],
+            [-0.4574809909962204, 0.49898414237597755, 1.1495177677542232, 2.873876518676211, 3.604272671140195]
         ]
+
         assert np.allclose(ans, config_cands)
-        for i in range(opt.tpe.n_ei_candidates):
+        for i in range(opt.tpe._n_ei_candidates):
             eval_config = {hp: a[-1] for a, hp in zip(ans, self.hp_names_cat)}
             ord_v = opt._revert_eval_config(eval_config)[self.hp_names_cat[-1]]
             assert ord_v in self.cs_cat.get_hyperparameter(self.hp_names_cat[-1]).sequence
