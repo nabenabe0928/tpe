@@ -15,7 +15,7 @@ from util.constants import default_percentile_maker
 def sphere(eval_config: Dict[str, float]) -> float:
     vals = np.array(list(eval_config.values()))
     vals *= vals
-    return vals.sum()
+    return vals.sum(), 0.0
 
 
 def rosen(eval_config: Dict[str, float]) -> float:
@@ -26,7 +26,7 @@ def rosen(eval_config: Dict[str, float]) -> float:
         t1 = 100 * (vals[d + 1] - vals[d] ** 2) ** 2
         t2 = (vals[d] - 1) ** 2
         val += t1 + t2
-    return val
+    return val, 0.0
 
 
 def mix_func(eval_config: Dict[str, Union[str, float]]) -> float:
@@ -35,7 +35,7 @@ def mix_func(eval_config: Dict[str, Union[str, float]]) -> float:
     vals *= vals
     assert isinstance(eval_config['func'], str)
     func_name: str = eval_config['func']
-    return 1 - func_dict[func_name](vals.sum()) ** 2
+    return 1 - func_dict[func_name](vals.sum()) ** 2, 0.0
 
 
 def cleanup() -> None:
@@ -65,32 +65,57 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
         self.hp_names = list(self.cs._hyperparameters.keys())
         self.hp_names_cat = list(self.cs_cat._hyperparameters.keys())
         self.logger = get_logger(file_name='test', logger_name='test')
+    
+    def test_insert_observations(self) -> None:
+        metric_name = 'loss'
+        opt = TPEOptimizer(
+            obj_func=sphere,
+            config_space=self.cs,
+            max_evals=10,
+            metric_name=metric_name,
+            resultfile='test'
+        )
+        opt.optimize(self.logger)
+        try:
+            opt._tpe._insert_observations(
+                "x0",
+                insert_loc=1,
+                val=0,
+                is_categorical=False
+            )
+        except ValueError:
+            pass
+        else:
+            raise RuntimeError("Did not yield ValueError")
 
     def test_update_observations(self) -> None:
-        max_evals, metric_name = 20, 'loss'
+        max_evals, metric_name, runtime_name = 20, 'loss', "test_run"
         opt = TPEOptimizer(
             obj_func=mix_func,
             config_space=self.cs_cat,
             max_evals=max_evals,
             metric_name=metric_name,
+            runtime_name=runtime_name,
             resultfile='test'
         )
         opt.optimize(self.logger)
 
         eval_config = {hp_name: 0.0 for hp_name in self.hp_names_cat}
         eval_config['func'] = 'cosine'  # type: ignore
-        opt.tpe.update_observations(eval_config=eval_config, loss=0)
-        assert opt.tpe._sorted_observations[metric_name][0] == 0.0
-        assert opt.tpe._sorted_observations[metric_name].size == max_evals + 1
+        opt._tpe.update_observations(eval_config=eval_config, loss=0, runtime=0)
+        assert opt._tpe._sorted_observations[metric_name][0] == 0.0
+        print(opt._tpe._sorted_observations)
+        assert opt._tpe._sorted_observations[runtime_name][0] == 0.0
+        assert opt._tpe._sorted_observations[metric_name].size == max_evals + 1
         for hp_name in self.hp_names:
-            assert opt.tpe.observations[hp_name].size == max_evals + 1
-            assert opt.tpe.observations[hp_name][-1] == 0.0
-            assert opt.tpe._sorted_observations[hp_name].size == max_evals + 1
-            assert opt.tpe._sorted_observations[hp_name][0] == 0.0
+            assert opt._tpe.observations[hp_name].size == max_evals + 1
+            assert opt._tpe.observations[hp_name][-1] == 0.0
+            assert opt._tpe._sorted_observations[hp_name].size == max_evals + 1
+            assert opt._tpe._sorted_observations[hp_name][0] == 0.0
 
         min_value = np.inf
         # The sorted_observations must be sorted
-        for v in opt.tpe._sorted_observations[metric_name]:
+        for v in opt._tpe._sorted_observations[metric_name]:
             assert min_value >= v
             min_value = min(min_value, np.inf)
 
@@ -114,15 +139,15 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
             ob[hp_name] = rng.random(n_samples)
 
         order = np.argsort(ob[metric_name])
-        opt.tpe.set_prior_observations(ob)
+        opt._tpe.set_prior_observations(ob)
 
         for hp_name in ob.keys():
-            cnt = np.count_nonzero(opt.tpe.observations[hp_name] != ob[hp_name])
+            cnt = np.count_nonzero(opt._tpe.observations[hp_name] != ob[hp_name])
             assert cnt == 0
 
         sorted_ob = {k: x[order] for k, x in ob.items()}
         for hp_name in ob.keys():
-            cnt = np.count_nonzero(opt.tpe._sorted_observations[hp_name] != sorted_ob[hp_name])
+            cnt = np.count_nonzero(opt._tpe._sorted_observations[hp_name] != sorted_ob[hp_name])
             assert cnt == 0
 
     def test_get_config_candidates(self) -> None:
@@ -136,10 +161,10 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
         )
         opt.optimize(self.logger)
 
-        opt.tpe._n_ei_candidates = 3
-        config_cands = opt.tpe.get_config_candidates()
+        opt._tpe._n_ei_candidates = 3
+        config_cands = opt._tpe.get_config_candidates()
         assert len(config_cands) == len(self.hp_names)
-        assert config_cands[0].size == opt.tpe._n_ei_candidates
+        assert config_cands[0].size == opt._tpe._n_ei_candidates
 
         ans = [[4.8431215412066475, -1.8158257273119596, -3.744716909802062],
                [2.7519831557632024, 0.2620535804840036, 0.45758517301446067],
@@ -163,10 +188,10 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
         )
         opt.optimize(self.logger)
 
-        opt.tpe._n_ei_candidates = 5
-        config_cands = opt.tpe.get_config_candidates()
+        opt._tpe._n_ei_candidates = 5
+        config_cands = opt._tpe.get_config_candidates()
         assert len(config_cands) == len(self.hp_names_cat)
-        assert config_cands[0].size == opt.tpe._n_ei_candidates
+        assert config_cands[0].size == opt._tpe._n_ei_candidates
 
         ans = [
             [0, 1, 0, 0, 0],
@@ -183,7 +208,7 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
         ]
 
         assert np.allclose(ans, config_cands)
-        for i in range(opt.tpe._n_ei_candidates):
+        for i in range(opt._tpe._n_ei_candidates):
             eval_config = {hp: a[-1] for a, hp in zip(ans, self.hp_names_cat)}
             ord_v = opt._revert_eval_config(eval_config)[self.hp_names_cat[-1]]
             assert ord_v in self.cs_cat.get_hyperparameter(self.hp_names_cat[-1]).sequence
@@ -203,13 +228,13 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
 
         samples = np.array([-1.5, 0.0, 1.5])
         n_samples = samples.size
-        bll_low, bll_up = opt.tpe._compute_basis_loglikelihoods(
+        bll_low, bll_up = opt._tpe._compute_basis_loglikelihoods(
             hp_name=self.hp_names[0],
             samples=samples
         )
 
         percentile_func = default_percentile_maker()
-        n_lower = percentile_func(opt.tpe.observations['loss'])
+        n_lower = percentile_func(opt._tpe.observations['loss'])
         n_upper = max_evals - n_lower
 
         assert bll_low.shape == (n_lower + 1, n_samples)
@@ -239,7 +264,7 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
         opt.optimize(self.logger)
 
         config_cands = [np.array([0.0]) for _ in range(len(self.hp_names))]
-        ll_ratio = opt.tpe.compute_probability_improvement(config_cands)
+        ll_ratio = opt._tpe.compute_probability_improvement(config_cands)
 
         assert ll_ratio.size == 1
         self.assertAlmostEqual(ll_ratio[0], 0.43775751678142427)
@@ -273,7 +298,7 @@ class TestTPEOptimizer(unittest.TestCase):
                 )
                 _, best_loss = opt.optimize(self.logger)
                 losses[i] = best_loss
-                assert opt.tpe.observations['x0'].size == max_evals
+                assert opt._tpe.observations['x0'].size == max_evals
 
             # performance test
             assert losses.mean() < threshold

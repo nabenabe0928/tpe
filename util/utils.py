@@ -12,8 +12,7 @@ import ConfigSpace as CS
 import ConfigSpace.hyperparameters as CSH
 
 from util.constants import (
-    CategoricalHPType,
-    NumericalHPType,
+    HPType,
     NumericType,
     config2type,
     type2config,
@@ -69,22 +68,22 @@ def get_hyperparameter_module(hp_module_path: str) -> Any:
 
 def get_hyperparameter(
     param_name: str,
-    config_type: Union[CategoricalHPType, NumericalHPType],
+    config_type: HPType,
     settings: ParameterSettings,
     hp_module_path: str,
-) -> Union[CategoricalHPType, NumericalHPType]:
+) -> HPType:
     """
     Create a hyperparameter class by CSH.<config_type>
 
     Args:
         param_name (str): The name of hyperparameter
-        config_type (Union[CategoricalHPType, NumericalHPType]):
+        config_type (HPType):
             The class of hyperparameter in the CSH package
         settings (ParameterSettings):
             Parameter settings from a json file
 
     Returns:
-        hp (Union[CategoricalHPType, NumericalHPType]):
+        hp (HPType):
             The hyperparameter for ConfigurationSpace
     """
     config_dict = {key: val for key, val in settings.items() if key not in ["ignore", "param_type", "dataclass"]}
@@ -155,13 +154,16 @@ def get_config_space(searching_space: Dict[str, ParameterSettings], hp_module_pa
     return cs
 
 
-def get_logger(file_name: str, logger_name: str) -> Logger:
+def get_logger(file_name: str, logger_name: str, disable: bool = False) -> Logger:
     subdirs = "/".join(file_name.split("/")[:-1])
     os.makedirs(f"log/{subdirs}", exist_ok=True)
 
     file_path = f"log/{file_name}.log"
     fmt = "%(asctime)s [%(levelname)s/%(filename)s:%(lineno)d] %(message)s"
-    basicConfig(filename=file_path, format=fmt, level=DEBUG)
+
+    if not disable:
+        basicConfig(filename=file_path, format=fmt, level=DEBUG)
+
     logger = getLogger(logger_name)
     file_handler = FileHandler(file_path, mode="a")
     file_handler.setLevel(DEBUG)
@@ -328,14 +330,20 @@ def store_results(
     logger: Logger,
     observations: Dict[str, np.ndarray],
     file_name: str,
+    requirements: Optional[List[str]] = None
 ) -> None:
-    logger.info(f"\nThe observations: {observations}")
-    save_observations(filename=file_name, observations=observations)
 
-    subdirs = "/".join(file_name.split("/")[:-1])
-    os.makedirs(f"incumbents/{subdirs}", exist_ok=True)
-    with open(f"incumbents/{file_name}.json", mode="w") as f:
-        json.dump(best_config, f, indent=4)
+    logger.info(f"\nThe observations: {observations}")
+    if requirements is None:
+        save_observations(filename=file_name, observations=observations)
+
+        subdirs = "/".join(file_name.split("/")[:-1])
+        os.makedirs(f"incumbents/{subdirs}", exist_ok=True)
+        with open(f"incumbents/{file_name}.json", mode="w") as f:
+            json.dump(best_config, f, indent=4)
+    else:
+        required_observations = {k: v for k, v in observations.items() if k in requirements}
+        save_observations(filename=file_name, observations=required_observations)
 
 
 def save_observations(filename: str, observations: Dict[str, np.ndarray]) -> None:

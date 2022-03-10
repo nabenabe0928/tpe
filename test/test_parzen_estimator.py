@@ -14,18 +14,43 @@ from util.constants import config2type, NumericalHPType
 
 class TestNumericalParzenEstimator(unittest.TestCase):
     def test_init(self) -> None:
-        samples_set = [
-            np.array([5])
+        kwargs_dict = [
+            dict(samples=np.array([5]), lb=-3.0, ub=3.0),
+            dict(samples=np.array([2]), lb=-3.0, ub=3.0, dtype=None)
         ]
-        for samples in samples_set:
+        for kwargs in kwargs_dict:
             try:
-                NumericalParzenEstimator(samples=samples, lb=-3.0, ub=3.0)
+                NumericalParzenEstimator(**kwargs)
             except ValueError:
                 pass
             except Exception:
                 raise ValueError('test_init failed.')
             else:
                 raise ValueError('The error was not raised.')
+
+    def test_cdf_discrete(self) -> None:
+        lb, ub = -50, 50
+        samples = np.array([-2, -1, 0, 1, 2])
+        pe = NumericalParzenEstimator(samples=np.array([0]), lb=lb, ub=ub, q=1)
+        integral_lb, integral_ub = pe.cdf(lb), pe.cdf(ub)
+        assert np.allclose(integral_ub - integral_lb, 1.0)
+        cdf_vals = pe.cdf(samples) - integral_lb
+        ans = [
+            [0.02275013, 0.15865525, 0.5, 0.84134475, 0.97724987],
+            [0.47916481, 0.48958188, 0.5, 0.51041812, 0.52083519]
+        ]
+        assert np.allclose(ans, cdf_vals)
+
+    def test_basis_loglikelihood_discrete(self) -> None:
+        lb, ub = -50, 50
+        samples = np.array([-2, -1, 0, 1, 2])
+        pe = NumericalParzenEstimator(samples=np.array([0]), lb=lb, ub=ub, q=1)
+        bll_vals = pe.basis_loglikelihood(samples)
+        ans = [
+            [-2.803501047738798, -1.4199324821566262, -0.9599163336956227, -1.419932482156626, -2.803501047738798],
+            [-4.564396550490211, -4.5642465517402, -4.564196552156876, -4.564246551740179, -4.564396550490211]
+        ]
+        assert np.allclose(ans, bll_vals)
 
     def test_sample(self) -> None:
         rng = np.random.RandomState()
@@ -53,9 +78,9 @@ class TestNumericalParzenEstimator(unittest.TestCase):
         ])
         mus = np.array([0.4372727, 0.44549973])
         pe = NumericalParzenEstimator(samples=mus, lb=0.0, ub=1.0)
-        assert np.allclose(pe.weights, [0.33333333, 0.33333333, 0.33333333])
-        assert np.allclose(pe.means, [0.43727276, 0.44549973, 0.5])
-        assert np.allclose(pe.stds, [0.019897270747110334, 0.019897270747110334, 1.])
+        assert np.allclose(pe._weights, [0.33333333, 0.33333333, 0.33333333])
+        assert np.allclose(pe._means, [0.43727276, 0.44549973, 0.5])
+        assert np.allclose(pe._stds, [0.019897270747110334, 0.019897270747110334, 1.])
         ans = [
             [-154.7543487548828, -16.10599708557129, -19.68598747253418, 2.9763262271881104, 1.7578061819076538,
              2.987107515335083, -329.816162109375, -139.15806579589844, 2.2890665531158447, 0.7415248155593872,
@@ -118,7 +143,7 @@ class TestCategoricalParzenEstimator(unittest.TestCase):
             pe = CategoricalParzenEstimator(samples=samples, n_choices=4, top=0.7)
             vals, counts = np.unique(pe.sample(rng, n_samples), return_counts=True)
 
-            assert np.allclose(ans_prob, pe.probs)
+            assert np.allclose(ans_prob, pe._probs)
 
             for i in range(4):
                 assert bound[i][0] <= counts[vals == i] / n_samples <= bound[i][1]
@@ -129,7 +154,7 @@ class TestCategoricalParzenEstimator(unittest.TestCase):
                 [0.1, 0.1, 0.7, 0.1],
                 [0.1, 0.1, 0.1, 0.7]
             ] * 10 + [[0.25] * 4]
-            assert np.allclose(np.log(ans), pe.basis_loglikelihoods)
+            assert np.allclose(np.log(ans), pe._basis_loglikelihoods)
             ans = [
                 [0.1, 0.1, 0.1, 0.7] * 10 + [0.25],
                 [0.1, 0.7, 0.1, 0.1] * 10 + [0.25]
@@ -195,34 +220,34 @@ class TestBuildParzenEstimators(unittest.TestCase):
         x = CSH.UniformFloatHyperparameter('x', lower=lb, upper=ub)
         vals = np.arange(1, 20)
         pe = self.build_npe(vals, x)
-        assert pe.q is None
-        self._check(pe.lb - lb, pe.ub - ub)
+        assert pe._q is None
+        self._check(pe._lb - lb, pe._ub - ub)
 
         x = CSH.UniformFloatHyperparameter('x', lower=lb, upper=ub, log=True)
         pe = self.build_npe(vals, x)
 
-        assert pe.q is None
-        self._check(pe.lb - np.log(lb), pe.ub - np.log(ub))
+        assert pe._q is None
+        self._check(pe._lb - np.log(lb), pe._ub - np.log(ub))
 
         x = CSH.UniformFloatHyperparameter('x', lower=lb, upper=ub, q=q)
         pe = self.build_npe(vals, x)
-        assert pe.q == q
-        self._check(pe.lb - (lb - 0.5 * q), pe.ub - (ub + 0.5 * q))
+        assert pe._q == q
+        self._check(pe._lb - (lb - 0.5 * q), pe._ub - (ub + 0.5 * q))
 
         x = CSH.UniformFloatHyperparameter('x', lower=lb, upper=ub, q=q, log=True)
         pe = self.build_npe(vals, x)
-        assert pe.q is None
-        self._check(pe.lb - np.log(lb), pe.ub - np.log(ub))
+        assert pe._q is None
+        self._check(pe._lb - np.log(lb), pe._ub - np.log(ub))
 
         x = CSH.UniformIntegerHyperparameter('x', lower=lb, upper=ub)
         pe = self.build_npe(vals, x)
-        assert pe.q == 1
-        self._check(pe.lb - (lb - 0.5), pe.ub - (ub + 0.5))
+        assert pe._q == 1
+        self._check(pe._lb - (lb - 0.5), pe._ub - (ub + 0.5))
 
         x = CSH.UniformIntegerHyperparameter('x', lower=lb, upper=ub, log=True)
         pe = self.build_npe(vals, x)
-        assert pe.q is None
-        self._check(pe.lb - np.log(lb), pe.ub - np.log(ub))
+        assert pe._q is None
+        self._check(pe._lb - np.log(lb), pe._ub - np.log(ub))
 
 
 if __name__ == '__main__':

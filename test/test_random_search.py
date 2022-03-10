@@ -9,7 +9,6 @@ import unittest
 
 from optimizer.random_search import RandomSearch
 from util.utils import get_logger
-from util.constants import default_percentile_maker
 
 
 def mix_func(eval_config: Dict[str, Union[str, float]]) -> float:
@@ -18,7 +17,7 @@ def mix_func(eval_config: Dict[str, Union[str, float]]) -> float:
     vals *= vals
     assert isinstance(eval_config['func'], str)
     func_name: str = eval_config['func']
-    return 1 - func_dict[func_name](vals.sum()) ** 2
+    return 1 - func_dict[func_name](vals.sum()) ** 2, 0.0
 
 
 def cleanup() -> None:

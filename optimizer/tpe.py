@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict, List, Optional, Protocol, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Protocol, Tuple, Type
 
 import numpy as np
 
@@ -7,28 +7,21 @@ import ConfigSpace as CS
 from optimizer.base_optimizer import BaseOptimizer
 from optimizer.parzen_estimator.loglikelihoods import compute_config_loglikelihoods
 from optimizer.parzen_estimator.parzen_estimator import (
-    CategoricalParzenEstimator,
-    NumericalParzenEstimator,
+    ParzenEstimatorType,
     build_categorical_parzen_estimator,
     build_numerical_parzen_estimator,
 )
 from util.constants import (
-    CategoricalHPType,
     NumericType,
-    NumericalHPType,
     config2type,
     default_percentile_maker,
     uniform_weight,
 )
 
 
-ParzenEstimatorType = Union[NumericalParzenEstimator, CategoricalParzenEstimator]
-HPType = Union[CategoricalHPType, NumericalHPType]
-
-
 class PercentileFuncMaker(Protocol):
     def __call__(self, **kwargs: Dict[str, Any]) -> Callable[[np.ndarray], int]:
-        ...
+        raise NotImplementedError
 
 
 class TreeStructuredParzenEstimator:
@@ -38,6 +31,7 @@ class TreeStructuredParzenEstimator:
         percentile_func: Callable[[np.ndarray], int],
         n_ei_candidates: int,
         metric_name: str = "loss",
+        runtime_name: str = "iter_time",
         min_bandwidth_factor: float = 1e-2,
         seed: Optional[int] = None,
     ):
@@ -48,6 +42,7 @@ class TreeStructuredParzenEstimator:
             config_space (CS.ConfigurationSpace): The searching space of the task
             hp_names (List[str]): The list of hyperparameter names
             metric_name (str): The name of the metric (or objective function value)
+            runtime_name (str): The name of the runtime metric.
             observations (Dict[str, Any]): The storage of the observations
             sorted_observations (Dict[str, Any]): The storage of the observations sorted based on loss
             min_bandwidth_factor (float): The minimum bandwidth for numerical parameters
@@ -61,6 +56,7 @@ class TreeStructuredParzenEstimator:
         self._config_space = config_space
         self._hp_names = list(config_space._hyperparameters.keys())
         self._metric_name = metric_name
+        self._runtime_name = runtime_name
         self._n_lower = 0
         self._min_bandwidth_factor = min_bandwidth_factor
 
@@ -68,6 +64,8 @@ class TreeStructuredParzenEstimator:
         self._sorted_observations = {hp_name: np.array([]) for hp_name in self._hp_names}
         self._observations[self._metric_name] = np.array([])
         self._sorted_observations[self._metric_name] = np.array([])
+        self._observations[self._runtime_name] = np.array([])
+        self._sorted_observations[self._runtime_name] = np.array([])
 
         self._percentile_func = percentile_func
 
@@ -83,13 +81,32 @@ class TreeStructuredParzenEstimator:
         self._pe_lower_dict: Dict[str, ParzenEstimatorType] = {}
         self._pe_upper_dict: Dict[str, ParzenEstimatorType] = {}
 
-    def update_observations(self, eval_config: Dict[str, NumericType], loss: float) -> None:
+    def _insert_observations(
+        self, key: str, insert_loc: int, val: Any, is_categorical: bool, dtype: Optional[Type[np.number]] = None
+    ) -> None:
+        data, sorted_data = self._observations, self._sorted_observations
+
+        if is_categorical:
+            data[key] = np.append(data[key], val)
+            if sorted_data[key].size == 0:  # cannot cast str to float!
+                sorted_data[key] = np.array([val], dtype="U32")
+            else:
+                sorted_data[key] = np.insert(sorted_data[key], insert_loc, val)
+        else:
+            if dtype is None:
+                raise ValueError("dtype must be specified, but got None")
+
+            data[key] = np.append(data[key], val).astype(dtype)
+            sorted_data[key] = np.insert(sorted_data[key], insert_loc, val).astype(dtype)
+
+    def update_observations(self, eval_config: Dict[str, NumericType], loss: float, runtime: float) -> None:
         """
         Update the observations for the TPE construction
 
         Args:
             eval_config (Dict[str, NumericType]): The configuration to evaluate (after conversion)
             loss (float): The loss value as a result of the evaluation
+            runtime (float): The runtime for both sampling and training
         """
         sorted_losses, losses = (
             self._sorted_observations[self._metric_name],
@@ -100,28 +117,27 @@ class TreeStructuredParzenEstimator:
         self._sorted_observations[self._metric_name] = np.insert(sorted_losses, insert_loc, loss)
         self._n_lower = self._percentile_func(self._sorted_observations[self._metric_name])
 
-        observations, sorted_observations = (
-            self._observations,
-            self._sorted_observations,
-        )
         for hp_name in self._hp_names:
             is_categorical = self._is_categoricals[hp_name]
-            config = self._config_space.get_hyperparameter(hp_name)
-            config_type = config.__class__.__name__
-            val = eval_config[hp_name]
+            config_type = self._config_space.get_hyperparameter(hp_name).__class__.__name__
 
-            if is_categorical:
-                observations[hp_name] = np.append(observations[hp_name], val)
-                if sorted_observations[hp_name].size == 0:  # cannot cast str to float!
-                    sorted_observations[hp_name] = np.array([val], dtype="U32")
-                else:
-                    sorted_observations[hp_name] = np.insert(sorted_observations[hp_name], insert_loc, val)
-            else:
-                dtype = config2type[config_type]
-                observations[hp_name] = np.append(observations[hp_name], val).astype(dtype)
-                sorted_observations[hp_name] = np.insert(sorted_observations[hp_name], insert_loc, val).astype(dtype)
-
+            self._insert_observations(
+                key=hp_name,
+                insert_loc=insert_loc,
+                val=eval_config[hp_name],
+                is_categorical=is_categorical,
+                dtype=config2type[config_type] if not is_categorical else None
+            )
             self._update_parzen_estimators(hp_name)
+        else:
+            runtime_key = self._runtime_name
+            self._insert_observations(
+                key=runtime_key,
+                insert_loc=insert_loc,
+                val=runtime,
+                is_categorical=False,
+                dtype=np.float32
+            )
 
     def _update_parzen_estimators(self, hp_name: str) -> None:
         is_categorical = self._is_categoricals[hp_name]
@@ -284,6 +300,8 @@ class TPEOptimizer(BaseOptimizer):
         max_evals: int = 100,
         seed: Optional[int] = None,
         metric_name: str = "loss",
+        runtime_name: str = "iter_time",
+        only_requirements: bool = False,
         n_ei_candidates: int = 24,
         percentile_func_maker: PercentileFuncMaker = default_percentile_maker,
     ):
@@ -296,21 +314,24 @@ class TPEOptimizer(BaseOptimizer):
             max_evals=max_evals,
             seed=seed,
             metric_name=metric_name,
+            runtime_name=runtime_name,
+            only_requirements=only_requirements
         )
 
-        self.tpe = TreeStructuredParzenEstimator(
+        self._tpe = TreeStructuredParzenEstimator(
             config_space=config_space,
             metric_name=metric_name,
+            runtime_name=runtime_name,
             n_ei_candidates=n_ei_candidates,
             seed=seed,
             percentile_func=percentile_func_maker(),
         )
 
-    def update(self, eval_config: Dict[str, Any], loss: float) -> None:
-        self.tpe.update_observations(eval_config=eval_config, loss=loss)
+    def update(self, eval_config: Dict[str, Any], loss: float, runtime: float) -> None:
+        self._tpe.update_observations(eval_config=eval_config, loss=loss, runtime=runtime)
 
     def fetch_observations(self) -> Dict[str, np.ndarray]:
-        return self.tpe.observations
+        return self._tpe.observations
 
     def sample(self) -> Dict[str, Any]:
         """
@@ -319,9 +340,9 @@ class TPEOptimizer(BaseOptimizer):
         Returns:
             eval_config (Dict[str, Any]): A sampled configuration from TPE
         """
-        config_cands = self.tpe.get_config_candidates()
+        config_cands = self._tpe.get_config_candidates()
 
-        pi_config = self.tpe.compute_probability_improvement(config_cands=config_cands)
+        pi_config = self._tpe.compute_probability_improvement(config_cands=config_cands)
         best_idx = int(np.argmax(pi_config))
         eval_config = {hp_name: config_cands[dim][best_idx] for dim, hp_name in enumerate(self._hp_names)}
 

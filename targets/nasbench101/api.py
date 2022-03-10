@@ -1,6 +1,6 @@
 import os
 from enum import Enum
-from typing import Any, Dict, List, Literal, Optional, TypedDict, Union
+from typing import Any, Dict, List, Literal, Optional, Tuple, TypedDict, Union
 
 import numpy as np
 
@@ -137,7 +137,7 @@ class NASBench101(BaseTabularBenchAPI):
                 cnt += 1
         return loss_vals
 
-    def objective_func(self, config: Dict[str, Any], budget: Dict[str, Any] = {}) -> float:
+    def objective_func(self, config: Dict[str, Any], budget: Dict[str, Any] = {}) -> Tuple[float, float]:
         idx = self._rng.randint(3)
         _config = self._Hyperparameters(**config)
         _budget = self._BudgetConfig(**budget)
@@ -148,9 +148,12 @@ class NASBench101(BaseTabularBenchAPI):
         try:
             _, non_static_info = self.data.get_metrics_from_spec(model_spec)
         except api.OutOfDomainError:
-            return 1.0
+            return 1.0, 0.0
 
-        return 1.0 - non_static_info[_budget.epochs][idx]["final_validation_accuracy"]
+        info = non_static_info[_budget.epochs][idx]
+        loss = 1.0 - info['final_validation_accuracy']
+        runtime = info['final_training_time']
+        return loss, runtime
 
     @property
     def data(self) -> api.NASBench:

@@ -1,7 +1,7 @@
 import os
 from enum import Enum
 import pickle
-from typing import Any, Dict, Optional, TypedDict, Union
+from typing import Any, Dict, Optional, Tuple, TypedDict, Union
 
 import numpy as np
 
@@ -133,7 +133,7 @@ class NASBench201(BaseTabularBenchAPI):
             index=index, dataset=self.dataset.value, hp="200", iepoch=epochs, is_random=random_seed
         )
 
-    def objective_func(self, config: Dict[str, Any], budget: Dict[str, Any] = {}) -> float:
+    def objective_func(self, config: Dict[str, Any], budget: Dict[str, Any] = {}) -> Tuple[float, float]:
         _config = Hyperparameters(**config)
         _budget = BudgetConfig(**budget)
 
@@ -149,8 +149,9 @@ class NASBench201(BaseTabularBenchAPI):
         prefix = "valid" if self.dataset.value == "cifar10-valid" else "valtest"
 
         loss -= info[f"{prefix}-accuracy"]
+        runtime = info['train-all-time']
 
-        return loss
+        return loss, runtime
 
     @property
     def data(self) -> NATStopology:

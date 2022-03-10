@@ -5,7 +5,7 @@ import pickle
 import numpy as np
 
 from enum import Enum
-from typing import Any, Dict, List, Optional, TypedDict, Union
+from typing import Any, Dict, List, Optional, Tuple, TypedDict, Union
 
 import h5py
 
@@ -82,6 +82,7 @@ class HPOBench(BaseTabularBenchAPI):
         self._data = h5py.File(os.path.join(path, dataset.value), "r")
         self._dataset = dataset
         self._metric_name = "valid_mse"
+        self._runtime_name = "runtime"
 
     def _collect_dataset_info(self, dataset_name: str) -> np.ndarray:
         data = h5py.File(os.path.join(self._path, dataset_name), "r")
@@ -117,13 +118,15 @@ class HPOBench(BaseTabularBenchAPI):
 
         return data
 
-    def objective_func(self, config: Dict[str, Any], budget: Dict[str, Any] = {}) -> float:
+    def objective_func(self, config: Dict[str, Any], budget: Dict[str, Any] = {}) -> Tuple[float, float]:
         _budget = BudgetConfig(**budget)
         config = Hyperparameters(**config).__dict__
 
         idx = self._rng.randint(4)
         key = json.dumps(config, sort_keys=True)
-        return self.data[key][self._metric_name][idx][_budget.epochs - 1]
+        loss = self.data[key][self._metric_name][idx][_budget.epochs - 1]
+        runtime = self.data[key][self._runtime_name][idx]
+        return loss, runtime
 
     @property
     def data(self) -> Any:

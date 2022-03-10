@@ -1,6 +1,7 @@
 from abc import abstractmethod, ABCMeta
 from logging import Logger
 from typing import Any, Callable, Dict, Optional, Tuple
+import time
 
 import numpy as np
 
@@ -20,6 +21,8 @@ class BaseOptimizer(metaclass=ABCMeta):
         max_evals: int = 100,
         seed: Optional[int] = None,
         metric_name: str = "loss",
+        runtime_name: str = "iter_time",
+        only_requirements: bool = False
     ):
         """
         Attributes:
@@ -33,6 +36,7 @@ class BaseOptimizer(metaclass=ABCMeta):
             config_space (CS.ConfigurationSpace): The searching space of the task
             is_categoricals (Dict[str, bool]): Whether the given hyperparameter is categorical
             is_ordinals (Dict[str, bool]): Whether the given hyperparameter is ordinal
+            only_requirements (bool): If True, we only save runtime and loss.
         """
 
         self._rng = np.random.RandomState(seed)
@@ -41,6 +45,8 @@ class BaseOptimizer(metaclass=ABCMeta):
         self._obj_func = obj_func
         self._hp_names = list(config_space._hyperparameters.keys())
         self._metric_name = metric_name
+        self._runtime_name = runtime_name
+        self._requirements = [metric_name, self._runtime_name] if only_requirements else None
 
         self._config_space = config_space
         self._is_categoricals = {
@@ -68,10 +74,12 @@ class BaseOptimizer(metaclass=ABCMeta):
 
         while True:
             logger.info(f"\nIteration: {t + 1}")
+            start = time.time()
             eval_config = self.initial_sample() if t < self._n_init else self.sample()
+            time2sample = time.time() - start
 
-            loss = self._obj_func(eval_config)
-            self.update(eval_config=eval_config, loss=loss)
+            loss, runtime = self._obj_func(eval_config)
+            self.update(eval_config=eval_config, loss=loss, runtime=runtime + time2sample)
 
             if best_loss > loss:
                 best_loss = loss
@@ -91,18 +99,20 @@ class BaseOptimizer(metaclass=ABCMeta):
             logger=logger,
             observations=observations,
             file_name=self.resultfile,
+            requirements=self._requirements
         )
 
         return best_config, best_loss
 
     @abstractmethod
-    def update(self, eval_config: Dict[str, Any], loss: float) -> None:
+    def update(self, eval_config: Dict[str, Any], loss: float, runtime: float) -> None:
         """
         Update of the child sampler.
 
         Args:
             eval_config (Dict[str, Any]): The configuration to be evaluated
             loss (float): The loss value of the eval_config
+            runtime (float): The runtime for both sampling and training
         """
         raise NotImplementedError
 

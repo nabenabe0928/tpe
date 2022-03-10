@@ -62,7 +62,7 @@ class BaseTabularBenchAPI(metaclass=ABCMeta):
         raise NotImplementedError
 
     @abstractmethod
-    def objective_func(self, config: Dict[str, Any], budget: Dict[str, Any] = {}) -> float:
+    def objective_func(self, config: Dict[str, Any], budget: Dict[str, Any] = {}) -> Tuple[float, float]:
         """
         Args:
             config (Dict[str, Any]):
@@ -73,6 +73,8 @@ class BaseTabularBenchAPI(metaclass=ABCMeta):
         Returns:
             val_error (float):
                 The validation error given a configuration and a budget.
+            runtime (float):
+                The runtime of the training.
         """
         raise NotImplementedError
 

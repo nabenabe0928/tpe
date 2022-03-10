@@ -15,6 +15,7 @@ NumericalHPType = Union[
     CSH.UniformFloatHyperparameter,
     CSH.OrdinalHyperparameter,
 ]
+HPType = Union[CategoricalHPType, NumericalHPType]
 
 config2type = {
     "UniformFloatHyperparameter": float,
