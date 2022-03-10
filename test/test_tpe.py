@@ -268,7 +268,8 @@ class TestTPEOptimizer(unittest.TestCase):
                     obj_func=sphere,
                     config_space=self.cs,
                     max_evals=max_evals,
-                    resultfile='test'
+                    resultfile='test',
+                    seed=i
                 )
                 _, best_loss = opt.optimize(self.logger)
                 losses[i] = best_loss
