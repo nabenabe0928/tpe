@@ -52,6 +52,10 @@ class TestNumericalParzenEstimator(unittest.TestCase):
         ]
         assert np.allclose(ans, bll_vals)
 
+        # Calculate the integral
+        bll = pe.basis_loglikelihood(np.linspace(lb, ub, 100000))
+        assert 0.99 <= np.exp(bll).mean() * (ub - lb) <= 1.01
+
     def test_sample(self) -> None:
         rng = np.random.RandomState()
         samples = np.array([0, 1, 2, 3] * 10)
@@ -66,8 +70,9 @@ class TestNumericalParzenEstimator(unittest.TestCase):
         assert np.allclose(np.unique(ss), choices)
 
     def test_basis_loglikelihood(self) -> None:
+        lb, ub = -3, 3
         samples = np.array([0, 1, 2, 3] * 10)
-        pe = NumericalParzenEstimator(samples=samples, lb=-3.0, ub=3.0)
+        pe = NumericalParzenEstimator(samples=samples, lb=lb, ub=ub)
         assert pe.basis_loglikelihood(np.arange(4)).shape == (41, 4)
 
         samples = np.array([
@@ -77,7 +82,8 @@ class TestNumericalParzenEstimator(unittest.TestCase):
             0.41424797, 0.49825133, 0.44741231, 0.5678886,  0.46689275, 0.48488553
         ])
         mus = np.array([0.4372727, 0.44549973])
-        pe = NumericalParzenEstimator(samples=mus, lb=0.0, ub=1.0)
+        lb, ub = 0, 1
+        pe = NumericalParzenEstimator(samples=mus, lb=lb, ub=ub)
         assert np.allclose(pe._weights, [0.33333333, 0.33333333, 0.33333333])
         assert np.allclose(pe._means, [0.43727276, 0.44549973, 0.5])
         assert np.allclose(pe._stds, [0.019897270747110334, 0.019897270747110334, 1.])
@@ -101,6 +107,12 @@ class TestNumericalParzenEstimator(unittest.TestCase):
         bll = pe.basis_loglikelihood(samples).astype(np.float32)
         err = np.abs(bll - ans) / np.abs(ans)
         assert err.sum() < 1e-4
+
+        # Calculate the integral
+        lb, ub = -3, 3
+        pe = NumericalParzenEstimator(samples=np.random.random(10) * (ub - lb) + lb, lb=lb, ub=ub)
+        bll = pe.basis_loglikelihood(np.linspace(lb, ub, 100000))
+        assert 0.99 <= np.exp(bll).mean() * (ub - lb) <= 1.01
 
 
 class TestCategoricalParzenEstimator(unittest.TestCase):
@@ -182,6 +194,10 @@ class TestCategoricalParzenEstimator(unittest.TestCase):
                [-1.3862943649291992, -1.3862943649291992, -1.3862943649291992, -1.3862943649291992]]
 
         assert np.allclose(ans, bll)
+
+        # Calculate the integral
+        bll = pe.basis_loglikelihood(np.arange(4))
+        assert 0.99 <= np.exp(bll).mean() * 4 <= 1.01
 
 
 class TestBuildParzenEstimators(unittest.TestCase):
