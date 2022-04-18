@@ -326,7 +326,6 @@ def revert_eval_config(
 
 
 def store_results(
-    best_config: Dict[str, np.ndarray],
     logger: Logger,
     observations: Dict[str, np.ndarray],
     file_name: str,
@@ -336,11 +335,6 @@ def store_results(
     logger.info(f"\nThe observations: {observations}")
     if requirements is None:
         save_observations(filename=file_name, observations=observations)
-
-        subdirs = "/".join(file_name.split("/")[:-1])
-        os.makedirs(f"incumbents/{subdirs}", exist_ok=True)
-        with open(f"incumbents/{file_name}.json", mode="w") as f:
-            json.dump(best_config, f, indent=4)
     else:
         required_observations = {k: v for k, v in observations.items() if k in requirements}
         save_observations(filename=file_name, observations=required_observations)
@@ -359,3 +353,61 @@ def save_observations(filename: str, observations: Dict[str, np.ndarray]) -> Non
 
     with open(f"results/{filename}.json", mode="w") as f:
         json.dump({k: v.tolist() for k, v in observations.items()}, f, indent=4)
+
+
+def is_pareto_front(costs: np.ndarray) -> np.ndarray:
+    """
+    Determine the pareto front from a provided set of costs.
+
+    Args:
+        costs (np.ndarray):
+            An array of costs (or objectives).
+            The shape is (n_observations, n_objectives).
+
+    Returns:
+        mask (np.ndarray):
+            The mask of the pareto front.
+            Each element is True or False and the shape is (n_observations, ).
+    """
+    on_front_indices = np.arange(costs.shape[0])
+    (n_observations, _) = costs.shape
+    next_index = 0
+
+    while next_index < len(costs):
+        nd_mask = np.any(costs < costs[next_index], axis=1)
+        nd_mask[next_index] = True
+        # Remove dominated points
+        on_front_indices, costs = on_front_indices[nd_mask], costs[nd_mask]
+        next_index = np.sum(nd_mask[:next_index]) + 1
+
+    mask = np.zeros(n_observations, dtype=np.bool8)
+    mask[on_front_indices] = True
+    return mask
+
+
+def nondominated_sort(costs: np.ndarray) -> np.ndarray:
+    """
+    Calculate the non-dominated rank of each observation.
+
+    Args:
+        costs (np.ndarray):
+            An array of costs (or objectives).
+            The shape is (n_observations, n_objectives).
+
+    Returns:
+        ranks (np.ndarray):
+            The non-dominated rank of each observation.
+            The shape is (n_observations, ).
+            The rank starts from zero and lower rank is better.
+    """
+    ranks = np.zeros(len(costs), dtype=np.int32)
+    rank = 0
+    indices = np.arange(len(costs))
+    while indices.size > 0:
+        on_front = is_pareto_front(costs)
+        ranks[indices[on_front]] = rank
+        # Remove pareto front points
+        indices, costs = indices[~on_front], costs[~on_front]
+        rank += 1
+
+    return ranks

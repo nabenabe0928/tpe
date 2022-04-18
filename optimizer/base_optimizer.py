@@ -1,6 +1,6 @@
 from abc import abstractmethod, ABCMeta
 from logging import Logger
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 import time
 
 import numpy as np
@@ -20,7 +20,7 @@ class BaseOptimizer(metaclass=ABCMeta):
         n_init: int = 10,
         max_evals: int = 100,
         seed: Optional[int] = None,
-        metric_name: str = "loss",
+        metric_names: List[str] = ["loss"],
         runtime_name: str = "iter_time",
         only_requirements: bool = False
     ):
@@ -31,7 +31,7 @@ class BaseOptimizer(metaclass=ABCMeta):
             n_init (int): The number of random sampling before using TPE
             obj_func (Callable): The objective function
             hp_names (List[str]): The list of hyperparameter names
-            metric_name (str): The name of the metric (or objective function value)
+            metric_names (List[str]): The names of the metrics (or objective functions)
             observations (Dict[str, Any]): The storage of the observations
             config_space (CS.ConfigurationSpace): The searching space of the task
             is_categoricals (Dict[str, bool]): Whether the given hyperparameter is categorical
@@ -44,9 +44,9 @@ class BaseOptimizer(metaclass=ABCMeta):
         self.resultfile = resultfile
         self._obj_func = obj_func
         self._hp_names = list(config_space._hyperparameters.keys())
-        self._metric_name = metric_name
+        self._metric_names = metric_names
         self._runtime_name = runtime_name
-        self._requirements = [metric_name, self._runtime_name] if only_requirements else None
+        self._requirements = metric_names + [self._runtime_name] if only_requirements else None
 
         self._config_space = config_space
         self._is_categoricals = {
@@ -70,7 +70,7 @@ class BaseOptimizer(metaclass=ABCMeta):
             best_loss (float): The best loss value during the optimization
         """
 
-        best_config, best_loss, t = {}, np.inf, 0
+        t = 0
 
         while True:
             logger.info(f"\nIteration: {t + 1}")
@@ -78,40 +78,32 @@ class BaseOptimizer(metaclass=ABCMeta):
             eval_config = self.initial_sample() if t < self._n_init else self.sample()
             time2sample = time.time() - start
 
-            loss, runtime = self._obj_func(eval_config)
-            self.update(eval_config=eval_config, loss=loss, runtime=runtime + time2sample)
+            loss_vals, runtime = self._obj_func(eval_config)
+            self.update(eval_config=eval_config, loss_vals=loss_vals, runtime=runtime + time2sample)
 
-            if best_loss > loss:
-                best_loss = loss
-                best_config = eval_config
-
-            logger.info(f"Cur. loss: {loss:.4e}, Cur. Config: {eval_config}")
-            logger.info(f"Best loss: {best_loss:.4e}, Best Config: {best_config}")
+            loss_repr = ", ".join([f"{metric}={loss:.4e}" for metric, loss in loss_vals.items()])
+            logger.info(f"Cur. loss: {loss_repr}, Cur. Config: {eval_config}")
             t += 1
 
             if t >= self._max_evals:
                 break
 
         observations = self.fetch_observations()
-        logger.info(f"Best loss: {best_loss:.4e}")
         store_results(
-            best_config=best_config,
             logger=logger,
             observations=observations,
             file_name=self.resultfile,
             requirements=self._requirements
         )
 
-        return best_config, best_loss
-
     @abstractmethod
-    def update(self, eval_config: Dict[str, Any], loss: float, runtime: float) -> None:
+    def update(self, eval_config: Dict[str, Any], loss_vals: Dict[str, float], runtime: float) -> None:
         """
         Update of the child sampler.
 
         Args:
             eval_config (Dict[str, Any]): The configuration to be evaluated
-            loss (float): The loss value of the eval_config
+            loss (Dict[str, float]): The loss values of the eval_config
             runtime (float): The runtime for both sampling and training
         """
         raise NotImplementedError
