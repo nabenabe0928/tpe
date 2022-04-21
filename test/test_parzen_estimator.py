@@ -3,13 +3,13 @@ import unittest
 
 import ConfigSpace.hyperparameters as CSH
 
-from optimizer.parzen_estimator.parzen_estimator import (
+from tpe.optimizer.parzen_estimator.parzen_estimator import (
     CategoricalParzenEstimator,
     NumericalParzenEstimator,
     build_categorical_parzen_estimator,
     build_numerical_parzen_estimator
 )
-from util.constants import config2type, NumericalHPType
+from tpe.utils.constants import config2type, NumericalHPType
 
 
 class TestNumericalParzenEstimator(unittest.TestCase):

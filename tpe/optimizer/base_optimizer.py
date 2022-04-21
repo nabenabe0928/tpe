@@ -7,8 +7,8 @@ import numpy as np
 
 import ConfigSpace as CS
 
-from util.constants import NumericType
-from util.utils import get_random_sample, revert_eval_config, store_results
+from tpe.utils.constants import NumericType
+from tpe.utils.utils import get_random_sample, revert_eval_config, store_results
 
 
 class BaseOptimizer(metaclass=ABCMeta):

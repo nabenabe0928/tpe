@@ -1,7 +1,7 @@
 # .coveragerc to control coverage.py
 [run]
 branch = True
-include = "optimizer/*","util/*"
+include = "tpe/*"
 
 [report]
 # Regexes for lines to exclude from consideration

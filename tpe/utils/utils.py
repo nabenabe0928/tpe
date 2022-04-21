@@ -11,7 +11,7 @@ import numpy as np
 import ConfigSpace as CS
 import ConfigSpace.hyperparameters as CSH
 
-from util.constants import (
+from tpe.utils.constants import (
     HPType,
     NumericType,
     config2type,

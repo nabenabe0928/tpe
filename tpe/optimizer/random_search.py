@@ -4,7 +4,7 @@ import numpy as np
 
 import ConfigSpace as CS
 
-from optimizer.base_optimizer import BaseOptimizer
+from tpe.optimizer.base_optimizer import BaseOptimizer
 
 
 class RandomSearch(BaseOptimizer):

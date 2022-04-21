@@ -4,14 +4,14 @@ import numpy as np
 
 import ConfigSpace as CS
 
-from optimizer.base_optimizer import BaseOptimizer
-from optimizer.parzen_estimator.loglikelihoods import compute_config_loglikelihoods
-from optimizer.parzen_estimator.parzen_estimator import (
+from tpe.optimizer.base_optimizer import BaseOptimizer
+from tpe.optimizer.parzen_estimator.loglikelihoods import compute_config_loglikelihoods
+from tpe.optimizer.parzen_estimator.parzen_estimator import (
     ParzenEstimatorType,
     build_categorical_parzen_estimator,
     build_numerical_parzen_estimator,
 )
-from util.constants import (
+from tpe.utils.constants import (
     NumericType,
     config2type,
     default_percentile_maker,

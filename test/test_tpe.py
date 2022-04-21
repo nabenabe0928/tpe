@@ -7,9 +7,9 @@ import ConfigSpace.hyperparameters as CSH
 import numpy as np
 import unittest
 
-from optimizer.tpe import TPEOptimizer
-from util.utils import get_logger
-from util.constants import default_percentile_maker
+from tpe.optimizer.tpe import TPEOptimizer
+from tpe.utils.utils import get_logger
+from tpe.utils.constants import default_percentile_maker
 
 
 def sphere(eval_config: Dict[str, float]) -> float:

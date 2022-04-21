@@ -5,7 +5,7 @@ import numpy as np
 
 from scipy.special import erf
 
-from util.constants import CategoricalHPType, EPS, NumericType, NumericalHPType, SQR2PI, SQR2, uniform_weight
+from tpe.utils.constants import CategoricalHPType, EPS, NumericType, NumericalHPType, SQR2PI, SQR2, uniform_weight
 
 
 def calculate_norm_consts(

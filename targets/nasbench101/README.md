@@ -1,1 +1,0 @@
-All the searching space follow the implementation [here](https://github.com/automl/nas_benchmarks/blob/master/tabular_benchmarks/nas_cifar10.py).

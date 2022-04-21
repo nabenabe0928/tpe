@@ -7,8 +7,8 @@ import ConfigSpace.hyperparameters as CSH
 import numpy as np
 import unittest
 
-from optimizer.random_search import RandomSearch
-from util.utils import get_logger
+from tpe.optimizer.random_search import RandomSearch
+from tpe.utils.utils import get_logger
 
 
 def mix_func(eval_config: Dict[str, Union[str, float]]) -> float:

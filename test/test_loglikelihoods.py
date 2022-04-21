@@ -1,7 +1,7 @@
 import numpy as np
 import unittest
 
-from optimizer.parzen_estimator.loglikelihoods import compute_config_loglikelihoods
+from tpe.optimizer.parzen_estimator.loglikelihoods import compute_config_loglikelihoods
 
 
 class TestFuncs(unittest.TestCase):
