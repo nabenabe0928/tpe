@@ -11,7 +11,7 @@ from parzen_estimator import (
     build_numerical_parzen_estimator,
 )
 
-from tpe.optimizer.base_optimizer import BaseOptimizer
+from tpe.optimizer.base_optimizer import BaseOptimizer, ObjectiveFunc
 from tpe.utils.constants import (
     NumericType,
     config2type,
@@ -30,10 +30,10 @@ class TreeStructuredParzenEstimator:
         config_space: CS.ConfigurationSpace,
         percentile_func: Callable[[np.ndarray], int],
         n_ei_candidates: int,
-        metric_name: str = "loss",
-        runtime_name: str = "iter_time",
+        metric_name: str,
+        runtime_name: str,
+        seed: Optional[int],
         min_bandwidth_factor: float = 1e-2,
-        seed: Optional[int] = None,
     ):
         """
         Attributes:
@@ -184,15 +184,21 @@ class TreeStructuredParzenEstimator:
         self._mvpe_lower = MultiVariateParzenEstimator(pe_lower_dict)
         self._mvpe_upper = MultiVariateParzenEstimator(pe_upper_dict)
 
-    def get_config_candidates(self) -> List[np.ndarray]:
+    def get_config_candidates(self, n_samples: Optional[int] = None) -> List[np.ndarray]:
         """
         Since we compute the probability improvement of each objective independently,
         we need to sample the configurations in advance.
 
+        Args:
+            n_samples (int):
+                The number of samples.
+                If None is provided, we use n_ei_candidates.
+
         Returns:
             config_cands (List[np.ndarray]): arrays of candidates in each dimension
         """
-        return self._mvpe_lower.sample(n_samples=self._n_ei_candidates, rng=self._rng, dim_independent=True)
+        n_samples = n_samples if n_samples is not None else self._n_ei_candidates
+        return self._mvpe_lower.sample(n_samples=n_samples, rng=self._rng, dim_independent=True)
 
     def compute_config_loglikelihoods(self, config_cands: List[np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -292,7 +298,7 @@ class TreeStructuredParzenEstimator:
 class TPEOptimizer(BaseOptimizer):
     def __init__(
         self,
-        obj_func: Callable,
+        obj_func: ObjectiveFunc,
         config_space: CS.ConfigurationSpace,
         resultfile: str,
         n_init: int = 10,
@@ -302,6 +308,8 @@ class TPEOptimizer(BaseOptimizer):
         runtime_name: str = "iter_time",
         only_requirements: bool = False,
         n_ei_candidates: int = 24,
+        result_keys: List[str] = ["loss"],
+        # TODO: Make dict of percentile_func_maker
         percentile_func_maker: PercentileFuncMaker = default_percentile_maker,
     ):
 
@@ -315,33 +323,81 @@ class TPEOptimizer(BaseOptimizer):
             metric_name=metric_name,
             runtime_name=runtime_name,
             only_requirements=only_requirements,
+            result_keys=result_keys,
         )
 
-        self._tpe = TreeStructuredParzenEstimator(
-            config_space=config_space,
-            metric_name=metric_name,
-            runtime_name=runtime_name,
-            n_ei_candidates=n_ei_candidates,
-            seed=seed,
-            percentile_func=percentile_func_maker(),
-        )
+        self._tpe_samplers = {
+            key: TreeStructuredParzenEstimator(
+                config_space=config_space,
+                metric_name=key,
+                runtime_name=runtime_name,
+                n_ei_candidates=n_ei_candidates,
+                seed=seed,
+                percentile_func=percentile_func_maker(),
+            )
+            for key in result_keys
+        }
 
-    def update(self, eval_config: Dict[str, Any], loss: float, runtime: float) -> None:
-        self._tpe.update_observations(eval_config=eval_config, loss=loss, runtime=runtime)
+    def update(self, eval_config: Dict[str, Any], results: Dict[str, float], runtime: float) -> None:
+        for key, val in results.items():
+            self._tpe_samplers[key].update_observations(eval_config=eval_config, loss=val, runtime=runtime)
 
     def fetch_observations(self) -> Dict[str, np.ndarray]:
-        return self._tpe.observations
+        observations = self._tpe_samplers[self._metric_name].observations
+        for key in self._result_keys:
+            observations[key] = self._tpe_samplers[key].observations[key]
 
-    def sample(self) -> Dict[str, Any]:
+        return observations
+
+    def _get_config_cands(self, n_samples_dict: Dict[str, int]) -> List[np.ndarray]:
+        config_cands: List[np.ndarray] = []
+        for key in self._result_keys:
+            tpe_sampler = self._tpe_samplers[key]
+            n_samples = n_samples_dict.get(key, tpe_sampler._n_ei_candidates)
+            if n_samples == 0:
+                continue
+
+            configs = tpe_sampler.get_config_candidates(n_samples)
+            if len(config_cands) == 0:
+                config_cands = configs
+            else:
+                config_cands = [np.concatenate([cfg0, cfg1]) for cfg0, cfg1 in zip(config_cands, configs)]
+
+        return config_cands
+
+    def _compute_probability_improvement(
+        self, config_cands: List[np.ndarray], weight_dict: Dict[str, float]
+    ) -> np.ndarray:
+        pi_config_array = np.zeros((len(self._result_keys), config_cands[0].size))
+        weights = np.ones(len(self._result_keys))
+
+        for i, key in enumerate(self._result_keys):
+            tpe_sampler = self._tpe_samplers[key]
+            pi_config_array[i] += tpe_sampler.compute_probability_improvement(config_cands=config_cands)
+            weights[i] = weight_dict[key]
+
+        return weights @ pi_config_array
+
+    def sample(
+        self, weight_dict: Optional[Dict[str, float]] = None, n_samples_dict: Optional[Dict[str, int]] = None
+    ) -> Dict[str, Any]:
         """
         Sample a configuration using tree-structured parzen estimator (TPE)
+
+        Args:
+            weights (Optional[Dict[str, float]]):
+                Weights for each tpe samplers.
+            n_samples_dict (Optional[Dict[str, int]]):
+                The number of samples for each tpe samplers.
 
         Returns:
             eval_config (Dict[str, Any]): A sampled configuration from TPE
         """
-        config_cands = self._tpe.get_config_candidates()
+        n_samples_dict = {} if n_samples_dict is None else n_samples_dict
+        weight_dict = {key: 1.0 for key in self._result_keys} if weight_dict is None else weight_dict
 
-        pi_config = self._tpe.compute_probability_improvement(config_cands=config_cands)
+        config_cands = self._get_config_cands(n_samples_dict)
+        pi_config = self._compute_probability_improvement(config_cands, weight_dict)
         best_idx = int(np.argmax(pi_config))
         eval_config = {hp_name: config_cands[dim][best_idx] for dim, hp_name in enumerate(self._hp_names)}
 

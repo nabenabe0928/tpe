@@ -1,7 +1,7 @@
 import time
 from abc import ABCMeta, abstractmethod
 from logging import Logger
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Protocol, Tuple
 
 import ConfigSpace as CS
 
@@ -11,18 +11,61 @@ from tpe.utils.constants import NumericType
 from tpe.utils.utils import get_random_sample, revert_eval_config, store_results
 
 
+class ObjectiveFunc(Protocol):
+    def __call__(self, eval_config: Dict[str, Any]) -> Tuple[Dict[str, float], float]:
+        """
+        Objective func prototype.
+
+        Args:
+            eval_config (Dict[str, Any]):
+                A configuration after the reversion.
+
+        Returns:
+            results (Dict[str, float]):
+                Each metric obtained by the objective function.
+            runtime (float):
+                The runtime required to get all metrics
+        """
+        raise NotImplementedError
+
+
+class BestUpdateFunc(Protocol):
+    def __call__(self, results: Dict[str, float], loss: float, best_loss: float) -> bool:
+        """
+        Objective func prototype.
+
+        Args:
+            results (Dict[str, float]):
+                Each metric obtained by the objective function.
+            loss (float):
+                The loss metric.
+            best_loss (float):
+                The best loss metric up to now.
+
+        Returns:
+            _ (bool):
+                Whether the current results are the best.
+        """
+        raise NotImplementedError
+
+
+def default_best_update(results: Dict[str, float], loss: float, best_loss: float) -> bool:
+    return loss < best_loss
+
+
 class BaseOptimizer(metaclass=ABCMeta):
     def __init__(
         self,
-        obj_func: Callable,
+        obj_func: ObjectiveFunc,
         config_space: CS.ConfigurationSpace,
         resultfile: str,
-        n_init: int = 10,
-        max_evals: int = 100,
-        seed: Optional[int] = None,
-        metric_name: str = "loss",
-        runtime_name: str = "iter_time",
-        only_requirements: bool = False,
+        n_init: int,
+        max_evals: int,
+        seed: Optional[int],
+        metric_name: str,
+        runtime_name: str,
+        only_requirements: bool,
+        result_keys: List[str],
     ):
         """
         Attributes:
@@ -37,6 +80,7 @@ class BaseOptimizer(metaclass=ABCMeta):
             is_categoricals (Dict[str, bool]): Whether the given hyperparameter is categorical
             is_ordinals (Dict[str, bool]): Whether the given hyperparameter is ordinal
             only_requirements (bool): If True, we only save runtime and loss.
+            result_keys (List[str]): Keys of results.
         """
 
         self._rng = np.random.RandomState(seed)
@@ -46,6 +90,7 @@ class BaseOptimizer(metaclass=ABCMeta):
         self._hp_names = list(config_space._hyperparameters.keys())
         self._metric_name = metric_name
         self._runtime_name = runtime_name
+        self._result_keys = result_keys[:]
         self._requirements = [metric_name, self._runtime_name] if only_requirements else None
 
         self._config_space = config_space
@@ -58,7 +103,9 @@ class BaseOptimizer(metaclass=ABCMeta):
             for hp_name in self._hp_names
         }
 
-    def optimize(self, logger: Logger) -> Tuple[Dict[str, Any], float]:
+    def optimize(
+        self, logger: Logger, best_update: BestUpdateFunc = default_best_update
+    ) -> Tuple[Dict[str, Any], float]:
         """
         Optimize obj_func using TPE Sampler and store the results in the end.
 
@@ -78,10 +125,11 @@ class BaseOptimizer(metaclass=ABCMeta):
             eval_config = self.initial_sample() if t < self._n_init else self.sample()
             time2sample = time.time() - start
 
-            loss, runtime = self._obj_func(eval_config)
-            self.update(eval_config=eval_config, loss=loss, runtime=runtime + time2sample)
+            results, runtime = self._obj_func(eval_config)
+            self.update(eval_config=eval_config, results=results, runtime=runtime + time2sample)
+            loss = results[self._metric_name]
 
-            if best_loss > loss:
+            if best_update(results=results, loss=loss, best_loss=best_loss):
                 best_loss = loss
                 best_config = eval_config
 
@@ -105,14 +153,16 @@ class BaseOptimizer(metaclass=ABCMeta):
         return best_config, best_loss
 
     @abstractmethod
-    def update(self, eval_config: Dict[str, Any], loss: float, runtime: float) -> None:
+    def update(self, eval_config: Dict[str, Any], results: Dict[str, float], runtime: float) -> None:
         """
         Update of the child sampler.
 
         Args:
             eval_config (Dict[str, Any]): The configuration to be evaluated
-            loss (float): The loss value of the eval_config
-            runtime (float): The runtime for both sampling and training
+            results (Dict[str, float]):
+                Each metric obtained by the objective function.
+            runtime (float):
+                The runtime required to get all metrics
         """
         raise NotImplementedError
 

@@ -1,6 +1,6 @@
 import os
 
-from typing import Dict, Union
+from typing import Dict, Tuple, Union
 
 import ConfigSpace as CS
 import ConfigSpace.hyperparameters as CSH
@@ -11,13 +11,13 @@ from tpe.optimizer.random_search import RandomSearch
 from tpe.utils.utils import get_logger
 
 
-def mix_func(eval_config: Dict[str, Union[str, float]]) -> float:
+def mix_func(eval_config: Dict[str, Union[str, float]]) -> Tuple[Dict[str, float], float]:
     func_dict = {"cosine": np.cos, "sine": np.sin}
     vals = np.array([v for v in eval_config.values() if isinstance(v, float)])
     vals *= vals
     assert isinstance(eval_config["func"], str)
     func_name: str = eval_config["func"]
-    return 1 - func_dict[func_name](vals.sum()) ** 2, 0.0
+    return {"loss": 1 - func_dict[func_name](vals.sum()) ** 2}, 0.0
 
 
 def cleanup() -> None:
