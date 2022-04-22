@@ -1,21 +1,21 @@
 from typing import Any, Callable, Dict, List, Optional, Protocol, Tuple, Type
 
-import numpy as np
-
 import ConfigSpace as CS
 
-from tpe.optimizer.base_optimizer import BaseOptimizer
-from tpe.optimizer.parzen_estimator.loglikelihoods import compute_config_loglikelihoods
-from tpe.optimizer.parzen_estimator.parzen_estimator import (
+import numpy as np
+
+from parzen_estimator import (
+    MultiVariateParzenEstimator,
     ParzenEstimatorType,
     build_categorical_parzen_estimator,
     build_numerical_parzen_estimator,
 )
+
+from tpe.optimizer.base_optimizer import BaseOptimizer
 from tpe.utils.constants import (
     NumericType,
     config2type,
     default_percentile_maker,
-    uniform_weight,
 )
 
 
@@ -58,6 +58,7 @@ class TreeStructuredParzenEstimator:
         self._metric_name = metric_name
         self._runtime_name = runtime_name
         self._n_lower = 0
+        self._percentile = 0
         self._min_bandwidth_factor = min_bandwidth_factor
 
         self._observations = {hp_name: np.array([]) for hp_name in self._hp_names}
@@ -78,8 +79,22 @@ class TreeStructuredParzenEstimator:
             hp_name: self._config_space.get_hyperparameter(hp_name).__class__.__name__ == "OrdinalHyperparameter"
             for hp_name in self._hp_names
         }
-        self._pe_lower_dict: Dict[str, ParzenEstimatorType] = {}
-        self._pe_upper_dict: Dict[str, ParzenEstimatorType] = {}
+        self._mvpe_lower: MultiVariateParzenEstimator
+        self._mvpe_upper: MultiVariateParzenEstimator
+
+    def apply_knowledge_augmentation(self, observations: Dict[str, np.ndarray]) -> None:
+        if self.observations[self._metric_name].size != 0:
+            raise ValueError("Knowledge augmentation must be applied before the optimization.")
+
+        self._observations = {hp_name: vals.copy() for hp_name, vals in observations.items()}
+        order = np.argsort(self.observations[self._metric_name])
+        self._sorted_observations = {
+            hp_name: observations[order] for hp_name, observations in self.observations.items()
+        }
+        self._n_lower = self._percentile_func(self._sorted_observations[self._metric_name])
+        n_observations = self._observations[self._metric_name].size
+        self._percentile = self._n_lower / n_observations
+        self._update_parzen_estimators()
 
     def _insert_observations(
         self, key: str, insert_loc: int, val: Any, is_categorical: bool, dtype: Optional[Type[np.number]] = None
@@ -101,6 +116,18 @@ class TreeStructuredParzenEstimator:
 
     def update_observations(self, eval_config: Dict[str, NumericType], loss: float, runtime: float) -> None:
         """
+        Update the observations for the TPE construction.
+        Users can customize here by inheriting the class.
+
+        Args:
+            eval_config (Dict[str, NumericType]): The configuration to evaluate (after conversion)
+            loss (float): The loss value as a result of the evaluation
+            runtime (float): The runtime for both sampling and training
+        """
+        self._update_observations(eval_config, loss, runtime)
+
+    def _update_observations(self, eval_config: Dict[str, NumericType], loss: float, runtime: float) -> None:
+        """
         Update the observations for the TPE construction
 
         Args:
@@ -116,46 +143,46 @@ class TreeStructuredParzenEstimator:
         self._observations[self._metric_name] = np.append(losses, loss)
         self._sorted_observations[self._metric_name] = np.insert(sorted_losses, insert_loc, loss)
         self._n_lower = self._percentile_func(self._sorted_observations[self._metric_name])
+        self._percentile = self._n_lower / self._observations[self._metric_name].size
 
         for hp_name in self._hp_names:
             is_categorical = self._is_categoricals[hp_name]
             config_type = self._config_space.get_hyperparameter(hp_name).__class__.__name__
-
             self._insert_observations(
                 key=hp_name,
                 insert_loc=insert_loc,
                 val=eval_config[hp_name],
                 is_categorical=is_categorical,
-                dtype=config2type[config_type] if not is_categorical else None
+                dtype=config2type[config_type] if not is_categorical else None,
             )
-            self._update_parzen_estimators(hp_name)
         else:
+            self._update_parzen_estimators()
             runtime_key = self._runtime_name
             self._insert_observations(
-                key=runtime_key,
-                insert_loc=insert_loc,
-                val=runtime,
-                is_categorical=False,
-                dtype=np.float32
+                key=runtime_key, insert_loc=insert_loc, val=runtime, is_categorical=False, dtype=np.float32
             )
 
-    def _update_parzen_estimators(self, hp_name: str) -> None:
-        is_categorical = self._is_categoricals[hp_name]
-        sorted_observations = self._sorted_observations[hp_name]
+    def _update_parzen_estimators(self) -> None:
         n_lower = self._n_lower
+        pe_lower_dict: Dict[str, ParzenEstimatorType] = {}
+        pe_upper_dict: Dict[str, ParzenEstimatorType] = {}
+        for hp_name in self._hp_names:
+            is_categorical = self._is_categoricals[hp_name]
+            sorted_observations = self._sorted_observations[hp_name]
 
-        # split observations
-        lower_vals = sorted_observations[:n_lower]
-        upper_vals = sorted_observations[n_lower:]
+            # split observations
+            lower_vals = sorted_observations[:n_lower]
+            upper_vals = sorted_observations[n_lower:]
 
-        pe_lower, pe_upper = self._get_parzen_estimator(
-            lower_vals=lower_vals,
-            upper_vals=upper_vals,
-            hp_name=hp_name,
-            is_categorical=is_categorical,
-        )
-        self._pe_lower_dict[hp_name] = pe_lower
-        self._pe_upper_dict[hp_name] = pe_upper
+            pe_lower_dict[hp_name], pe_upper_dict[hp_name] = self._get_parzen_estimator(
+                lower_vals=lower_vals,
+                upper_vals=upper_vals,
+                hp_name=hp_name,
+                is_categorical=is_categorical,
+            )
+
+        self._mvpe_lower = MultiVariateParzenEstimator(pe_lower_dict)
+        self._mvpe_upper = MultiVariateParzenEstimator(pe_upper_dict)
 
     def get_config_candidates(self) -> List[np.ndarray]:
         """
@@ -165,28 +192,7 @@ class TreeStructuredParzenEstimator:
         Returns:
             config_cands (List[np.ndarray]): arrays of candidates in each dimension
         """
-        config_cands = [
-            self._pe_lower_dict[hp_name].sample(self._rng, self._n_ei_candidates) for hp_name in self._hp_names
-        ]
-        return config_cands
-
-    def _compute_basis_loglikelihoods(self, hp_name: str, samples: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Compute the log likelihood of each basis of the provided hyperparameter
-
-        Args:
-            hp_name (str): The name of a hyperparameter
-            samples (np.ndarray): The samples to compute the basis loglikelihoods
-
-        Returns:
-            basis_loglikelihoods (np.ndarray):
-                The shape is (n_basis, n_samples).
-        """
-        pe_lower = self._pe_lower_dict[hp_name]
-        pe_upper = self._pe_upper_dict[hp_name]
-        bll_lower = pe_lower.basis_loglikelihood(samples)
-        bll_upper = pe_upper.basis_loglikelihood(samples)
-        return bll_lower, bll_upper
+        return self._mvpe_lower.sample(n_samples=self._n_ei_candidates, rng=self._rng, dim_independent=True)
 
     def compute_config_loglikelihoods(self, config_cands: List[np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -204,24 +210,8 @@ class TreeStructuredParzenEstimator:
                 the good group or bad group.
                 The shape is (n_ei_candidates, ) for each.
         """
-        dim = len(self._hp_names)
-        n_evals = self._sorted_observations[self._metric_name].size
-        n_lower = self._n_lower
-
-        n_candidates = config_cands[0].size
-        blls_lower = np.zeros((dim, n_lower + 1, n_candidates))
-        weights_lower = uniform_weight(n_lower + 1)
-        blls_upper = np.zeros((dim, n_evals - n_lower + 1, n_candidates))
-        weights_upper = uniform_weight(n_evals - n_lower + 1)
-
-        for dim, (hp_name, samples) in enumerate(zip(self._hp_names, config_cands)):
-            bll_lower, bll_upper = self._compute_basis_loglikelihoods(hp_name, samples)
-            blls_lower[dim] += bll_lower
-            blls_upper[dim] += bll_upper
-
-        config_ll_lower = compute_config_loglikelihoods(blls_lower, weights_lower)
-        config_ll_upper = compute_config_loglikelihoods(blls_upper, weights_upper)
-
+        config_ll_lower = self._mvpe_lower.log_pdf(config_cands)
+        config_ll_upper = self._mvpe_upper.log_pdf(config_cands)
         return config_ll_lower, config_ll_upper
 
     def compute_probability_improvement(self, config_cands: List[np.ndarray]) -> np.ndarray:
@@ -238,9 +228,18 @@ class TreeStructuredParzenEstimator:
             config_ll_ratio (np.ndarray):
                 The log of the likelihood ratios of each configuration.
                 The shape is (n_ei_candidates, )
+
+        Note:
+            In this implementation, we consider the gamma
+                (gamma + (1 - gamma)g(x)/l(x))^-1
+                = exp(log(gamma)) + exp(log(1 - gamma) + log(g(x)/l(x)))
         """
+        EPS = 1e-12
         cll_lower, cll_upper = self.compute_config_loglikelihoods(config_cands)
-        return cll_lower - cll_upper
+        first_term = np.log(self._percentile + EPS)
+        second_term = np.log(1.0 - self._percentile + EPS) + cll_upper - cll_lower
+        pi = -np.logaddexp(first_term, second_term)
+        return pi
 
     def _get_parzen_estimator(
         self,
@@ -315,7 +314,7 @@ class TPEOptimizer(BaseOptimizer):
             seed=seed,
             metric_name=metric_name,
             runtime_name=runtime_name,
-            only_requirements=only_requirements
+            only_requirements=only_requirements,
         )
 
         self._tpe = TreeStructuredParzenEstimator(

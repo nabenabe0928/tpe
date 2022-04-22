@@ -1,15 +1,14 @@
+import json
 import os
 from argparse import ArgumentParser, Namespace
 from enum import Enum
-from logging import basicConfig, getLogger, DEBUG, FileHandler, Formatter, Logger
+from logging import DEBUG, FileHandler, Formatter, Logger, basicConfig, getLogger
 from typing import Any, Dict, List, Literal, Optional, Type, TypedDict, Union
-
-import json
-
-import numpy as np
 
 import ConfigSpace as CS
 import ConfigSpace.hyperparameters as CSH
+
+import numpy as np
 
 from tpe.utils.constants import (
     HPType,
@@ -330,7 +329,7 @@ def store_results(
     logger: Logger,
     observations: Dict[str, np.ndarray],
     file_name: str,
-    requirements: Optional[List[str]] = None
+    requirements: Optional[List[str]] = None,
 ) -> None:
 
     logger.info(f"\nThe observations: {observations}")

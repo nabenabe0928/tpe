@@ -5,6 +5,7 @@ log/
 incumbents/
 **/.mypy_cache
 **/.pytest_cache
+.coverage
 
 build/
 dist/

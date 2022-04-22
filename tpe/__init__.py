@@ -1,4 +1,5 @@
-from tpe import optimizer, utils
+from tpe import optimizer
+from tpe.utils import utils
 
 
 __version__ = "0.0.1"

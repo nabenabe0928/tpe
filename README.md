@@ -1,5 +1,5 @@
-[![Build Status](https://github.com/nabenabe0928/tpe/workflows/Functionality%20test/badge.svg?branch=main)](https://github.com/nabenabe0928/tpe)
-[![codecov](https://codecov.io/gh/nabenabe0928/tpe/branch/main/graph/badge.svg?token=UXC2K5VJNN)](https://codecov.io/gh/nabenabe0928/tpe)
+[![Build Status](https://github.com/nabenabe0928/tpe/workflows/Functionality%20test/badge.svg?branch=stable)](https://github.com/nabenabe0928/tpe)
+[![codecov](https://codecov.io/gh/nabenabe0928/tpe/branch/stable/graph/badge.svg?token=UXC2K5VJNN)](https://codecov.io/gh/nabenabe0928/tpe)
 
 # Introduction
 This package is the implementation example of tree-structured parzen estimator (TPE).
@@ -21,10 +21,10 @@ from typing import Dict
 
 import ConfigSpace as CS
 import ConfigSpace.hyperparameters as CSH
-from util.utils import get_logger
+from tpe.utils.utils import get_logger
 import numpy as np
 
-from optimizer.tpe import TPEOptimizer
+from tpe.optimizer import TPEOptimizer
 
 
 def sphere(eval_config: Dict[str, float]) -> float:

@@ -4,61 +4,38 @@ import ConfigSpace.hyperparameters as CSH
 import numpy as np
 import unittest
 
-from tpe.utils.utils import (
-    get_random_sample,
-    revert_eval_config
-)
+from tpe.utils.utils import get_random_sample, revert_eval_config
 
 
 class TestFuncs(unittest.TestCase):
     def setUp(self) -> None:
         self.config_space = CS.ConfigurationSpace()
         lb, ub = 1, 100
+        self.config_space.add_hyperparameter(CSH.UniformFloatHyperparameter("f", lower=lb, upper=ub))
+        self.config_space.add_hyperparameter(CSH.UniformFloatHyperparameter("fq", lower=lb, upper=ub, q=0.5))
+        self.config_space.add_hyperparameter(CSH.UniformFloatHyperparameter("fql", lower=lb, upper=ub, q=0.5, log=True))
+        self.config_space.add_hyperparameter(CSH.UniformFloatHyperparameter("fl", lower=lb, upper=ub, log=True))
+
+        self.config_space.add_hyperparameter(CSH.UniformIntegerHyperparameter("i", lower=lb, upper=ub))
+        self.config_space.add_hyperparameter(CSH.UniformIntegerHyperparameter("il", lower=lb, upper=ub, log=True))
+
+        self.config_space.add_hyperparameter(CSH.CategoricalHyperparameter("c", choices=["x", "y", "z"]))
+
         self.config_space.add_hyperparameter(
-            CSH.UniformFloatHyperparameter('f', lower=lb, upper=ub)
-        )
-        self.config_space.add_hyperparameter(
-            CSH.UniformFloatHyperparameter('fq', lower=lb, upper=ub, q=0.5)
-        )
-        self.config_space.add_hyperparameter(
-            CSH.UniformFloatHyperparameter('fql', lower=lb, upper=ub, q=0.5, log=True)
-        )
-        self.config_space.add_hyperparameter(
-            CSH.UniformFloatHyperparameter('fl', lower=lb, upper=ub, log=True)
+            CSH.OrdinalHyperparameter("o", sequence=list(range(1, 101)), meta={"lower": 1, "upper": 100, "log": False})
         )
 
         self.config_space.add_hyperparameter(
-            CSH.UniformIntegerHyperparameter('i', lower=lb, upper=ub)
-        )
-        self.config_space.add_hyperparameter(
-            CSH.UniformIntegerHyperparameter('il', lower=lb, upper=ub, log=True)
-        )
-
-        self.config_space.add_hyperparameter(
-            CSH.CategoricalHyperparameter('c', choices=['x', 'y', 'z'])
-        )
-
-        self.config_space.add_hyperparameter(
-            CSH.OrdinalHyperparameter(
-                'o',
-                sequence=list(range(1, 101)),
-                meta={'lower': 1, 'upper': 100, 'log': False})
-        )
-
-        self.config_space.add_hyperparameter(
-            CSH.OrdinalHyperparameter(
-                'ol',
-                sequence=[1, 10, 100],
-                meta={'lower': 1, 'upper': 100, 'log': True})
+            CSH.OrdinalHyperparameter("ol", sequence=[1, 10, 100], meta={"lower": 1, "upper": 100, "log": True})
         )
 
         self.hp_names = self.config_space.get_hyperparameter_names()
         self.is_categoricals = {
-            hp_name: self.config_space.get_hyperparameter(hp_name).__class__.__name__ == 'CategoricalHyperparameter'
+            hp_name: self.config_space.get_hyperparameter(hp_name).__class__.__name__ == "CategoricalHyperparameter"
             for hp_name in self.hp_names
         }
         self.is_ordinals = {
-            hp_name: self.config_space.get_hyperparameter(hp_name).__class__.__name__ == 'OrdinalHyperparameter'
+            hp_name: self.config_space.get_hyperparameter(hp_name).__class__.__name__ == "OrdinalHyperparameter"
             for hp_name in self.hp_names
         }
 
@@ -72,7 +49,7 @@ class TestFuncs(unittest.TestCase):
                     config_space=self.config_space,
                     is_categorical=self.is_categoricals[hp_name],
                     is_ordinal=self.is_ordinals[hp_name],
-                    rng=rng
+                    rng=rng,
                 )
                 for hp_name in self.hp_names
             }
@@ -81,7 +58,7 @@ class TestFuncs(unittest.TestCase):
                 config_space=self.config_space,
                 is_categoricals=self.is_categoricals,
                 is_ordinals=self.is_ordinals,
-                hp_names=self.hp_names
+                hp_names=self.hp_names,
             )
 
             for hp_name, value in eval_config.items():
@@ -101,17 +78,17 @@ class TestFuncs(unittest.TestCase):
                         self.assertAlmostEqual(int((value + 1e-12) / q), (value + 1e-12) / q)
 
     def test_revert_eval_config(self) -> None:
-        """ TODO: Ordinal """
+        """TODO: Ordinal"""
         eval_config = {
-            'c': 0,
-            'f': 10.1,
-            'fl': np.log(10.1),
-            'fq': 10.1,
-            'fql': np.log(10.1),
-            'i': 10.1,
-            'il': np.log(10.1),
-            'o': 5.4,
-            'ol': np.log(40)
+            "c": 0,
+            "f": 10.1,
+            "fl": np.log(10.1),
+            "fq": 10.1,
+            "fql": np.log(10.1),
+            "i": 10.1,
+            "il": np.log(10.1),
+            "o": 5.4,
+            "ol": np.log(40),
         }
 
         config = revert_eval_config(
@@ -119,20 +96,10 @@ class TestFuncs(unittest.TestCase):
             config_space=self.config_space,
             is_categoricals=self.is_categoricals,
             is_ordinals=self.is_ordinals,
-            hp_names=self.hp_names
+            hp_names=self.hp_names,
         )
 
-        ans = {
-            'c': 'x',
-            'f': 10.1,
-            'fl': 10.1,
-            'fq': 10.0,
-            'fql': 10.0,
-            'i': 10,
-            'il': 10,
-            'o': 5,
-            'ol': 100
-        }
+        ans = {"c": "x", "f": 10.1, "fl": 10.1, "fq": 10.0, "fql": 10.0, "i": 10, "il": 10, "o": 5, "ol": 100}
 
         for a, v in zip(ans.values(), config.values()):
             if isinstance(a, float):
@@ -141,15 +108,15 @@ class TestFuncs(unittest.TestCase):
                 assert a == v
 
         eval_config = {
-            'c': 1,
-            'f': 10.3,
-            'fl': np.log(10.3),
-            'fq': 10.3,
-            'fql': np.log(10.3),
-            'i': 10.3,
-            'il': np.log(10.6),
-            'o': 5.6,
-            'ol': np.log(30)
+            "c": 1,
+            "f": 10.3,
+            "fl": np.log(10.3),
+            "fq": 10.3,
+            "fql": np.log(10.3),
+            "i": 10.3,
+            "il": np.log(10.6),
+            "o": 5.6,
+            "ol": np.log(30),
         }
 
         config = revert_eval_config(
@@ -157,20 +124,10 @@ class TestFuncs(unittest.TestCase):
             config_space=self.config_space,
             is_categoricals=self.is_categoricals,
             is_ordinals=self.is_ordinals,
-            hp_names=self.hp_names
+            hp_names=self.hp_names,
         )
 
-        ans = {
-            'c': 'y',
-            'f': 10.3,
-            'fl': 10.3,
-            'fq': 10.5,
-            'fql': 10.5,
-            'i': 10,
-            'il': 11,
-            'o': 6,
-            'ol': 10
-        }
+        ans = {"c": "y", "f": 10.3, "fl": 10.3, "fq": 10.5, "fql": 10.5, "i": 10, "il": 11, "o": 6, "ol": 10}
 
         for a, v in zip(ans.values(), config.values()):
             if isinstance(a, float):
@@ -185,5 +142,5 @@ class TestFuncs(unittest.TestCase):
         pass
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

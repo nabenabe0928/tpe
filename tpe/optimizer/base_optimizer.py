@@ -1,11 +1,11 @@
-from abc import abstractmethod, ABCMeta
+import time
+from abc import ABCMeta, abstractmethod
 from logging import Logger
 from typing import Any, Callable, Dict, Optional, Tuple
-import time
-
-import numpy as np
 
 import ConfigSpace as CS
+
+import numpy as np
 
 from tpe.utils.constants import NumericType
 from tpe.utils.utils import get_random_sample, revert_eval_config, store_results
@@ -22,7 +22,7 @@ class BaseOptimizer(metaclass=ABCMeta):
         seed: Optional[int] = None,
         metric_name: str = "loss",
         runtime_name: str = "iter_time",
-        only_requirements: bool = False
+        only_requirements: bool = False,
     ):
         """
         Attributes:
@@ -99,7 +99,7 @@ class BaseOptimizer(metaclass=ABCMeta):
             logger=logger,
             observations=observations,
             file_name=self.resultfile,
-            requirements=self._requirements
+            requirements=self._requirements,
         )
 
         return best_config, best_loss

@@ -1,17 +1,25 @@
 from typing import Any, Callable, Dict, Optional
 
-import numpy as np
-
 import ConfigSpace as CS
+
+import numpy as np
 
 from tpe.optimizer.base_optimizer import BaseOptimizer
 
 
 class RandomSearch(BaseOptimizer):
-    def __init__(self, obj_func: Callable, config_space: CS.ConfigurationSpace,
-                 resultfile: str, n_init: int = 10, max_evals: int = 100,
-                 seed: Optional[int] = None, metric_name: str = 'loss', runtime_name: str = "iter_time",
-                 only_requirements: bool = False):
+    def __init__(
+        self,
+        obj_func: Callable,
+        config_space: CS.ConfigurationSpace,
+        resultfile: str,
+        n_init: int = 10,
+        max_evals: int = 100,
+        seed: Optional[int] = None,
+        metric_name: str = "loss",
+        runtime_name: str = "iter_time",
+        only_requirements: bool = False,
+    ):
 
         super().__init__(
             obj_func=obj_func,
@@ -22,7 +30,7 @@ class RandomSearch(BaseOptimizer):
             seed=seed,
             metric_name=metric_name,
             runtime_name=runtime_name,
-            only_requirements=only_requirements
+            only_requirements=only_requirements,
         )
 
         self._observations = {hp_name: np.array([]) for hp_name in self._hp_names}
