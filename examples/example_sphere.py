@@ -14,7 +14,7 @@ def sphere(eval_config: Dict[str, float]) -> Tuple[float, float]:
     start = time.time()
     vals = np.array(list(eval_config.values()))
     vals *= vals
-    return np.sum(vals), time.time() - start
+    return {"loss": np.sum(vals)}, time.time() - start
 
 
 if __name__ == "__main__":
@@ -25,4 +25,4 @@ if __name__ == "__main__":
 
     logger = get_logger(file_name="sphere", logger_name="sphere", disable=True)
     opt = TPEOptimizer(obj_func=sphere, config_space=cs, resultfile="sphere")
-    opt.optimize(logger)
+    print(opt.optimize(logger))
