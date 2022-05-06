@@ -8,7 +8,7 @@ import ConfigSpace as CS
 import numpy as np
 
 from tpe.utils.constants import NumericType
-from tpe.utils.utils import get_random_sample, revert_eval_config, store_results
+from tpe.utils.utils import get_logger, get_random_sample, revert_eval_config, store_results
 
 
 class ObjectiveFunc(Protocol):
@@ -104,19 +104,19 @@ class BaseOptimizer(metaclass=ABCMeta):
         }
 
     def optimize(
-        self, logger: Logger, best_update: BestUpdateFunc = default_best_update
+        self, logger: Optional[Logger] = None, best_update: BestUpdateFunc = default_best_update
     ) -> Tuple[Dict[str, Any], float]:
         """
         Optimize obj_func using TPE Sampler and store the results in the end.
 
         Args:
-            logger (Logger): The logging to write the intermediate results
+            logger (Optional[Logger]): The logging to write the intermediate results
 
         Returns:
             best_config (Dict[str, Any]): The configuration that has the best loss
             best_loss (float): The best loss value during the optimization
         """
-
+        logger = logger if logger else get_logger("temp", "temp", disable=True)
         best_config, best_loss, t = {}, np.inf, 0
 
         while True:

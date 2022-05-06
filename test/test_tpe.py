@@ -8,7 +8,7 @@ import ConfigSpace.hyperparameters as CSH
 import numpy as np
 import unittest
 
-from tpe.optimizer.tpe import TPEOptimizer
+from tpe.optimizer.tpe import TPEOptimizer, TreeStructuredParzenEstimator
 from tpe.utils.utils import get_logger
 
 
@@ -44,6 +44,47 @@ def cleanup() -> None:
     os.remove("incumbents/test.json")
 
 
+def test_get_min_bandwidth() -> None:
+    config_space = CS.ConfigurationSpace()
+    config_space.add_hyperparameters(
+        [
+            CSH.UniformFloatHyperparameter("x0", 1, 5, log=True, meta={"min_bandwidth_factor": 0.1}),
+            CSH.UniformFloatHyperparameter("x1", 1, 5, log=True),
+            CSH.UniformFloatHyperparameter("x2", 1, 5, log=True, q=0.5, meta={"min_bandwidth_factor": 0.1}),
+            CSH.UniformFloatHyperparameter("x3", 1, 5, log=True, q=0.5),
+            CSH.UniformFloatHyperparameter("x4", 1, 5, q=0.5, meta={"min_bandwidth_factor": 0.1}),
+            CSH.UniformFloatHyperparameter("x5", 1, 5, q=0.5),
+            CSH.UniformFloatHyperparameter("x6", 1, 5, meta={"min_bandwidth_factor": 0.1}),
+            CSH.UniformFloatHyperparameter("x7", 1, 5),
+            CSH.UniformIntegerHyperparameter("x8", 1, 5, log=True, meta={"min_bandwidth_factor": 0.1}),
+            CSH.UniformIntegerHyperparameter("x9", 1, 5, log=True),
+            CSH.UniformIntegerHyperparameter("x10", 1, 5, log=True, q=2, meta={"min_bandwidth_factor": 0.1}),
+            CSH.UniformIntegerHyperparameter("x11", 1, 5, log=True, q=2),
+            CSH.UniformIntegerHyperparameter("x12", 1, 5, q=2, meta={"min_bandwidth_factor": 0.1}),
+            CSH.UniformIntegerHyperparameter("x13", 1, 5, q=2),
+            CSH.UniformIntegerHyperparameter("x14", 1, 5, meta={"min_bandwidth_factor": 0.1}),
+            CSH.UniformIntegerHyperparameter("x15", 1, 5),
+            CSH.OrdinalHyperparameter("x16", sequence=[1, 2, 3, 4, 5], meta={"lower": 1, "upper": 5}),
+            CSH.OrdinalHyperparameter(
+                "x17", sequence=[1, 2, 3, 4, 5], meta={"lower": 1, "upper": 5, "min_bandwidth_factor": 0.1}
+            ),
+        ]
+    )
+    tpe = TreeStructuredParzenEstimator(
+        config_space,
+        percentile_func=lambda x: 2,
+        n_ei_candidates=24,
+        metric_name="loss",
+        runtime_name="iter_time",
+        seed=0,
+        min_bandwidth_factor=0.01,
+    )
+    for d, ans in enumerate(
+        [0.1, 0.01, 0.1, 0.01, 0.1, 1 / 9, 0.1, 0.01, 0.1, 0.01, 0.1, 0.01, 0.1, 1 / 3, 0.1, 1 / 5, 1 / 5, 0.1]
+    ):
+        assert tpe._get_min_bandwidth_factor(f"x{d}") == ans
+
+
 class TestTreeStructuredParzenEstimator(unittest.TestCase):
     def setUp(self) -> None:
         dim = 10
@@ -66,7 +107,12 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
     def test_insert_observations(self) -> None:
         metric_name = "loss"
         opt = TPEOptimizer(
-            obj_func=sphere, config_space=self.cs, max_evals=10, metric_name=metric_name, resultfile="test"
+            obj_func=sphere,
+            config_space=self.cs,
+            max_evals=10,
+            metric_name=metric_name,
+            resultfile="test",
+            min_bandwidth_factor=1e-2,
         )
         opt.optimize(self.logger)
         try:
@@ -85,6 +131,7 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
             metric_name=metric_name,
             runtime_name=runtime_name,
             resultfile="test",
+            min_bandwidth_factor=1e-2,
         )
         opt.optimize(self.logger)
 
@@ -111,7 +158,12 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
     def test_apply_knowledge_augmentation(self) -> None:
         metric_name = "loss"
         opt = TPEOptimizer(
-            obj_func=sphere, config_space=self.cs, max_evals=10, metric_name=metric_name, resultfile="test"
+            obj_func=sphere,
+            config_space=self.cs,
+            max_evals=10,
+            metric_name=metric_name,
+            resultfile="test",
+            min_bandwidth_factor=1e-2,
         )
         ob = {}
         n_samples = 10
@@ -137,7 +189,14 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
 
     def test_get_config_candidates(self) -> None:
         max_evals = 5
-        opt = TPEOptimizer(obj_func=sphere, config_space=self.cs, max_evals=max_evals, resultfile="test", seed=0)
+        opt = TPEOptimizer(
+            obj_func=sphere,
+            config_space=self.cs,
+            max_evals=max_evals,
+            resultfile="test",
+            seed=0,
+            min_bandwidth_factor=1e-2,
+        )
         opt.optimize(self.logger)
         metric_name = opt._metric_name
 
@@ -161,7 +220,14 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
         assert np.allclose(ans, config_cands)
 
         max_evals = 5
-        opt = TPEOptimizer(obj_func=mix_func, config_space=self.cs_cat, max_evals=max_evals, resultfile="test", seed=0)
+        opt = TPEOptimizer(
+            obj_func=mix_func,
+            config_space=self.cs_cat,
+            max_evals=max_evals,
+            resultfile="test",
+            seed=0,
+            min_bandwidth_factor=1e-2,
+        )
         opt.optimize(self.logger)
 
         opt._tpe_samplers[metric_name]._n_ei_candidates = 5
@@ -193,7 +259,14 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
 
     def test_compute_probability_improvement(self) -> None:
         max_evals = 5
-        opt = TPEOptimizer(obj_func=sphere, config_space=self.cs, max_evals=max_evals, resultfile="test", seed=0)
+        opt = TPEOptimizer(
+            obj_func=sphere,
+            config_space=self.cs,
+            max_evals=max_evals,
+            resultfile="test",
+            seed=0,
+            min_bandwidth_factor=1e-2,
+        )
         opt.optimize(self.logger)
         metric_name = opt._metric_name
 
@@ -224,7 +297,12 @@ class TestTPEOptimizer(unittest.TestCase):
         for func, threshold in zip([sphere, rosen], [0.6, 200]):
             for i in range(n_experiments):
                 opt = TPEOptimizer(
-                    obj_func=sphere, config_space=self.cs, max_evals=max_evals, resultfile="test", seed=i
+                    obj_func=sphere,
+                    config_space=self.cs,
+                    max_evals=max_evals,
+                    resultfile="test",
+                    seed=i,
+                    min_bandwidth_factor=1e-2,
                 )
                 _, best_loss = opt.optimize(self.logger)
                 losses[i] = best_loss

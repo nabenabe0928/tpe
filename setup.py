@@ -9,7 +9,7 @@ with open("requirements.txt", "r") as f:
 
 setuptools.setup(
     name="tpe",
-    version="0.0.3",
+    version="0.0.4",
     author="nabenabe0928",
     author_email="shuhei.watanabe.utokyo@gmail.com",
     url="https://github.com/nabenabe0928/tpe",

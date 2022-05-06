@@ -33,7 +33,7 @@ class TreeStructuredParzenEstimator:
         metric_name: str,
         runtime_name: str,
         seed: Optional[int],
-        min_bandwidth_factor: float = 1e-2,
+        min_bandwidth_factor: float,
     ):
         """
         Attributes:
@@ -247,6 +247,23 @@ class TreeStructuredParzenEstimator:
         pi = -np.logaddexp(first_term, second_term)
         return pi
 
+    def _get_min_bandwidth_factor(self, hp_name: str) -> float:
+        config = self._config_space.get_hyperparameter(hp_name)
+        if config.meta and "min_bandwidth_factor" in config.meta:
+            return config.meta["min_bandwidth_factor"]
+        if self._is_ordinals[hp_name]:
+            return 1.0 / len(config.sequence)
+
+        dtype = config2type[config.__class__.__name__]
+        lb, ub, log, q = config.lower, config.upper, config.log, config.q
+
+        if not log and (q is not None or dtype is int):
+            q = q if q is not None else 1
+            n_grids = int((ub - lb) / q) + 1
+            return 1.0 / n_grids
+
+        return self._min_bandwidth_factor
+
     def _get_parzen_estimator(
         self,
         lower_vals: np.ndarray,
@@ -279,11 +296,10 @@ class TreeStructuredParzenEstimator:
             pe_lower = build_categorical_parzen_estimator(vals=lower_vals, **kwargs)
             pe_upper = build_categorical_parzen_estimator(vals=upper_vals, **kwargs)
         else:
-            min_bandwidth_factor = 1.0 / len(config.sequence) if is_ordinal else self._min_bandwidth_factor
             kwargs.update(
                 dtype=config2type[config_type],
                 is_ordinal=is_ordinal,
-                min_bandwidth_factor=min_bandwidth_factor,
+                min_bandwidth_factor=self._get_min_bandwidth_factor(hp_name),
             )
             pe_lower = build_numerical_parzen_estimator(vals=lower_vals, **kwargs)
             pe_upper = build_numerical_parzen_estimator(vals=upper_vals, **kwargs)
@@ -300,7 +316,7 @@ class TPEOptimizer(BaseOptimizer):
         self,
         obj_func: ObjectiveFunc,
         config_space: CS.ConfigurationSpace,
-        resultfile: str,
+        resultfile: str = "temp",
         n_init: int = 10,
         max_evals: int = 100,
         seed: Optional[int] = None,
@@ -309,10 +325,25 @@ class TPEOptimizer(BaseOptimizer):
         only_requirements: bool = False,
         n_ei_candidates: int = 24,
         result_keys: List[str] = ["loss"],
+        min_bandwidth_factor: float = 1e-1,
         # TODO: Make dict of percentile_func_maker
         percentile_func_maker: PercentileFuncMaker = default_percentile_maker,
     ):
-
+        """
+        Args:
+            obj_func (ObjectiveFunc): The objective function.
+            config_space (CS.ConfigurationSpace): The searching space of the task
+            resultfile (str): The name of the result file to output in the end
+            n_init (int): The number of random sampling before using TPE
+            max_evals (int): The number of total evaluations.
+            seed (int): The random seed.
+            metric_name (str): The name of the metric (or that of the objective function value)
+            runtime_name (str): The name of the runtime metric.
+            only_requirements (bool): If True, we only save runtime and loss.
+            n_ei_candidates (int): The number of samplings to optimize the EI value
+            result_keys (List[str]): Keys of results.
+            min_bandwidth_factor (float): The minimum bandwidth for numerical parameters
+        """
         super().__init__(
             obj_func=obj_func,
             config_space=config_space,
@@ -333,6 +364,7 @@ class TPEOptimizer(BaseOptimizer):
                 runtime_name=runtime_name,
                 n_ei_candidates=n_ei_candidates,
                 seed=seed,
+                min_bandwidth_factor=min_bandwidth_factor,
                 percentile_func=percentile_func_maker(),
             )
             for key in result_keys
