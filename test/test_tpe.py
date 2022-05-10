@@ -78,6 +78,7 @@ def test_get_min_bandwidth() -> None:
         runtime_name="iter_time",
         seed=0,
         min_bandwidth_factor=0.01,
+        top=0.8,
     )
     for d, ans in enumerate(
         [0.1, 0.01, 0.1, 0.01, 0.1, 1 / 9, 0.1, 0.01, 0.1, 0.01, 0.1, 0.01, 0.1, 1 / 3, 0.1, 1 / 5, 1 / 5, 0.1]
@@ -113,6 +114,7 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
             metric_name=metric_name,
             resultfile="test",
             min_bandwidth_factor=1e-2,
+            top=0.8,
         )
         opt.optimize(self.logger)
         try:
@@ -132,6 +134,7 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
             runtime_name=runtime_name,
             resultfile="test",
             min_bandwidth_factor=1e-2,
+            top=0.8,
         )
         opt.optimize(self.logger)
 
@@ -164,6 +167,7 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
             metric_name=metric_name,
             resultfile="test",
             min_bandwidth_factor=1e-2,
+            top=0.8,
         )
         ob = {}
         n_samples = 10
@@ -196,6 +200,7 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
             resultfile="test",
             seed=0,
             min_bandwidth_factor=1e-2,
+            top=0.8,
         )
         opt.optimize(self.logger)
         metric_name = opt._metric_name
@@ -227,6 +232,7 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
             resultfile="test",
             seed=0,
             min_bandwidth_factor=1e-2,
+            top=0.8,
         )
         opt.optimize(self.logger)
 
@@ -266,6 +272,7 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
             resultfile="test",
             seed=0,
             min_bandwidth_factor=1e-2,
+            top=0.8,
         )
         opt.optimize(self.logger)
         metric_name = opt._metric_name
@@ -303,6 +310,7 @@ class TestTPEOptimizer(unittest.TestCase):
                     resultfile="test",
                     seed=i,
                     min_bandwidth_factor=1e-2,
+                    top=0.8,
                 )
                 _, best_loss = opt.optimize(self.logger)
                 losses[i] = best_loss

@@ -34,6 +34,7 @@ class TreeStructuredParzenEstimator:
         runtime_name: str,
         seed: Optional[int],
         min_bandwidth_factor: float,
+        top: float,
     ):
         """
         Attributes:
@@ -46,6 +47,7 @@ class TreeStructuredParzenEstimator:
             observations (Dict[str, Any]): The storage of the observations
             sorted_observations (Dict[str, Any]): The storage of the observations sorted based on loss
             min_bandwidth_factor (float): The minimum bandwidth for numerical parameters
+            top (float): The hyperparam of the cateogircal kernel. It defines the prob of the top category.
             is_categoricals (Dict[str, bool]): Whether the given hyperparameter is categorical
             is_ordinals (Dict[str, bool]): Whether the given hyperparameter is ordinal
             percentile_func (Callable[[np.ndarray], int]):
@@ -60,6 +62,7 @@ class TreeStructuredParzenEstimator:
         self._n_lower = 0
         self._percentile = 0
         self._min_bandwidth_factor = min_bandwidth_factor
+        self._top = top
 
         self._observations = {hp_name: np.array([]) for hp_name in self._hp_names}
         self._sorted_observations = {hp_name: np.array([]) for hp_name in self._hp_names}
@@ -293,8 +296,8 @@ class TreeStructuredParzenEstimator:
         kwargs = dict(config=config)
 
         if is_categorical:
-            pe_lower = build_categorical_parzen_estimator(vals=lower_vals, **kwargs)
-            pe_upper = build_categorical_parzen_estimator(vals=upper_vals, **kwargs)
+            pe_lower = build_categorical_parzen_estimator(vals=lower_vals, **kwargs, top=self._top)
+            pe_upper = build_categorical_parzen_estimator(vals=upper_vals, **kwargs, top=self._top)
         else:
             kwargs.update(
                 dtype=config2type[config_type],
@@ -326,6 +329,7 @@ class TPEOptimizer(BaseOptimizer):
         n_ei_candidates: int = 24,
         result_keys: List[str] = ["loss"],
         min_bandwidth_factor: float = 1e-1,
+        top: float = 1.0,
         # TODO: Make dict of percentile_func_maker
         percentile_func_maker: PercentileFuncMaker = default_percentile_maker,
     ):
@@ -343,6 +347,7 @@ class TPEOptimizer(BaseOptimizer):
             n_ei_candidates (int): The number of samplings to optimize the EI value
             result_keys (List[str]): Keys of results.
             min_bandwidth_factor (float): The minimum bandwidth for numerical parameters
+            top (float): The hyperparam of the cateogircal kernel. It defines the prob of the top category.
         """
         super().__init__(
             obj_func=obj_func,
@@ -365,6 +370,7 @@ class TPEOptimizer(BaseOptimizer):
                 n_ei_candidates=n_ei_candidates,
                 seed=seed,
                 min_bandwidth_factor=min_bandwidth_factor,
+                top=top,
                 percentile_func=percentile_func_maker(),
             )
             for key in result_keys
