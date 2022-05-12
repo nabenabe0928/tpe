@@ -103,7 +103,6 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
 
         self.hp_names = list(self.cs._hyperparameters.keys())
         self.hp_names_cat = list(self.cs_cat._hyperparameters.keys())
-        self.logger = get_logger(file_name="test", logger_name="test")
 
     def test_insert_observations(self) -> None:
         metric_name = "loss"
@@ -116,7 +115,7 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
             min_bandwidth_factor=1e-2,
             top=0.8,
         )
-        opt.optimize(self.logger)
+        opt.optimize(logger_name="test")
         try:
             opt._tpe_samplers[metric_name]._insert_observations("x0", insert_loc=1, val=0, is_categorical=False)
         except ValueError:
@@ -136,7 +135,7 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
             min_bandwidth_factor=1e-2,
             top=0.8,
         )
-        opt.optimize(self.logger)
+        opt.optimize(logger_name="test")
 
         eval_config = {hp_name: 0.0 for hp_name in self.hp_names_cat}
         eval_config["func"] = "cosine"  # type: ignore
@@ -202,7 +201,7 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
             min_bandwidth_factor=1e-2,
             top=0.8,
         )
-        opt.optimize(self.logger)
+        opt.optimize(logger_name="test")
         metric_name = opt._metric_name
 
         opt._tpe_samplers[metric_name]._n_ei_candidates = 3
@@ -234,7 +233,7 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
             min_bandwidth_factor=1e-2,
             top=0.8,
         )
-        opt.optimize(self.logger)
+        opt.optimize(logger_name="test")
 
         opt._tpe_samplers[metric_name]._n_ei_candidates = 5
         config_cands = opt._tpe_samplers[metric_name].get_config_candidates()
@@ -274,7 +273,7 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
             min_bandwidth_factor=1e-2,
             top=0.8,
         )
-        opt.optimize(self.logger)
+        opt.optimize(logger_name="test")
         metric_name = opt._metric_name
 
         config_cands = [np.array([0.0]) for _ in range(len(self.hp_names))]
@@ -312,7 +311,7 @@ class TestTPEOptimizer(unittest.TestCase):
                     min_bandwidth_factor=1e-2,
                     top=0.8,
                 )
-                _, best_loss = opt.optimize(self.logger)
+                _, best_loss = opt.optimize(logger_name="test")
                 losses[i] = best_loss
                 assert opt._tpe_samplers[opt._metric_name].observations["x0"].size == max_evals
 

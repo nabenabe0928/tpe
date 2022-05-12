@@ -1,6 +1,5 @@
 import time
 from abc import ABCMeta, abstractmethod
-from logging import Logger
 from typing import Any, Dict, List, Optional, Protocol, Tuple
 
 import ConfigSpace as CS
@@ -104,19 +103,22 @@ class BaseOptimizer(metaclass=ABCMeta):
         }
 
     def optimize(
-        self, logger: Optional[Logger] = None, best_update: BestUpdateFunc = default_best_update
+        self, logger_name: Optional[str] = None, best_update: BestUpdateFunc = default_best_update
     ) -> Tuple[Dict[str, Any], float]:
         """
         Optimize obj_func using TPE Sampler and store the results in the end.
 
         Args:
-            logger (Optional[Logger]): The logging to write the intermediate results
+            logger_name (Optional[str]):
+                The name of logger to write the intermediate results
 
         Returns:
             best_config (Dict[str, Any]): The configuration that has the best loss
             best_loss (float): The best loss value during the optimization
         """
-        logger = logger if logger else get_logger("temp", "temp", disable=True)
+        use_logger = logger_name is not None
+        logger_name = logger_name if use_logger else "temp"
+        logger = get_logger(logger_name, logger_name, disable=use_logger)
         best_config, best_loss, t = {}, np.inf, 0
 
         while True:

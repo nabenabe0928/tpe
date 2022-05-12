@@ -21,7 +21,6 @@ from typing import Dict
 
 import ConfigSpace as CS
 import ConfigSpace.hyperparameters as CSH
-from tpe.utils.utils import get_logger
 import numpy as np
 
 from tpe.optimizer import TPEOptimizer
@@ -39,7 +38,7 @@ if __name__ == '__main__':
     for d in range(dim):
         cs.add_hyperparameter(CSH.UniformFloatHyperparameter(f'x{d}', lower=-5, upper=5))
 
-    logger = get_logger(file_name='sphere', logger_name='sphere')
     opt = TPEOptimizer(obj_func=sphere, config_space=cs, resultfile='sphere')
-    opt.optimize(logger)
+    # If you do not want to do logging, remove the `logger_name` argument
+    opt.optimize(logger_name="sphere")
 ```

@@ -8,7 +8,6 @@ import numpy as np
 import unittest
 
 from tpe.optimizer.random_search import RandomSearch
-from tpe.utils.utils import get_logger
 
 
 def mix_func(eval_config: Dict[str, Union[str, float]]) -> Tuple[Dict[str, float], float]:
@@ -40,13 +39,12 @@ class TestRandomSearch(unittest.TestCase):
                 )
 
         self.hp_names_cat = list(self.cs._hyperparameters.keys())
-        self.logger = get_logger(file_name="test", logger_name="test")
 
     def test_optimize(self) -> None:
         max_evals = 100
 
         opt = RandomSearch(obj_func=mix_func, config_space=self.cs, max_evals=max_evals, resultfile="test")
-        opt.optimize(self.logger)
+        opt.optimize(logger_name="test")
         assert opt.fetch_observations()["x0"].size == max_evals
 
         cleanup()

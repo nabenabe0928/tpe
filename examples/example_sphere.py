@@ -7,7 +7,6 @@ import ConfigSpace.hyperparameters as CSH
 import numpy as np
 
 from tpe.optimizer import TPEOptimizer
-from tpe.utils.utils import get_logger
 
 
 def sphere(eval_config: Dict[str, float]) -> Tuple[float, float]:
@@ -23,6 +22,5 @@ if __name__ == "__main__":
     for d in range(dim):
         cs.add_hyperparameter(CSH.UniformFloatHyperparameter(f"x{d}", lower=-5, upper=5))
 
-    logger = get_logger(file_name="sphere", logger_name="sphere", disable=True)
     opt = TPEOptimizer(obj_func=sphere, config_space=cs, resultfile="sphere")
-    print(opt.optimize(logger))
+    print(opt.optimize(logger_name="sphere"))
