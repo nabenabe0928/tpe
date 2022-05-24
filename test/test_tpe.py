@@ -8,7 +8,7 @@ import ConfigSpace.hyperparameters as CSH
 import numpy as np
 import unittest
 
-from tpe.optimizer.tpe import TPEOptimizer, TreeStructuredParzenEstimator
+from tpe.optimizer.tpe import TPEOptimizer
 from tpe.utils.utils import get_logger
 
 
@@ -42,48 +42,6 @@ def cleanup() -> None:
     os.remove("log/test.log")
     os.remove("results/test.json")
     os.remove("incumbents/test.json")
-
-
-def test_get_min_bandwidth() -> None:
-    config_space = CS.ConfigurationSpace()
-    config_space.add_hyperparameters(
-        [
-            CSH.UniformFloatHyperparameter("x0", 1, 5, log=True, meta={"min_bandwidth_factor": 0.1}),
-            CSH.UniformFloatHyperparameter("x1", 1, 5, log=True),
-            CSH.UniformFloatHyperparameter("x2", 1, 5, log=True, q=0.5, meta={"min_bandwidth_factor": 0.1}),
-            CSH.UniformFloatHyperparameter("x3", 1, 5, log=True, q=0.5),
-            CSH.UniformFloatHyperparameter("x4", 1, 5, q=0.5, meta={"min_bandwidth_factor": 0.1}),
-            CSH.UniformFloatHyperparameter("x5", 1, 5, q=0.5),
-            CSH.UniformFloatHyperparameter("x6", 1, 5, meta={"min_bandwidth_factor": 0.1}),
-            CSH.UniformFloatHyperparameter("x7", 1, 5),
-            CSH.UniformIntegerHyperparameter("x8", 1, 5, log=True, meta={"min_bandwidth_factor": 0.1}),
-            CSH.UniformIntegerHyperparameter("x9", 1, 5, log=True),
-            CSH.UniformIntegerHyperparameter("x10", 1, 5, log=True, q=2, meta={"min_bandwidth_factor": 0.1}),
-            CSH.UniformIntegerHyperparameter("x11", 1, 5, log=True, q=2),
-            CSH.UniformIntegerHyperparameter("x12", 1, 5, q=2, meta={"min_bandwidth_factor": 0.1}),
-            CSH.UniformIntegerHyperparameter("x13", 1, 5, q=2),
-            CSH.UniformIntegerHyperparameter("x14", 1, 5, meta={"min_bandwidth_factor": 0.1}),
-            CSH.UniformIntegerHyperparameter("x15", 1, 5),
-            CSH.OrdinalHyperparameter("x16", sequence=[1, 2, 3, 4, 5], meta={"lower": 1, "upper": 5}),
-            CSH.OrdinalHyperparameter(
-                "x17", sequence=[1, 2, 3, 4, 5], meta={"lower": 1, "upper": 5, "min_bandwidth_factor": 0.1}
-            ),
-        ]
-    )
-    tpe = TreeStructuredParzenEstimator(
-        config_space,
-        percentile_func=lambda x: 2,
-        n_ei_candidates=24,
-        metric_name="loss",
-        runtime_name="iter_time",
-        seed=0,
-        min_bandwidth_factor=0.01,
-        top=0.8,
-    )
-    for d, ans in enumerate(
-        [0.1, 0.01, 0.1, 0.01, 0.1, 1 / 9, 0.1, 0.01, 0.1, 0.01, 0.1, 0.01, 0.1, 1 / 3, 0.1, 1 / 5, 1 / 5, 0.1]
-    ):
-        assert tpe._get_min_bandwidth_factor(f"x{d}") == ans
 
 
 class TestTreeStructuredParzenEstimator(unittest.TestCase):

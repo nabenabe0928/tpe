@@ -42,3 +42,5 @@ if __name__ == '__main__':
     # If you do not want to do logging, remove the `logger_name` argument
     opt.optimize(logger_name="sphere")
 ```
+
+The documentation of `ConfigSpace` is available [here](https://automl.github.io/ConfigSpace/master/).

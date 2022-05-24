@@ -250,23 +250,6 @@ class TreeStructuredParzenEstimator:
         pi = -np.logaddexp(first_term, second_term)
         return pi
 
-    def _get_min_bandwidth_factor(self, hp_name: str) -> float:
-        config = self._config_space.get_hyperparameter(hp_name)
-        if config.meta and "min_bandwidth_factor" in config.meta:
-            return config.meta["min_bandwidth_factor"]
-        if self._is_ordinals[hp_name]:
-            return 1.0 / len(config.sequence)
-
-        dtype = config2type[config.__class__.__name__]
-        lb, ub, log, q = config.lower, config.upper, config.log, config.q
-
-        if not log and (q is not None or dtype is int):
-            q = q if q is not None else 1
-            n_grids = int((ub - lb) / q) + 1
-            return 1.0 / n_grids
-
-        return self._min_bandwidth_factor
-
     def _get_parzen_estimator(
         self,
         lower_vals: np.ndarray,
@@ -302,7 +285,7 @@ class TreeStructuredParzenEstimator:
             kwargs.update(
                 dtype=config2type[config_type],
                 is_ordinal=is_ordinal,
-                min_bandwidth_factor=self._get_min_bandwidth_factor(hp_name),
+                default_min_bandwidth_factor=self._min_bandwidth_factor,
             )
             pe_lower = build_numerical_parzen_estimator(vals=lower_vals, **kwargs)
             pe_upper = build_numerical_parzen_estimator(vals=upper_vals, **kwargs)
