@@ -165,7 +165,7 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
         opt._tpe_samplers[metric_name]._n_ei_candidates = 3
         config_cands = opt._tpe_samplers[metric_name].get_config_candidates()
         assert len(config_cands) == len(self.hp_names)
-        assert config_cands[0].size == opt._tpe_samplers[metric_name]._n_ei_candidates
+        assert config_cands[self.hp_names[0]].size == opt._tpe_samplers[metric_name]._n_ei_candidates
 
         ans = [
             [4.8431215412066475, -1.8158257273119596, -3.744716909802062],
@@ -179,7 +179,7 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
             [2.6414792686135344, 3.77160611108241, 4.524089680601648],
             [-4.031769469731796, 2.082749780768603, -0.7739934294417338],
         ]
-        assert np.allclose(ans, config_cands)
+        assert np.allclose(ans, list(config_cands.values()))
 
         max_evals = 5
         opt = TPEOptimizer(
@@ -196,7 +196,7 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
         opt._tpe_samplers[metric_name]._n_ei_candidates = 5
         config_cands = opt._tpe_samplers[metric_name].get_config_candidates()
         assert len(config_cands) == len(self.hp_names_cat)
-        assert config_cands[0].size == opt._tpe_samplers[metric_name]._n_ei_candidates
+        assert config_cands[self.hp_names[0]].size == opt._tpe_samplers[metric_name]._n_ei_candidates
 
         ans = [
             [0, 1, 0, 0, 0],
@@ -212,7 +212,7 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
             [-0.4574809909962204, 0.49898414237597755, 1.1495177677542232, 2.873876518676211, 3.604272671140195],
         ]
 
-        assert np.allclose(ans, config_cands)
+        assert np.allclose(ans, list(config_cands.values()))
         for i in range(opt._tpe_samplers[metric_name]._n_ei_candidates):
             eval_config = {hp: a[-1] for a, hp in zip(ans, self.hp_names_cat)}
             ord_v = opt._revert_eval_config(eval_config)[self.hp_names_cat[-1]]
@@ -234,7 +234,7 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
         opt.optimize(logger_name="test")
         metric_name = opt._metric_name
 
-        config_cands = [np.array([0.0]) for _ in range(len(self.hp_names))]
+        config_cands = {hp_name: np.array([0.0]) for hp_name in self.hp_names}
         ll_ratio = opt._tpe_samplers[metric_name].compute_probability_improvement(config_cands)
 
         assert ll_ratio.size == 1

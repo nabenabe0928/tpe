@@ -118,7 +118,7 @@ class BaseOptimizer(metaclass=ABCMeta):
         """
         use_logger = logger_name is not None
         logger_name = logger_name if use_logger else "temp"
-        logger = get_logger(logger_name, logger_name, disable=use_logger)
+        logger = get_logger(logger_name, logger_name, disable=(not use_logger))
         best_config, best_loss, t = {}, np.inf, 0
 
         while True:

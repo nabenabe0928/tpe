@@ -187,7 +187,7 @@ class TreeStructuredParzenEstimator:
         self._mvpe_lower = MultiVariateParzenEstimator(pe_lower_dict)
         self._mvpe_upper = MultiVariateParzenEstimator(pe_upper_dict)
 
-    def get_config_candidates(self, n_samples: Optional[int] = None) -> List[np.ndarray]:
+    def get_config_candidates(self, n_samples: Optional[int] = None) -> Dict[str, np.ndarray]:
         """
         Since we compute the probability improvement of each objective independently,
         we need to sample the configurations in advance.
@@ -198,18 +198,19 @@ class TreeStructuredParzenEstimator:
                 If None is provided, we use n_ei_candidates.
 
         Returns:
-            config_cands (List[np.ndarray]): arrays of candidates in each dimension
+            config_cands (Dict[str, np.ndarray]):
+                A dict of arrays of candidates in each dimension
         """
         n_samples = n_samples if n_samples is not None else self._n_ei_candidates
-        return self._mvpe_lower.sample(n_samples=n_samples, rng=self._rng, dim_independent=True)
+        return self._mvpe_lower.sample(n_samples=n_samples, rng=self._rng, dim_independent=True, return_dict=True)
 
-    def compute_config_loglikelihoods(self, config_cands: List[np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
+    def compute_config_loglikelihoods(self, config_cands: Dict[str, np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
         """
         Compute the probability improvement given configurations
 
         Args:
-            config_cands (List[np.ndarray]):
-                The list of candidate values for each dimension.
+            config_cands (Dict[str, np.ndarray]):
+                The dict of candidate values for each dimension.
                 The length is the number of dimensions and
                 each array has the length of n_ei_candidates.
 
@@ -223,13 +224,13 @@ class TreeStructuredParzenEstimator:
         config_ll_upper = self._mvpe_upper.log_pdf(config_cands)
         return config_ll_lower, config_ll_upper
 
-    def compute_probability_improvement(self, config_cands: List[np.ndarray]) -> np.ndarray:
+    def compute_probability_improvement(self, config_cands: Dict[str, np.ndarray]) -> np.ndarray:
         """
         Compute the probability improvement given configurations
 
         Args:
-            config_cands (List[np.ndarray]):
-                The list of candidate values for each dimension.
+            config_cands (Dict[str, np.ndarray]):
+                The dict of candidate values for each dimension.
                 The length is the number of dimensions and
                 each array has the length of n_ei_candidates.
 
@@ -310,6 +311,7 @@ class TPEOptimizer(BaseOptimizer):
         runtime_name: str = "iter_time",
         only_requirements: bool = False,
         n_ei_candidates: int = 24,
+        # TODO: task names for transfer learning
         result_keys: List[str] = ["loss"],
         min_bandwidth_factor: float = 1e-1,
         top: float = 1.0,
@@ -370,8 +372,8 @@ class TPEOptimizer(BaseOptimizer):
 
         return observations
 
-    def _get_config_cands(self, n_samples_dict: Dict[str, int]) -> List[np.ndarray]:
-        config_cands: List[np.ndarray] = []
+    def _get_config_cands(self, n_samples_dict: Dict[str, int]) -> Dict[str, np.ndarray]:
+        config_cands: Dict[str, np.ndarray] = {}
         for key in self._result_keys:
             tpe_sampler = self._tpe_samplers[key]
             n_samples = n_samples_dict.get(key, tpe_sampler._n_ei_candidates)
@@ -382,14 +384,16 @@ class TPEOptimizer(BaseOptimizer):
             if len(config_cands) == 0:
                 config_cands = configs
             else:
-                config_cands = [np.concatenate([cfg0, cfg1]) for cfg0, cfg1 in zip(config_cands, configs)]
+                config_cands = {
+                    hp_name: np.concatenate([config_cands[hp_name], configs[hp_name]]) for hp_name in configs.keys()
+                }
 
         return config_cands
 
     def _compute_probability_improvement(
-        self, config_cands: List[np.ndarray], weight_dict: Dict[str, float]
+        self, config_cands: Dict[str, np.ndarray], weight_dict: Dict[str, float]
     ) -> np.ndarray:
-        pi_config_array = np.zeros((len(self._result_keys), config_cands[0].size))
+        pi_config_array = np.zeros((len(self._result_keys), config_cands[self._hp_names[0]].size))
         weights = np.ones(len(self._result_keys))
 
         for i, key in enumerate(self._result_keys):
@@ -420,6 +424,6 @@ class TPEOptimizer(BaseOptimizer):
         config_cands = self._get_config_cands(n_samples_dict)
         pi_config = self._compute_probability_improvement(config_cands, weight_dict)
         best_idx = int(np.argmax(pi_config))
-        eval_config = {hp_name: config_cands[dim][best_idx] for dim, hp_name in enumerate(self._hp_names)}
+        eval_config = {hp_name: config_cands[hp_name][best_idx] for dim, hp_name in enumerate(self._hp_names)}
 
         return self._revert_eval_config(eval_config=eval_config)

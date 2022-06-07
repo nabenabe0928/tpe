@@ -22,5 +22,5 @@ if __name__ == "__main__":
     for d in range(dim):
         cs.add_hyperparameter(CSH.UniformFloatHyperparameter(f"x{d}", lower=-5, upper=5))
 
-    opt = TPEOptimizer(obj_func=sphere, config_space=cs, resultfile="sphere")
+    opt = TPEOptimizer(obj_func=sphere, config_space=cs, min_bandwidth_factor=1e-2, resultfile="sphere")
     print(opt.optimize(logger_name="sphere"))
