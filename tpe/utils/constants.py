@@ -1,4 +1,4 @@
-from typing import Callable, Union
+from typing import Any, Callable, Dict, Protocol, Union
 
 import ConfigSpace.hyperparameters as CSH
 
@@ -29,6 +29,11 @@ type2config = {
     bool: "CategoricalHyperparameter",
     str: "CategoricalHyperparameter",
 }
+
+
+class PercentileFuncMaker(Protocol):
+    def __call__(self, **kwargs: Dict[str, Any]) -> Callable[[np.ndarray], int]:
+        raise NotImplementedError
 
 
 def default_percentile_maker() -> Callable[[np.ndarray], int]:

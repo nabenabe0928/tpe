@@ -314,8 +314,9 @@ def revert_eval_config(
             if config.log:
                 val = np.exp(val)
             if q is not None or dtype is int:
+                lb = config.lower
                 q = 1 if q is None and dtype is int else q
-                val = np.round(val / q) * q
+                val = np.round((val - lb) / q) * q + lb
 
             check_value_range(hp_name=hp_name, config=config, val=val)
 

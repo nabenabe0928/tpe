@@ -10,9 +10,9 @@ from tpe.utils.utils import get_random_sample, revert_eval_config
 class TestFuncs(unittest.TestCase):
     def setUp(self) -> None:
         self.config_space = CS.ConfigurationSpace()
-        lb, ub = 1, 100
+        lb, ub = 1, 101
         self.config_space.add_hyperparameter(CSH.UniformFloatHyperparameter("f", lower=lb, upper=ub))
-        self.config_space.add_hyperparameter(CSH.UniformFloatHyperparameter("fq", lower=lb, upper=ub, q=0.5))
+        self.config_space.add_hyperparameter(CSH.UniformFloatHyperparameter("fq", lower=lb, upper=ub, q=2))
         self.config_space.add_hyperparameter(CSH.UniformFloatHyperparameter("fql", lower=lb, upper=ub, q=0.5, log=True))
         self.config_space.add_hyperparameter(CSH.UniformFloatHyperparameter("fl", lower=lb, upper=ub, log=True))
 
@@ -75,10 +75,10 @@ class TestFuncs(unittest.TestCase):
                     assert config.lower <= value <= config.upper
 
                     if q is not None:
-                        self.assertAlmostEqual(int((value + 1e-12) / q), (value + 1e-12) / q)
+                        lb = config.lower
+                        self.assertAlmostEqual(int((value - lb + 1e-12) / q), (value - lb + 1e-12) / q)
 
     def test_revert_eval_config(self) -> None:
-        """TODO: Ordinal"""
         eval_config = {
             "c": 0,
             "f": 10.1,
@@ -99,7 +99,7 @@ class TestFuncs(unittest.TestCase):
             hp_names=self.hp_names,
         )
 
-        ans = {"c": "x", "f": 10.1, "fl": 10.1, "fq": 10.0, "fql": 10.0, "i": 10, "il": 10, "o": 5, "ol": 100}
+        ans = {"c": "x", "f": 10.1, "fl": 10.1, "fq": 11.0, "fql": 10.0, "i": 10, "il": 10, "o": 5, "ol": 100}
 
         for a, v in zip(ans.values(), config.values()):
             if isinstance(a, float):
@@ -111,7 +111,7 @@ class TestFuncs(unittest.TestCase):
             "c": 1,
             "f": 10.3,
             "fl": np.log(10.3),
-            "fq": 10.3,
+            "fq": 9.8,
             "fql": np.log(10.3),
             "i": 10.3,
             "il": np.log(10.6),
@@ -127,7 +127,7 @@ class TestFuncs(unittest.TestCase):
             hp_names=self.hp_names,
         )
 
-        ans = {"c": "y", "f": 10.3, "fl": 10.3, "fq": 10.5, "fql": 10.5, "i": 10, "il": 11, "o": 6, "ol": 10}
+        ans = {"c": "y", "f": 10.3, "fl": 10.3, "fq": 9.0, "fql": 10.5, "i": 10, "il": 11, "o": 6, "ol": 10}
 
         for a, v in zip(ans.values(), config.values()):
             if isinstance(a, float):

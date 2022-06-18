@@ -8,7 +8,7 @@ import ConfigSpace.hyperparameters as CSH
 import numpy as np
 import unittest
 
-from tpe.optimizer.tpe import TPEOptimizer
+from tpe.optimizer.tpe_optimizer import TPEOptimizer
 from tpe.utils.utils import get_logger
 
 
