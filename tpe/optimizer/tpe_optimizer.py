@@ -9,11 +9,15 @@ from tpe.optimizer.tpe import TreeStructuredParzenEstimator
 from tpe.utils.constants import PercentileFuncMaker, default_percentile_maker
 
 
+DEFAULT_OBJECTIVE_NAMES = ["loss"]
+
+
 class TPEOptimizer(BaseOptimizer):
     def __init__(
         self,
         obj_func: ObjectiveFunc,
         config_space: CS.ConfigurationSpace,
+        *,
         resultfile: str = "temp",
         n_init: int = 10,
         max_evals: int = 100,
@@ -22,8 +26,10 @@ class TPEOptimizer(BaseOptimizer):
         runtime_name: str = "iter_time",
         only_requirements: bool = False,
         n_ei_candidates: int = 24,
-        # TODO: task names for transfer learning
-        result_keys: List[str] = ["loss"],
+        result_keys: List[str] = DEFAULT_OBJECTIVE_NAMES[:],
+        objective_names: List[str] = DEFAULT_OBJECTIVE_NAMES[:],
+        constraint_names: Optional[List[str]] = None,
+        metadata: Optional[Dict[str, Dict[str, np.ndarray]]] = None,
         min_bandwidth_factor: float = 1e-1,
         top: float = 1.0,
         # TODO: Make dict of percentile_func_maker
@@ -42,6 +48,11 @@ class TPEOptimizer(BaseOptimizer):
             only_requirements (bool): If True, we only save runtime and loss.
             n_ei_candidates (int): The number of samplings to optimize the EI value
             result_keys (List[str]): Keys of results.
+            objective_names (List[str]): The objective function names required for multi-objective.
+            constraint_names (List[str]): The constraint names required for constraint optimization.
+            metadata (Optional[Dict[str, Dict[str, np.ndarray]]]):
+                Meta data required for meta-learning.
+                Dict[task name, Dict[hyperparam/objective name, observation array]].
             min_bandwidth_factor (float): The minimum bandwidth for numerical parameters
             top (float): The hyperparam of the cateogircal kernel. It defines the prob of the top category.
         """

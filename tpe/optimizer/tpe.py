@@ -76,13 +76,13 @@ class TreeStructuredParzenEstimator:
         self._mvpe_upper: MultiVariateParzenEstimator
 
     def apply_knowledge_augmentation(self, observations: Dict[str, np.ndarray]) -> None:
-        if self.observations[self._metric_name].size != 0:
+        if self._observations[self._metric_name].size != 0:
             raise ValueError("Knowledge augmentation must be applied before the optimization.")
 
         self._observations = {hp_name: vals.copy() for hp_name, vals in observations.items()}
-        order = np.argsort(self.observations[self._metric_name])
+        order = np.argsort(self._observations[self._metric_name])
         self._sorted_observations = {
-            hp_name: observations[order] for hp_name, observations in self.observations.items()
+            hp_name: observations[order] for hp_name, observations in self._observations.items()
         }
         self._n_lower = self._percentile_func(self._sorted_observations[self._metric_name])
         n_observations = self._observations[self._metric_name].size
