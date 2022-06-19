@@ -6,7 +6,7 @@ from fast_pareto import is_pareto_front, nondominated_rank
 
 import numpy as np
 
-from tpe.optimizer.models.base_tpe import BaseTPE
+from tpe.optimizer.models import BaseTPE
 
 
 class MultiObjectiveTPE(BaseTPE):

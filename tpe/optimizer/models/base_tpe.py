@@ -15,7 +15,32 @@ from parzen_estimator import (
 from tpe.utils.constants import NumericType, config2type
 
 
-class BaseTPE(metaclass=ABCMeta):
+class AbstractTPE(metaclass=ABCMeta):
+    @abstractmethod
+    def update_observations(
+        self, eval_config: Dict[str, NumericType], results: Dict[str, float], runtime: float
+    ) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def apply_knowledge_augmentation(self, observations: Dict[str, np.ndarray]) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def compute_probability_improvement(self, config_cands: Dict[str, np.ndarray]) -> np.ndarray:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_config_candidates(self) -> Dict[str, np.ndarray]:
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def observations(self) -> Dict[str, np.ndarray]:
+        raise NotImplementedError
+
+
+class BaseTPE(AbstractTPE, metaclass=ABCMeta):
     def __init__(
         self,
         config_space: CS.ConfigurationSpace,
@@ -80,7 +105,7 @@ class BaseTPE(metaclass=ABCMeta):
         raise NotImplementedError
 
     def apply_knowledge_augmentation(self, observations: Dict[str, np.ndarray]) -> None:
-        if any(self.observations[metric_name].size != 0 for metric_name in self._metric_names):
+        if any(self._observations[metric_name].size != 0 for metric_name in self._metric_names):
             raise ValueError("Knowledge augmentation must be applied before the optimization.")
 
         self._observations = {name: vals.copy() for name, vals in observations.items()}
@@ -99,7 +124,7 @@ class BaseTPE(metaclass=ABCMeta):
 
         Args:
             eval_config (Dict[str, NumericType]): The configuration to evaluate (after conversion)
-            loss (float): The loss value as a result of the evaluation
+            results (Dict[str, float]): The dict of loss values.
             runtime (float): The runtime for both sampling and training
         """
         order = self._calculate_order(results)
@@ -143,22 +168,18 @@ class BaseTPE(metaclass=ABCMeta):
         self._mvpe_lower = MultiVariateParzenEstimator(pe_lower_dict)
         self._mvpe_upper = MultiVariateParzenEstimator(pe_upper_dict)
 
-    def get_config_candidates(self, n_samples: Optional[int] = None) -> Dict[str, np.ndarray]:
+    def get_config_candidates(self) -> Dict[str, np.ndarray]:
         """
         Since we compute the probability improvement of each objective independently,
         we need to sample the configurations in advance.
-
-        Args:
-            n_samples (int):
-                The number of samples.
-                If None is provided, we use n_ei_candidates.
 
         Returns:
             config_cands (Dict[str, np.ndarray]):
                 A dict of arrays of candidates in each dimension
         """
-        n_samples = n_samples if n_samples is not None else self._n_ei_candidates
-        return self._mvpe_lower.sample(n_samples=n_samples, rng=self._rng, dim_independent=True, return_dict=True)
+        return self._mvpe_lower.sample(
+            n_samples=self._n_ei_candidates, rng=self._rng, dim_independent=True, return_dict=True
+        )
 
     def compute_config_loglikelihoods(self, config_cands: Dict[str, np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -182,7 +203,7 @@ class BaseTPE(metaclass=ABCMeta):
 
     def compute_probability_improvement(self, config_cands: Dict[str, np.ndarray]) -> np.ndarray:
         """
-        Compute the probability improvement given configurations
+        Compute the (log) probability improvement given configurations
 
         Args:
             config_cands (Dict[str, np.ndarray]):
