@@ -1,4 +1,5 @@
-from typing import Any, Callable, Dict, Optional, Tuple, Type
+from abc import ABCMeta, abstractmethod
+from typing import Dict, List, Optional, Tuple
 
 import ConfigSpace as CS
 
@@ -14,13 +15,12 @@ from parzen_estimator import (
 from tpe.utils.constants import NumericType, config2type
 
 
-class BaseTPE:
+class BaseTPE(metaclass=ABCMeta):
     def __init__(
         self,
         config_space: CS.ConfigurationSpace,
-        percentile_func: Callable[[np.ndarray], int],
         n_ei_candidates: int,
-        metric_name: str,
+        metric_names: List[str],
         runtime_name: str,
         seed: Optional[int],
         min_bandwidth_factor: float,
@@ -32,7 +32,7 @@ class BaseTPE:
             n_ei_candidates (int): The number of samplings to optimize the EI value
             config_space (CS.ConfigurationSpace): The searching space of the task
             hp_names (List[str]): The list of hyperparameter names
-            metric_name (str): The name of the metric (or objective function value)
+            metric_names (List[str]): The names of the metrics (or objective functions)
             runtime_name (str): The name of the runtime metric.
             observations (Dict[str, Any]): The storage of the observations
             sorted_observations (Dict[str, Any]): The storage of the observations sorted based on loss
@@ -40,28 +40,24 @@ class BaseTPE:
             top (float): The hyperparam of the cateogircal kernel. It defines the prob of the top category.
             is_categoricals (Dict[str, bool]): Whether the given hyperparameter is categorical
             is_ordinals (Dict[str, bool]): Whether the given hyperparameter is ordinal
-            percentile_func (Callable[[np.ndarray], int]):
-                The function that returns the number of a better group based on the total number of evaluations.
         """
         self._rng = np.random.RandomState(seed)
         self._n_ei_candidates = n_ei_candidates
         self._config_space = config_space
         self._hp_names = list(config_space._hyperparameters.keys())
-        self._metric_name = metric_name
+        self._metric_names = metric_names[:]
         self._runtime_name = runtime_name
         self._n_lower = 0
-        self._percentile = 0
+        self._percentile = 0.0
         self._min_bandwidth_factor = min_bandwidth_factor
         self._top = top
 
-        self._observations = {hp_name: np.array([]) for hp_name in self._hp_names}
-        self._sorted_observations = {hp_name: np.array([]) for hp_name in self._hp_names}
-        self._observations[self._metric_name] = np.array([])
-        self._sorted_observations[self._metric_name] = np.array([])
+        self._observations: Dict[str, np.ndarray] = {hp_name: np.array([]) for hp_name in self._hp_names}
+        self._sorted_observations: Dict[str, np.ndarray] = {hp_name: np.array([]) for hp_name in self._hp_names}
+        self._observations.update({metric_name: np.array([]) for metric_name in metric_names})
+        self._sorted_observations.update({metric_name: np.array([]) for metric_name in metric_names})
         self._observations[self._runtime_name] = np.array([])
         self._sorted_observations[self._runtime_name] = np.array([])
-
-        self._percentile_func = percentile_func
 
         self._is_categoricals = {
             hp_name: self._config_space.get_hyperparameter(hp_name).__class__.__name__ == "CategoricalHyperparameter"
@@ -75,51 +71,29 @@ class BaseTPE:
         self._mvpe_lower: MultiVariateParzenEstimator
         self._mvpe_upper: MultiVariateParzenEstimator
 
+    @abstractmethod
+    def _percentile_func(self) -> int:
+        raise NotImplementedError
+
+    @abstractmethod
+    def _calculate_order(self, results: Optional[Dict[str, float]] = None) -> np.ndarray:
+        raise NotImplementedError
+
     def apply_knowledge_augmentation(self, observations: Dict[str, np.ndarray]) -> None:
-        if self._observations[self._metric_name].size != 0:
+        if any(self.observations[metric_name].size != 0 for metric_name in self._metric_names):
             raise ValueError("Knowledge augmentation must be applied before the optimization.")
 
-        self._observations = {hp_name: vals.copy() for hp_name, vals in observations.items()}
-        order = np.argsort(self._observations[self._metric_name])
-        self._sorted_observations = {
-            hp_name: observations[order] for hp_name, observations in self._observations.items()
-        }
-        self._n_lower = self._percentile_func(self._sorted_observations[self._metric_name])
-        n_observations = self._observations[self._metric_name].size
+        self._observations = {name: vals.copy() for name, vals in observations.items()}
+        order = self._calculate_order()
+        self._sorted_observations = {name: observations[order] for name, observations in self._observations.items()}
+        self._n_lower = self._percentile_func()
+        n_observations = self._observations[self._metric_names[0]].size
         self._percentile = self._n_lower / n_observations
         self._update_parzen_estimators()
 
-    def _insert_observations(
-        self, key: str, insert_loc: int, val: Any, is_categorical: bool, dtype: Optional[Type[np.number]] = None
+    def update_observations(
+        self, eval_config: Dict[str, NumericType], results: Dict[str, float], runtime: float
     ) -> None:
-        data, sorted_data = self._observations, self._sorted_observations
-
-        if is_categorical:
-            data[key] = np.append(data[key], val)
-            if sorted_data[key].size == 0:  # cannot cast str to float!
-                sorted_data[key] = np.array([val], dtype="U32")
-            else:
-                sorted_data[key] = np.insert(sorted_data[key], insert_loc, val)
-        else:
-            if dtype is None:
-                raise ValueError("dtype must be specified, but got None")
-
-            data[key] = np.append(data[key], val).astype(dtype)
-            sorted_data[key] = np.insert(sorted_data[key], insert_loc, val).astype(dtype)
-
-    def update_observations(self, eval_config: Dict[str, NumericType], loss: float, runtime: float) -> None:
-        """
-        Update the observations for the TPE construction.
-        Users can customize here by inheriting the class.
-
-        Args:
-            eval_config (Dict[str, NumericType]): The configuration to evaluate (after conversion)
-            loss (float): The loss value as a result of the evaluation
-            runtime (float): The runtime for both sampling and training
-        """
-        self._update_observations(eval_config, loss, runtime)
-
-    def _update_observations(self, eval_config: Dict[str, NumericType], loss: float, runtime: float) -> None:
         """
         Update the observations for the TPE construction
 
@@ -128,32 +102,24 @@ class BaseTPE:
             loss (float): The loss value as a result of the evaluation
             runtime (float): The runtime for both sampling and training
         """
-        sorted_losses, losses = (
-            self._sorted_observations[self._metric_name],
-            self._observations[self._metric_name],
-        )
-        insert_loc = np.searchsorted(sorted_losses, loss, side="right")
-        self._observations[self._metric_name] = np.append(losses, loss)
-        self._sorted_observations[self._metric_name] = np.insert(sorted_losses, insert_loc, loss)
-        self._n_lower = self._percentile_func(self._sorted_observations[self._metric_name])
-        self._percentile = self._n_lower / self._observations[self._metric_name].size
+        order = self._calculate_order(results)
+
+        for metric_name in self._metric_names:
+            metric_val = results[metric_name]
+            self._observations[metric_name] = np.append(self._observations[metric_name], metric_val)
+            self._sorted_observations[metric_name] = self._observations[metric_name][order]
 
         for hp_name in self._hp_names:
-            is_categorical = self._is_categoricals[hp_name]
-            config_type = self._config_space.get_hyperparameter(hp_name).__class__.__name__
-            self._insert_observations(
-                key=hp_name,
-                insert_loc=insert_loc,
-                val=eval_config[hp_name],
-                is_categorical=is_categorical,
-                dtype=config2type[config_type] if not is_categorical else None,
-            )
+            hp_val = eval_config[hp_name]
+            self._observations[hp_name] = np.append(self._observations[hp_name], hp_val)
+            self._sorted_observations[hp_name] = self._observations[hp_name][order]
         else:
+            self._n_lower = self._percentile_func()
+            self._percentile = self._n_lower / self._observations[self._metric_names[0]].size
             self._update_parzen_estimators()
             runtime_key = self._runtime_name
-            self._insert_observations(
-                key=runtime_key, insert_loc=insert_loc, val=runtime, is_categorical=False, dtype=np.float32
-            )
+            self._observations[runtime_key] = np.append(self._observations[runtime_key], runtime)
+            self._sorted_observations[runtime_key] = self._observations[runtime_key][order]
 
     def _update_parzen_estimators(self) -> None:
         n_lower = self._n_lower
