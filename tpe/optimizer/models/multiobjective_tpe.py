@@ -14,7 +14,7 @@ class MultiObjectiveTPE(BaseTPE):
         self,
         config_space: CS.ConfigurationSpace,
         n_ei_candidates: int,
-        metric_names: List[str],
+        objective_names: List[str],
         runtime_name: str,
         seed: Optional[int],
         min_bandwidth_factor: float,
@@ -23,7 +23,7 @@ class MultiObjectiveTPE(BaseTPE):
         super().__init__(
             config_space=config_space,
             n_ei_candidates=n_ei_candidates,
-            metric_names=metric_names,
+            objective_names=objective_names,
             runtime_name=runtime_name,
             seed=seed,
             min_bandwidth_factor=min_bandwidth_factor,
@@ -33,26 +33,26 @@ class MultiObjectiveTPE(BaseTPE):
         self._nondominated_ranks: np.ndarray
 
     def _percentile_func(self) -> int:
-        n_observations = self._observations[self._metric_names[0]].size
+        n_observations = self._observations[self._objective_names[0]].size
         return max(self._n_fronts, int(np.ceil(0.15 * n_observations)))
 
     def _calculate_order(self, results: Optional[Dict[str, float]] = None) -> np.ndarray:
         with_new_result = results is not None
 
-        n_observations = self._observations[self._metric_names[0]].size
-        n_objectives = len(self._metric_names)
+        n_observations = self._observations[self._objective_names[0]].size
+        n_objectives = len(self._objective_names)
         costs = np.zeros((n_observations + with_new_result, n_objectives))
-        for idx, metric_name in enumerate(self._metric_names):
+        for idx, objective_name in enumerate(self._objective_names):
             if not with_new_result:
-                costs[:, idx] = self._observations[metric_name]
+                costs[:, idx] = self._observations[objective_name]
                 continue
             else:
-                costs[:-1, idx] = self._observations[metric_name]
+                costs[:-1, idx] = self._observations[objective_name]
 
             assert results is not None  # mypy redefinition
-            new_loss = results.get(metric_name, None)
+            new_loss = results.get(objective_name, None)
             if new_loss is None:
-                raise ValueError(f"The evaluation must return {metric_name}.")
+                raise ValueError(f"The evaluation must return {objective_name}.")
 
             costs[-1, idx] = new_loss
 

@@ -9,6 +9,7 @@ import numpy as np
 import unittest
 
 from tpe.optimizer.tpe_optimizer import TPEOptimizer
+from tpe.optimizer.models import ConstraintTPE
 from tpe.utils.utils import get_logger
 
 
@@ -41,7 +42,6 @@ def mix_func(eval_config: Dict[str, Union[str, float]]) -> Tuple[Dict[str, float
 def cleanup() -> None:
     os.remove("log/test.log")
     os.remove("results/test.json")
-    os.remove("incumbents/test.json")
 
 
 class TestTreeStructuredParzenEstimator(unittest.TestCase):
@@ -63,12 +63,12 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
         self.hp_names_cat = list(self.cs_cat._hyperparameters.keys())
 
     def test_update_observations(self) -> None:
-        max_evals, metric_name, runtime_name = 20, "loss", "test_run"
+        max_evals, objective_name, runtime_name = 20, "loss", "test_run"
         opt = TPEOptimizer(
             obj_func=mix_func,
             config_space=self.cs_cat,
             max_evals=max_evals,
-            metric_names=[metric_name],
+            objective_names=[objective_name],
             runtime_name=runtime_name,
             resultfile="test",
             min_bandwidth_factor=1e-2,
@@ -78,10 +78,11 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
 
         eval_config = {hp_name: 0.0 for hp_name in self.hp_names_cat}
         eval_config["func"] = "cosine"  # type: ignore
-        opt._sampler.update_observations(eval_config=eval_config, results={metric_name: 0}, runtime=0)
-        assert opt._sampler._sorted_observations[metric_name][0] == 0.0
+        opt._sampler.update_observations(eval_config=eval_config, results={objective_name: 0}, runtime=0)
+        assert not isinstance(opt._sampler, ConstraintTPE)
+        assert opt._sampler._sorted_observations[objective_name][0] == 0.0
         assert opt._sampler._sorted_observations[runtime_name][0] == 0.0
-        assert opt._sampler._sorted_observations[metric_name].size == max_evals + 1
+        assert opt._sampler._sorted_observations[objective_name].size == max_evals + 1
         for hp_name in self.hp_names:
             assert opt._sampler.observations[hp_name].size == max_evals + 1
             assert opt._sampler.observations[hp_name][-1] == 0.0
@@ -90,19 +91,19 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
 
         min_value = np.inf
         # The sorted_observations must be sorted
-        for v in opt._sampler._sorted_observations[metric_name]:
+        for v in opt._sampler._sorted_observations[objective_name]:
             assert min_value >= v
             min_value = min(min_value, np.inf)
 
         cleanup()
 
     def test_apply_knowledge_augmentation(self) -> None:
-        metric_name = "loss"
+        objective_name = "loss"
         opt = TPEOptimizer(
             obj_func=sphere,
             config_space=self.cs,
             max_evals=10,
-            metric_names=[metric_name],
+            objective_names=[objective_name],
             resultfile="test",
             min_bandwidth_factor=1e-2,
             top=0.8,
@@ -110,11 +111,11 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
         ob = {}
         n_samples = 10
         rng = np.random.RandomState(0)
-        ob[metric_name] = rng.random(n_samples)
+        ob[objective_name] = rng.random(n_samples)
         for hp_name in self.hp_names:
             ob[hp_name] = rng.random(n_samples)
 
-        order = np.argsort(ob[metric_name])
+        order = np.argsort(ob[objective_name])
         opt._sampler.apply_knowledge_augmentation(ob)  # type: ignore
 
         for hp_name in ob.keys():
@@ -123,6 +124,7 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
 
         sorted_ob = {k: x[order] for k, x in ob.items()}
         for hp_name in ob.keys():
+            assert not isinstance(opt._sampler, ConstraintTPE)
             cnt = np.count_nonzero(opt._sampler._sorted_observations[hp_name] != sorted_ob[hp_name])
             assert cnt == 0
 
@@ -142,6 +144,7 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
         )
         opt.optimize(logger_name="test")
 
+        assert not isinstance(opt._sampler, ConstraintTPE)
         opt._sampler._n_ei_candidates = 3
         config_cands = opt._sampler.get_config_candidates()
         assert len(config_cands) == len(self.hp_names)
@@ -173,6 +176,7 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
         )
         opt.optimize(logger_name="test")
 
+        assert not isinstance(opt._sampler, ConstraintTPE)
         opt._sampler._n_ei_candidates = 5
         config_cands = opt._sampler.get_config_candidates()
         assert len(config_cands) == len(self.hp_names_cat)
@@ -248,8 +252,8 @@ class TestTPEOptimizer(unittest.TestCase):
                     min_bandwidth_factor=1e-2,
                     top=0.8,
                 )
-                _, best_loss = opt.optimize(logger_name="test")
-                losses[i] = best_loss
+                opt.optimize(logger_name="test")
+                losses[i] = opt.fetch_observations()["loss"].min()
                 assert opt._sampler.observations["x0"].size == max_evals
 
             # performance test

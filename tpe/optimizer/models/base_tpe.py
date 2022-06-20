@@ -45,7 +45,7 @@ class BaseTPE(AbstractTPE, metaclass=ABCMeta):
         self,
         config_space: CS.ConfigurationSpace,
         n_ei_candidates: int,
-        metric_names: List[str],
+        objective_names: List[str],
         runtime_name: str,
         seed: Optional[int],
         min_bandwidth_factor: float,
@@ -57,7 +57,7 @@ class BaseTPE(AbstractTPE, metaclass=ABCMeta):
             n_ei_candidates (int): The number of samplings to optimize the EI value
             config_space (CS.ConfigurationSpace): The searching space of the task
             hp_names (List[str]): The list of hyperparameter names
-            metric_names (List[str]): The names of the metrics (or objective functions)
+            objective_names (List[str]): The names of the metrics (or objective functions)
             runtime_name (str): The name of the runtime metric.
             observations (Dict[str, Any]): The storage of the observations
             sorted_observations (Dict[str, Any]): The storage of the observations sorted based on loss
@@ -70,7 +70,7 @@ class BaseTPE(AbstractTPE, metaclass=ABCMeta):
         self._n_ei_candidates = n_ei_candidates
         self._config_space = config_space
         self._hp_names = list(config_space._hyperparameters.keys())
-        self._metric_names = metric_names[:]
+        self._objective_names = objective_names[:]
         self._runtime_name = runtime_name
         self._n_lower = 0
         self._percentile = 0.0
@@ -79,8 +79,8 @@ class BaseTPE(AbstractTPE, metaclass=ABCMeta):
 
         self._observations: Dict[str, np.ndarray] = {hp_name: np.array([]) for hp_name in self._hp_names}
         self._sorted_observations: Dict[str, np.ndarray] = {hp_name: np.array([]) for hp_name in self._hp_names}
-        self._observations.update({metric_name: np.array([]) for metric_name in metric_names})
-        self._sorted_observations.update({metric_name: np.array([]) for metric_name in metric_names})
+        self._observations.update({objective_name: np.array([]) for objective_name in objective_names})
+        self._sorted_observations.update({objective_name: np.array([]) for objective_name in objective_names})
         self._observations[self._runtime_name] = np.array([])
         self._sorted_observations[self._runtime_name] = np.array([])
 
@@ -106,14 +106,14 @@ class BaseTPE(AbstractTPE, metaclass=ABCMeta):
         raise NotImplementedError
 
     def apply_knowledge_augmentation(self, observations: Dict[str, np.ndarray]) -> None:
-        if any(self._observations[metric_name].size != 0 for metric_name in self._metric_names):
+        if any(self._observations[objective_name].size != 0 for objective_name in self._objective_names):
             raise ValueError("Knowledge augmentation must be applied before the optimization.")
 
         self._observations = {name: vals.copy() for name, vals in observations.items()}
         order = self._calculate_order()
         self._sorted_observations = {name: observations[order] for name, observations in self._observations.items()}
         self._n_lower = self._percentile_func()
-        n_observations = self._observations[self._metric_names[0]].size
+        n_observations = self._observations[self._objective_names[0]].size
         self._percentile = self._n_lower / n_observations
         self._update_parzen_estimators()
 
@@ -134,10 +134,10 @@ class BaseTPE(AbstractTPE, metaclass=ABCMeta):
         """
         order = self._calculate_order(results)
 
-        for metric_name in self._metric_names:
-            metric_val = results[metric_name]
-            self._observations[metric_name] = np.append(self._observations[metric_name], metric_val)
-            self._sorted_observations[metric_name] = self._observations[metric_name][order]
+        for objective_name in self._objective_names:
+            metric_val = results[objective_name]
+            self._observations[objective_name] = np.append(self._observations[objective_name], metric_val)
+            self._sorted_observations[objective_name] = self._observations[objective_name][order]
 
         for hp_name in self._hp_names:
             hp_val = eval_config[hp_name]
@@ -145,7 +145,7 @@ class BaseTPE(AbstractTPE, metaclass=ABCMeta):
             self._sorted_observations[hp_name] = self._observations[hp_name][order]
         else:
             self._n_lower = self._percentile_func() if percentile_func is None else percentile_func()
-            self._percentile = self._n_lower / self._observations[self._metric_names[0]].size
+            self._percentile = self._n_lower / self._observations[self._objective_names[0]].size
             self._update_parzen_estimators()
             runtime_key = self._runtime_name
             self._observations[runtime_key] = np.append(self._observations[runtime_key], runtime)

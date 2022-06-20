@@ -48,10 +48,6 @@ class BestUpdateFunc(Protocol):
         raise NotImplementedError
 
 
-def default_best_update(results: Dict[str, float], loss: float, best_loss: float) -> bool:
-    return loss < best_loss
-
-
 class BaseOptimizer(metaclass=ABCMeta):
     def __init__(
         self,
@@ -61,10 +57,10 @@ class BaseOptimizer(metaclass=ABCMeta):
         n_init: int,
         max_evals: int,
         seed: Optional[int],
-        metric_name: str,
         runtime_name: str,
         only_requirements: bool,
-        result_keys: List[str],
+        objective_names: List[str],
+        constraints: Optional[Dict[str, float]],
     ):
         """
         Attributes:
@@ -79,7 +75,6 @@ class BaseOptimizer(metaclass=ABCMeta):
             is_categoricals (Dict[str, bool]): Whether the given hyperparameter is categorical
             is_ordinals (Dict[str, bool]): Whether the given hyperparameter is ordinal
             only_requirements (bool): If True, we only save runtime and loss.
-            result_keys (List[str]): Keys of results.
         """
 
         self._rng = np.random.RandomState(seed)
@@ -87,10 +82,11 @@ class BaseOptimizer(metaclass=ABCMeta):
         self.resultfile = resultfile
         self._obj_func = obj_func
         self._hp_names = list(config_space._hyperparameters.keys())
-        self._metric_name = metric_name
         self._runtime_name = runtime_name
-        self._result_keys = result_keys[:]
-        self._requirements = [metric_name, self._runtime_name] if only_requirements else None
+        self._objective_names = objective_names[:]
+        self._constraints = {} if constraints is None else constraints.copy()
+        metric_names = self._objective_names + list(self._constraints.keys())
+        self._requirements = (metric_names + [self._runtime_name]) if only_requirements else None
 
         self._config_space = config_space
         self._is_categoricals = {
@@ -102,24 +98,18 @@ class BaseOptimizer(metaclass=ABCMeta):
             for hp_name in self._hp_names
         }
 
-    def optimize(
-        self, logger_name: Optional[str] = None, best_update: BestUpdateFunc = default_best_update
-    ) -> Tuple[Dict[str, Any], float]:
+    def optimize(self, logger_name: Optional[str] = None) -> None:
         """
         Optimize obj_func using TPE Sampler and store the results in the end.
 
         Args:
             logger_name (Optional[str]):
                 The name of logger to write the intermediate results
-
-        Returns:
-            best_config (Dict[str, Any]): The configuration that has the best loss
-            best_loss (float): The best loss value during the optimization
         """
         use_logger = logger_name is not None
         logger_name = logger_name if use_logger else "temp"
         logger = get_logger(logger_name, logger_name, disable=(not use_logger))
-        best_config, best_loss, t = {}, np.inf, 0
+        t = 0
 
         while True:
             logger.info(f"\nIteration: {t + 1}")
@@ -129,30 +119,20 @@ class BaseOptimizer(metaclass=ABCMeta):
 
             results, runtime = self._obj_func(eval_config)
             self.update(eval_config=eval_config, results=results, runtime=runtime + time2sample)
-            loss = results[self._metric_name]
 
-            if best_update(results=results, loss=loss, best_loss=best_loss):
-                best_loss = loss
-                best_config = eval_config
-
-            logger.info(f"Cur. loss: {loss:.4e}, Cur. Config: {eval_config}")
-            logger.info(f"Best loss: {best_loss:.4e}, Best Config: {best_config}")
+            logger.info(f"Cur. results: {results}, Cur. Config: {eval_config}")
             t += 1
 
             if t >= self._max_evals:
                 break
 
         observations = self.fetch_observations()
-        logger.info(f"Best loss: {best_loss:.4e}")
         store_results(
-            best_config=best_config,
             logger=logger,
             observations=observations,
             file_name=self.resultfile,
             requirements=self._requirements,
         )
-
-        return best_config, best_loss
 
     @abstractmethod
     def update(self, eval_config: Dict[str, Any], results: Dict[str, float], runtime: float) -> None:

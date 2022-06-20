@@ -162,7 +162,6 @@ def revert_eval_config(
 
 
 def store_results(
-    best_config: Dict[str, np.ndarray],
     logger: Logger,
     observations: Dict[str, np.ndarray],
     file_name: str,
@@ -172,11 +171,6 @@ def store_results(
     logger.info(f"\nThe observations: {observations}")
     if requirements is None:
         save_observations(filename=file_name, observations=observations)
-
-        subdirs = "/".join(file_name.split("/")[:-1])
-        os.makedirs(f"incumbents/{subdirs}", exist_ok=True)
-        with open(f"incumbents/{file_name}.json", mode="w") as f:
-            json.dump(best_config, f, indent=4)
     else:
         required_observations = {k: v for k, v in observations.items() if k in requirements}
         save_observations(filename=file_name, observations=required_observations)

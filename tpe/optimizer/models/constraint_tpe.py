@@ -21,7 +21,7 @@ class ConstraintTPE(AbstractTPE):
         self,
         config_space: CS.ConfigurationSpace,
         n_ei_candidates: int,
-        metric_names: List[str],
+        objective_names: List[str],
         runtime_name: str,
         seed: Optional[int],
         min_bandwidth_factor: float,
@@ -37,23 +37,23 @@ class ConstraintTPE(AbstractTPE):
             top=top,
         )
         self._constraints = constraints.copy()
-        self._metric_names = metric_names[:]
+        self._objective_names = objective_names[:]
         self._samplers: Dict[str, TPESamplerType] = {}
         self._satisfied_flag = np.array([])
-        self._feasible_counts = {metric_name: 0 for metric_name in constraints.keys()}
-        self._init_samplers(metric_names, tpe_params)
+        self._feasible_counts = {name: 0 for name in constraints.keys()}
+        self._init_samplers(objective_names, tpe_params)
 
-    def _init_samplers(self, metric_names: List[str], tpe_params: Dict[str, Any]) -> None:
-        if len(metric_names) == 1:
-            self._samplers[OBJECTIVE_KEY] = TPE(metric_name=metric_names[0], **tpe_params)
+    def _init_samplers(self, objective_names: List[str], tpe_params: Dict[str, Any]) -> None:
+        if len(objective_names) == 1:
+            self._samplers[OBJECTIVE_KEY] = TPE(objective_name=objective_names[0], **tpe_params)
         else:
-            self._samplers[OBJECTIVE_KEY] = MultiObjectiveTPE(metric_names=metric_names, **tpe_params)
+            self._samplers[OBJECTIVE_KEY] = MultiObjectiveTPE(objective_names=objective_names, **tpe_params)
 
-        for metric_name, threshold in self._constraints.items():
-            self._samplers[metric_name] = TPE(metric_name=metric_name, **tpe_params)
+        for name, threshold in self._constraints.items():
+            self._samplers[name] = TPE(objective_name=name, **tpe_params)
 
     def _is_satisfied(self, results: Dict[str, float]) -> bool:
-        return all(results[metric_name] <= threshold for metric_name, threshold in self._constraints.items())
+        return all(results[name] <= threshold for name, threshold in self._constraints.items())
 
     def _validate_observations(self, n_observations: int, observations: Dict[str, np.ndarray]) -> None:
         for vals in observations.values():
@@ -72,25 +72,25 @@ class ConstraintTPE(AbstractTPE):
         n_observations = len(list(observations.values()))
         hp_names = main_sampler._hp_names[:]
         self._validate_observations(n_observations=n_observations, observations=observations)
-        if any(main_sampler._observations[metric_name].size != 0 for metric_name in self._metric_names):
+        if any(main_sampler._observations[objective_name].size != 0 for objective_name in self._objective_names):
             raise ValueError("Knowledge augmentation must be applied before the optimization.")
 
-        all_objectives_exist = all(observations[metric_name].size != 0 for metric_name in self._metric_names)
-        all_constraints_exist = all(observations[metric_name].size != 0 for metric_name in self._constraints.keys())
+        all_objectives_exist = all(observations[objective_name].size != 0 for objective_name in self._objective_names)
+        all_constraints_exist = all(observations[name].size != 0 for name in self._constraints.keys())
         if all_objectives_exist and all_constraints_exist:
             self._satisfied_flag = self._get_is_satisfied_flag_from_data(n_observations, observations)
 
         if all_objectives_exist:
-            _observations = _copy_observations(observations=observations, param_names=hp_names + self._metric_names)
+            _observations = _copy_observations(observations=observations, param_names=hp_names + self._objective_names)
             main_sampler.apply_knowledge_augmentation(observations=_observations)
 
-        for metric_name, threshold in self._constraints.items():
-            if metric_name not in observations:
+        for name, threshold in self._constraints.items():
+            if name not in observations:
                 continue
 
-            _observations = _copy_observations(observations=observations, param_names=hp_names + [metric_name])
-            self._feasible_counts[metric_name] = np.sum(observations[metric_name] <= threshold)
-            self._samplers[metric_name].apply_knowledge_augmentation(observations=_observations)
+            _observations = _copy_observations(observations=observations, param_names=hp_names + [name])
+            self._feasible_counts[name] = np.sum(observations[name] <= threshold)
+            self._samplers[name].apply_knowledge_augmentation(observations=_observations)
 
     def _percentile_func_for_objective(self) -> int:
         sampler = self._samplers[OBJECTIVE_KEY]
@@ -113,7 +113,7 @@ class ConstraintTPE(AbstractTPE):
             runtime (float): The runtime for both sampling and training
         """
         self._satisfied_flag = np.append(self._satisfied_flag, self._is_satisfied(results))
-        _results = {metric_name: results[metric_name] for metric_name in self._metric_names}
+        _results = {objective_name: results[objective_name] for objective_name in self._objective_names}
         self._samplers[OBJECTIVE_KEY].update_observations(
             results=_results,
             eval_config=eval_config,
@@ -121,13 +121,13 @@ class ConstraintTPE(AbstractTPE):
             percentile_func=self._percentile_func_for_objective,
         )
 
-        for metric_name, threshold in self._constraints.items():
-            self._feasible_counts[metric_name] += results[metric_name] <= threshold
-            self._samplers[metric_name].update_observations(
-                results={metric_name: results[metric_name]},
+        for name, threshold in self._constraints.items():
+            self._feasible_counts[name] += results[name] <= threshold
+            self._samplers[name].update_observations(
+                results={name: results[name]},
                 eval_config=eval_config,
                 runtime=runtime,
-                percentile_func=lambda: max(1, self._feasible_counts[metric_name]),
+                percentile_func=lambda: max(1, self._feasible_counts[name]),
             )
 
     def get_config_candidates(self) -> Dict[str, np.ndarray]:
@@ -172,17 +172,17 @@ class ConstraintTPE(AbstractTPE):
                 = exp(log(gamma)) + exp(log(1 - gamma) + log(g(x)/l(x)))
         """
         pi_config = self._samplers[OBJECTIVE_KEY].compute_probability_improvement(config_cands)
-        for metric_name in self._constraints.keys():
-            pi_config += self._samplers[metric_name].compute_probability_improvement(config_cands)
+        for name in self._constraints.keys():
+            pi_config += self._samplers[name].compute_probability_improvement(config_cands)
 
         return pi_config
 
     @property
     def observations(self) -> Dict[str, np.ndarray]:
         observations = self._samplers[OBJECTIVE_KEY].observations
-        n_evals = observations[self._metric_names[0]].size
-        for metric_name in self._constraints.keys():
+        n_evals = observations[self._objective_names[0]].size
+        for name in self._constraints.keys():
             # Some constraints might be augmented and thus we need to take the latest n_evals values.
-            observations[metric_name] = self._samplers[metric_name]._observations[metric_name][-n_evals:]
+            observations[name] = self._samplers[name]._observations[name][-n_evals:]
 
         return observations
