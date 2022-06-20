@@ -1,5 +1,5 @@
 from abc import ABCMeta, abstractmethod
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 import ConfigSpace as CS
 
@@ -95,6 +95,7 @@ class BaseTPE(AbstractTPE, metaclass=ABCMeta):
         }
         self._mvpe_lower: MultiVariateParzenEstimator
         self._mvpe_upper: MultiVariateParzenEstimator
+        self._order: np.ndarray
 
     @abstractmethod
     def _percentile_func(self) -> int:
@@ -117,7 +118,11 @@ class BaseTPE(AbstractTPE, metaclass=ABCMeta):
         self._update_parzen_estimators()
 
     def update_observations(
-        self, eval_config: Dict[str, NumericType], results: Dict[str, float], runtime: float
+        self,
+        eval_config: Dict[str, NumericType],
+        results: Dict[str, float],
+        runtime: float,
+        percentile_func: Optional[Callable] = None,
     ) -> None:
         """
         Update the observations for the TPE construction
@@ -139,7 +144,7 @@ class BaseTPE(AbstractTPE, metaclass=ABCMeta):
             self._observations[hp_name] = np.append(self._observations[hp_name], hp_val)
             self._sorted_observations[hp_name] = self._observations[hp_name][order]
         else:
-            self._n_lower = self._percentile_func()
+            self._n_lower = self._percentile_func() if percentile_func is None else percentile_func()
             self._percentile = self._n_lower / self._observations[self._metric_names[0]].size
             self._update_parzen_estimators()
             runtime_key = self._runtime_name

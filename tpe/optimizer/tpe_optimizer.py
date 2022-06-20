@@ -60,6 +60,7 @@ class TPEOptimizer(BaseOptimizer):
             n_init=n_init,
             max_evals=max_evals,
             seed=seed,
+            # TODO: Adapt here
             metric_name=metric_names[0],
             runtime_name=runtime_name,
             only_requirements=only_requirements,

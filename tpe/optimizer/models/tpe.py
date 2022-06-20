@@ -39,4 +39,5 @@ class TPE(BaseTPE):
         else:
             loss_vals = np.append(self._observations[self._metric_name], results[self._metric_name])
 
-        return np.argsort(loss_vals)
+        self._order = np.argsort(loss_vals)
+        return self._order

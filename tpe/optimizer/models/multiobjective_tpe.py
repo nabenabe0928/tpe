@@ -58,4 +58,5 @@ class MultiObjectiveTPE(BaseTPE):
 
         self._nondominated_ranks = nondominated_rank(costs, tie_break=True)
         self._n_fronts = np.sum(is_pareto_front(costs))
-        return np.argsort(self._nondominated_ranks)
+        self._order = np.argsort(self._nondominated_ranks)
+        return self._order

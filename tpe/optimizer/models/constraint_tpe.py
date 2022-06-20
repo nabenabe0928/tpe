@@ -1,14 +1,15 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import ConfigSpace as CS
 
 import numpy as np
 
-from tpe.optimizer.models import AbstractTPE, MultiObjectiveTPE, TPE, TPESamplerType
+from tpe.optimizer.models import AbstractTPE, MultiObjectiveTPE, TPE
 from tpe.utils.constants import NumericType
 
 
 OBJECTIVE_KEY = "objective"
+TPESamplerType = Union[TPE, MultiObjectiveTPE]
 
 
 def _copy_observations(observations: Dict[str, np.ndarray], param_names: List[str]) -> Dict[str, np.ndarray]:
@@ -16,17 +17,16 @@ def _copy_observations(observations: Dict[str, np.ndarray], param_names: List[st
 
 
 class ConstraintTPE(AbstractTPE):
-    # TODO: Make it possible to input percentile func from outside as used to be
     def __init__(
         self,
         config_space: CS.ConfigurationSpace,
         n_ei_candidates: int,
         metric_names: List[str],
-        constraints: Dict[str, float],
         runtime_name: str,
         seed: Optional[int],
         min_bandwidth_factor: float,
         top: float,
+        constraints: Dict[str, float],
     ):
         tpe_params = dict(
             config_space=config_space,
@@ -49,11 +49,8 @@ class ConstraintTPE(AbstractTPE):
         else:
             self._samplers[OBJECTIVE_KEY] = MultiObjectiveTPE(metric_names=metric_names, **tpe_params)
 
-        # TODO: add percentile_func for objective
-
         for metric_name, threshold in self._constraints.items():
             self._samplers[metric_name] = TPE(metric_name=metric_name, **tpe_params)
-            # self._samplers[metric_name]._percentile_func = lambda: max(1, self._feasible_counts[metric_name])
 
     def _is_satisfied(self, results: Dict[str, float]) -> bool:
         return all(results[metric_name] <= threshold for metric_name, threshold in self._constraints.items())
@@ -95,6 +92,15 @@ class ConstraintTPE(AbstractTPE):
             self._feasible_counts[metric_name] = np.sum(observations[metric_name] <= threshold)
             self._samplers[metric_name].apply_knowledge_augmentation(observations=_observations)
 
+    def _percentile_func_for_objective(self) -> int:
+        sampler = self._samplers[OBJECTIVE_KEY]
+        n_lower = sampler._percentile_func()
+        sorted_satisfied_flag = self._satisfied_flag[sampler._order]
+        n_satisfied = sorted_satisfied_flag.cumsum()
+        # Take at least `n_lower` feasible solutions in the better group
+        idx = np.searchsorted(n_satisfied, n_lower, side="left") + 1
+        return min(idx, n_satisfied.size)
+
     def update_observations(
         self, eval_config: Dict[str, NumericType], results: Dict[str, float], runtime: float
     ) -> None:
@@ -106,15 +112,23 @@ class ConstraintTPE(AbstractTPE):
             results (Dict[str, float]): The dict of loss values.
             runtime (float): The runtime for both sampling and training
         """
+        self._satisfied_flag = np.append(self._satisfied_flag, self._is_satisfied(results))
         _results = {metric_name: results[metric_name] for metric_name in self._metric_names}
-        self._samplers[OBJECTIVE_KEY].update_observations(results=_results, eval_config=eval_config, runtime=runtime)
+        self._samplers[OBJECTIVE_KEY].update_observations(
+            results=_results,
+            eval_config=eval_config,
+            runtime=runtime,
+            percentile_func=self._percentile_func_for_objective,
+        )
 
         for metric_name, threshold in self._constraints.items():
             self._feasible_counts[metric_name] += results[metric_name] <= threshold
-            _results = {metric_name: results[metric_name]}
-            self._samplers[metric_name].update_observations(results=_results, eval_config=eval_config, runtime=runtime)
-
-        self._satisfied_flag = np.append(self._satisfied_flag, self._is_satisfied(results))
+            self._samplers[metric_name].update_observations(
+                results={metric_name: results[metric_name]},
+                eval_config=eval_config,
+                runtime=runtime,
+                percentile_func=lambda: max(1, self._feasible_counts[metric_name]),
+            )
 
     def get_config_candidates(self) -> Dict[str, np.ndarray]:
         """
