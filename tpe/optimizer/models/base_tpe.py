@@ -108,10 +108,12 @@ class BaseTPE(AbstractTPE, metaclass=ABCMeta):
     def apply_knowledge_augmentation(self, observations: Dict[str, np.ndarray]) -> None:
         if any(self._observations[objective_name].size != 0 for objective_name in self._objective_names):
             raise ValueError("Knowledge augmentation must be applied before the optimization.")
+        if any(objective_name not in observations for objective_name in self._objective_names):
+            raise ValueError("All objectives must be provided for when applying knowledge augmentation")
 
-        self._observations = {name: vals.copy() for name, vals in observations.items()}
+        self._observations.update({name: vals.copy() for name, vals in observations.items()})
         order = self._calculate_order()
-        self._sorted_observations = {name: observations[order] for name, observations in self._observations.items()}
+        self._sorted_observations.update({name: observations[name][order] for name in observations.keys()})
         self._n_lower = self._percentile_func()
         n_observations = self._observations[self._objective_names[0]].size
         self._percentile = self._n_lower / n_observations
@@ -147,9 +149,7 @@ class BaseTPE(AbstractTPE, metaclass=ABCMeta):
             self._n_lower = self._percentile_func() if percentile_func is None else percentile_func()
             self._percentile = self._n_lower / self._observations[self._objective_names[0]].size
             self._update_parzen_estimators()
-            runtime_key = self._runtime_name
-            self._observations[runtime_key] = np.append(self._observations[runtime_key], runtime)
-            self._sorted_observations[runtime_key] = self._observations[runtime_key][order]
+            self._observations[self._runtime_name] = np.append(self._observations[self._runtime_name], runtime)
 
     def _update_parzen_estimators(self) -> None:
         n_lower = self._n_lower
@@ -277,4 +277,5 @@ class BaseTPE(AbstractTPE, metaclass=ABCMeta):
 
     @property
     def observations(self) -> Dict[str, np.ndarray]:
-        return {hp_name: vals.copy() for hp_name, vals in self._observations.items()}
+        n_evals = self._observations[self._objective_names[0]].size
+        return {hp_name: vals[-n_evals:].copy() for hp_name, vals in self._observations.items()}

@@ -85,8 +85,8 @@ class BaseOptimizer(metaclass=ABCMeta):
         self._runtime_name = runtime_name
         self._objective_names = objective_names[:]
         self._constraints = {} if constraints is None else constraints.copy()
-        metric_names = self._objective_names + list(self._constraints.keys())
-        self._requirements = (metric_names + [self._runtime_name]) if only_requirements else None
+        self._metric_names = self._objective_names + list(self._constraints.keys())
+        self._requirements = (self._metric_names + [self._runtime_name]) if only_requirements else None
 
         self._config_space = config_space
         self._is_categoricals = {

@@ -79,6 +79,25 @@ class TPEOptimizer(BaseOptimizer):
         else:
             self._sampler = MultiObjectiveTPE(objective_names=objective_names, **tpe_params)
 
+    def _validate_hyperparameters(self, observations: Dict[str, np.ndarray]) -> None:
+        for hp_name in self._config_space:
+            config = self._config_space.get_hyperparameter(hp_name)
+            unique_vals = np.unique(observations[hp_name])
+            if not hasattr(config, "choices") and not hasattr(config, "sequence"):
+                EPS = 1e-12
+                lb, ub = config.lower, config.upper
+                if np.any((lb - EPS > unique_vals) | (unique_vals > ub + EPS)):
+                    raise ValueError(f"Provided observations must be in the specified range ({lb}, {ub})")
+            else:
+                possible_vals = config.choices if hasattr(config, "choices") else config.sequence
+                unknown_vals = set(unique_vals) - set(possible_vals)
+                if len(unknown_vals) > 0:
+                    raise ValueError(f"Provided observations include unknown values {unknown_vals}")
+
+    def apply_knowledge_augmentation(self, observations: Dict[str, np.ndarray]) -> None:
+        self._validate_hyperparameters(observations)
+        self._sampler.apply_knowledge_augmentation(observations)
+
     def update(self, eval_config: Dict[str, Any], results: Dict[str, float], runtime: float) -> None:
         self._sampler.update_observations(eval_config=eval_config, results=results, runtime=runtime)
 

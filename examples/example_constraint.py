@@ -11,7 +11,7 @@ import numpy as np
 from tpe.optimizer import TPEOptimizer
 
 
-def small2d(eval_config: Dict[str, float]) -> Tuple[float, float]:
+def small2d(eval_config: Dict[str, float]) -> Tuple[Dict[str, float], float]:
     """
     Simulation 2 from the paper:
         "Bayesian Optimization with Inequality Constraints"
@@ -40,6 +40,8 @@ def plot_result(observations: Dict[str, np.ndarray]) -> None:
         label="Infeasible solutions",
         s=2.0,
     )
+    plt.xlim(-0.1, 6.1)
+    plt.ylim(-0.1, 6.1)
     # plt.scatter(loss_vals, observations["c"], label="Observations")
     # plt.hlines(-0.95, xmin, xmax, label="Threshold")
     plt.title(f'Optimal: {observations["loss"][is_feasible].min()}')
@@ -57,8 +59,8 @@ if __name__ == "__main__":
     opt = TPEOptimizer(
         obj_func=small2d,
         config_space=cs,
-        min_bandwidth_factor=1e-1,
-        max_evals=200,
+        min_bandwidth_factor=1e-2,
+        max_evals=1000,
         constraints={"c": -0.95},
     )
     opt.optimize(logger_name="small2d")

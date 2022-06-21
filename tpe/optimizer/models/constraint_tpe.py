@@ -36,6 +36,7 @@ class ConstraintTPE(AbstractTPE):
             min_bandwidth_factor=min_bandwidth_factor,
             top=top,
         )
+        self._n_ei_candidates = n_ei_candidates
         self._constraints = constraints.copy()
         self._objective_names = objective_names[:]
         self._samplers: Dict[str, TPESamplerType] = {}
@@ -69,14 +70,14 @@ class ConstraintTPE(AbstractTPE):
 
     def apply_knowledge_augmentation(self, observations: Dict[str, np.ndarray]) -> None:
         main_sampler = self._samplers[OBJECTIVE_KEY]
-        n_observations = len(list(observations.values()))
+        n_observations = len(list(observations.values())[0])
         hp_names = main_sampler._hp_names[:]
         self._validate_observations(n_observations=n_observations, observations=observations)
         if any(main_sampler._observations[objective_name].size != 0 for objective_name in self._objective_names):
             raise ValueError("Knowledge augmentation must be applied before the optimization.")
 
-        all_objectives_exist = all(observations[objective_name].size != 0 for objective_name in self._objective_names)
-        all_constraints_exist = all(observations[name].size != 0 for name in self._constraints.keys())
+        all_objectives_exist = all(objective_name in observations for objective_name in self._objective_names)
+        all_constraints_exist = all(name in observations for name in self._constraints.keys())
         if all_objectives_exist and all_constraints_exist:
             self._satisfied_flag = self._get_is_satisfied_flag_from_data(n_observations, observations)
 
@@ -183,6 +184,6 @@ class ConstraintTPE(AbstractTPE):
         n_evals = observations[self._objective_names[0]].size
         for name in self._constraints.keys():
             # Some constraints might be augmented and thus we need to take the latest n_evals values.
-            observations[name] = self._samplers[name]._observations[name][-n_evals:]
+            observations[name] = self._samplers[name]._observations[name][-n_evals:].copy()
 
         return observations

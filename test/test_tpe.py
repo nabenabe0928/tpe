@@ -81,7 +81,6 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
         opt._sampler.update_observations(eval_config=eval_config, results={objective_name: 0}, runtime=0)
         assert not isinstance(opt._sampler, ConstraintTPE)
         assert opt._sampler._sorted_observations[objective_name][0] == 0.0
-        assert opt._sampler._sorted_observations[runtime_name][0] == 0.0
         assert opt._sampler._sorted_observations[objective_name].size == max_evals + 1
         for hp_name in self.hp_names:
             assert opt._sampler.observations[hp_name].size == max_evals + 1
@@ -116,7 +115,7 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
             ob[hp_name] = rng.random(n_samples)
 
         order = np.argsort(ob[objective_name])
-        opt._sampler.apply_knowledge_augmentation(ob)  # type: ignore
+        opt.apply_knowledge_augmentation(ob)  # type: ignore
 
         for hp_name in ob.keys():
             cnt = np.count_nonzero(opt._sampler.observations[hp_name] != ob[hp_name])
@@ -129,7 +128,7 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
             assert cnt == 0
 
         with pytest.raises(ValueError):
-            opt._sampler.apply_knowledge_augmentation(ob)  # type: ignore
+            opt.apply_knowledge_augmentation(ob)  # type: ignore
 
     def test_get_config_candidates(self) -> None:
         max_evals = 5
@@ -222,6 +221,30 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
 
         assert ll_ratio.size == 1
         self.assertAlmostEqual(ll_ratio[0], 0.333536394021221)
+
+    def test_errors_in_apply_knowledge_augmentation(self) -> None:
+        opt = TPEOptimizer(obj_func=mix_func, config_space=self.cs_cat)
+        size = 50
+        observations = {f"x{i}": np.random.random(size) for i in range(9)}
+        observations["func"] = np.array([["sine", "cosine"][idx] for idx in np.random.randint(2, size=size)])
+        observations["x9"] = np.random.randint(11, size=size) - 5
+        observations["loss"] = np.random.random(size)
+        opt.apply_knowledge_augmentation(observations)
+
+        for key, val in zip(["x1", "x1", "func", "x9"], [100, -100, "tan", 100]):
+            original_val = observations[key][0]
+            with pytest.raises(ValueError):
+                observations[key][0] = val
+                opt.apply_knowledge_augmentation(observations)
+
+            observations[key][0] = original_val
+
+        opt = TPEOptimizer(obj_func=mix_func, objective_names=["loss", "f2"], config_space=self.cs_cat)
+        observations["f2"] = np.random.random(size)
+        opt.apply_knowledge_augmentation(observations)
+        with pytest.raises(ValueError):
+            observations.pop("f2")
+            opt.apply_knowledge_augmentation(observations)
 
 
 class TestTPEOptimizer(unittest.TestCase):
