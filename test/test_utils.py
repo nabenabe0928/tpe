@@ -2,9 +2,40 @@ import ConfigSpace as CS
 import ConfigSpace.hyperparameters as CSH
 
 import numpy as np
+import pytest
 import unittest
 
-from tpe.utils.utils import get_random_sample, revert_eval_config
+from tpe.utils.utils import check_value_range, get_random_sample, revert_eval_config
+
+
+def test_error_in_get_random_sample() -> None:
+    config_space = CS.ConfigurationSpace()
+    config_space.add_hyperparameter(CSH.OrdinalHyperparameter("a", [1, 2, 3]))
+    with pytest.raises(ValueError):
+        get_random_sample("a", False, True, np.random.RandomState(), config_space)
+
+
+def test_error_in_revert_eval_config() -> None:
+    config_space = CS.ConfigurationSpace()
+    meta = {"lower": 1, "upper": 3}
+    is_ordinals = {"a": True}
+    is_categoricals = {"a": False}
+    config_space.add_hyperparameter(CSH.OrdinalHyperparameter("a", [1, 2, 3], meta=meta))
+    revert_eval_config({"a": 1}, config_space, is_categoricals, is_ordinals, ["a"])
+
+    config_space = CS.ConfigurationSpace()
+    config_space.add_hyperparameter(CSH.OrdinalHyperparameter("a", [1, 2, 3]))
+    with pytest.raises(ValueError):
+        revert_eval_config({"a": 1}, config_space, is_categoricals, is_ordinals, ["a"])
+
+
+def test_check_value_range() -> None:
+    config = CS.UniformFloatHyperparameter("a", 0, 1)
+    with pytest.raises(ValueError):
+        check_value_range("a", config, -0.1)
+    with pytest.raises(ValueError):
+        check_value_range("a", config, 1.1)
+    check_value_range("a", config, 0.4)
 
 
 class TestFuncs(unittest.TestCase):

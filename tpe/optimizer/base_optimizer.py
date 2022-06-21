@@ -28,26 +28,6 @@ class ObjectiveFunc(Protocol):
         raise NotImplementedError
 
 
-class BestUpdateFunc(Protocol):
-    def __call__(self, results: Dict[str, float], loss: float, best_loss: float) -> bool:
-        """
-        Objective func prototype.
-
-        Args:
-            results (Dict[str, float]):
-                Each metric obtained by the objective function.
-            loss (float):
-                The loss metric.
-            best_loss (float):
-                The best loss metric up to now.
-
-        Returns:
-            _ (bool):
-                Whether the current results are the best.
-        """
-        raise NotImplementedError
-
-
 class BaseOptimizer(metaclass=ABCMeta):
     def __init__(
         self,

@@ -9,6 +9,7 @@ import ConfigSpace.hyperparameters as CSH
 import numpy as np
 
 from tpe.optimizer import TPEOptimizer
+from tpe.optimizer.models import ConstraintTPE
 
 
 def small2d(eval_config: Dict[str, float]) -> Tuple[Dict[str, float], float]:
@@ -43,7 +44,8 @@ def _get_default_opt() -> TPEOptimizer:
         obj_func=small2d,
         config_space=cs,
         min_bandwidth_factor=1e-2,
-        max_evals=50,
+        max_evals=30,
+        only_requirements=True,
         constraints={"c": -0.95},
     )
     return opt
@@ -59,7 +61,7 @@ def _get_default_opt_with_multi_constraints() -> TPEOptimizer:
         obj_func=dummy_func,
         config_space=cs,
         min_bandwidth_factor=1e-2,
-        max_evals=50,
+        max_evals=30,
         constraints={"c1": 0.5, "c2": 0.5},
     )
     return opt
@@ -75,7 +77,7 @@ def _get_default_multi_opt_with_multi_constraints() -> TPEOptimizer:
         obj_func=dummy_mo_func,
         config_space=cs,
         min_bandwidth_factor=1e-2,
-        max_evals=50,
+        max_evals=30,
         objective_names=["loss", "f2"],
         constraints={"c1": 0.5, "c2": 0.5},
     )
@@ -86,6 +88,8 @@ def test_optimize() -> None:
     opt = _get_default_opt()
     opt.optimize()
     data = opt.fetch_observations()
+
+    assert isinstance(opt._sampler, ConstraintTPE)
     assert np.sum(data["c"] <= -0.95) == opt._sampler._satisfied_flag.sum()
     assert data["c"].size == opt._sampler._satisfied_flag.size
     assert opt._sampler._feasible_counts["c"] == np.sum(data["c"] <= -0.95)
@@ -93,6 +97,7 @@ def test_optimize() -> None:
     opt = _get_default_opt_with_multi_constraints()
     opt.optimize()
     data = opt.fetch_observations()
+    assert isinstance(opt._sampler, ConstraintTPE)
     assert np.sum((data["c1"] <= 0.5) & (data["c2"] <= 0.5)) == opt._sampler._satisfied_flag.sum()
     assert data["c1"].size == opt._sampler._satisfied_flag.size
     assert opt._sampler._feasible_counts["c1"] == np.sum(data["c1"] <= 0.5)
@@ -107,6 +112,7 @@ def test_optimize_with_knowledge_augmentation() -> None:
     opt.optimize()
 
     data = opt.fetch_observations()
+    assert isinstance(opt._sampler, ConstraintTPE)
     assert np.sum((data["c1"] <= 0.5) & (data["c2"] <= 0.5)) == opt._sampler._satisfied_flag.sum()
     assert data["c1"].size == opt._sampler._satisfied_flag.size
     assert opt._sampler._feasible_counts["c1"] == np.sum(data["c1"] <= 0.5) + np.sum(observations["c1"] <= 0.5)
@@ -115,6 +121,7 @@ def test_optimize_with_knowledge_augmentation() -> None:
 
 def test_is_satisfied() -> None:
     opt = _get_default_opt_with_multi_constraints()
+    assert isinstance(opt._sampler, ConstraintTPE)
     assert opt._sampler._is_satisfied({"c1": 0.4, "c2": 0.4})
     assert not opt._sampler._is_satisfied({"c1": 0.4, "c2": 0.6})
     assert not opt._sampler._is_satisfied({"c1": 0.6, "c2": 0.4})
@@ -161,6 +168,7 @@ def test_apply_knowledge_augmentation() -> None:
         opt = _get_default_opt_with_multi_constraints()
         opt.apply_knowledge_augmentation(observations)
         all_constraints_exist = all(key in observations for key in ["c1", "c2"])
+        assert isinstance(opt._sampler, ConstraintTPE)
         assert opt._sampler._satisfied_flag.size == (all_constraints_exist * 50)
         for name in ["c1", "c2"]:
             if name in observations:
@@ -187,6 +195,7 @@ def test_apply_knowledge_augmentation() -> None:
 
 def test_get_is_satisfied_flag_from_data() -> None:
     opt = _get_default_opt_with_multi_constraints()
+    assert isinstance(opt._sampler, ConstraintTPE)
     flag = opt._sampler._get_is_satisfied_flag_from_data(
         n_observations=4,
         observations={"c1": np.array([0.4, 0.4, 0.6, 0.6]), "c2": np.array([0.4, 0.6, 0.4, 0.6])},
@@ -196,6 +205,7 @@ def test_get_is_satisfied_flag_from_data() -> None:
 
 def test_init_samplers() -> None:
     opt = _get_default_multi_opt_with_multi_constraints()
+    assert isinstance(opt._sampler, ConstraintTPE)
     assert all(key in opt._sampler._samplers for key in ["objective", "c1", "c2"])
 
 

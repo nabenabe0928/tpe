@@ -9,6 +9,7 @@ import ConfigSpace.hyperparameters as CSH
 import numpy as np
 
 from tpe.optimizer import TPEOptimizer
+from tpe.optimizer.models import MultiObjectiveTPE
 
 
 def multi_modal_MOP(config: Dict[str, float]) -> Tuple[Dict[str, float], float]:
@@ -38,7 +39,7 @@ def _get_default_opt() -> TPEOptimizer:
 
     max_evals = 50
     opt = TPEOptimizer(
-        obj_func=multi_modal_MOP,
+        obj_func=multi_modal_MOP,  # type: ignore
         config_space=cs,
         objective_names=["f1", "f2"],
         min_bandwidth_factor=1e-3,
@@ -54,11 +55,13 @@ def test_by_multi_modal_MOP() -> None:
     opt.optimize()
     assert opt.fetch_observations()["f1"].size == max_evals
     assert opt.fetch_observations()["f2"].size == max_evals
+    assert isinstance(opt._sampler, MultiObjectiveTPE)
     assert opt._sampler._percentile_func() == max(opt._sampler._n_fronts, (15 * 50 + 99) // 100)
 
 
 def test_calculate_order() -> None:
     opt = _get_default_opt()
+    assert isinstance(opt._sampler, MultiObjectiveTPE)
     opt._sampler._observations["f1"] = np.array([0, 2, 3, 5])
     opt._sampler._observations["f2"] = np.array([3, 1, 2, 4])
     order = opt._sampler._calculate_order()
