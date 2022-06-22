@@ -105,7 +105,9 @@ class BaseTPE(AbstractTPE, metaclass=ABCMeta):
     def _calculate_order(self, results: Optional[Dict[str, float]] = None) -> np.ndarray:
         raise NotImplementedError
 
-    def apply_knowledge_augmentation(self, observations: Dict[str, np.ndarray]) -> None:
+    def apply_knowledge_augmentation(
+        self, observations: Dict[str, np.ndarray], percentile_func: Optional[Callable] = None
+    ) -> None:
         if any(self._observations[objective_name].size != 0 for objective_name in self._objective_names):
             raise ValueError("Knowledge augmentation must be applied before the optimization.")
         if any(objective_name not in observations for objective_name in self._objective_names):
@@ -114,7 +116,7 @@ class BaseTPE(AbstractTPE, metaclass=ABCMeta):
         self._observations.update({name: vals.copy() for name, vals in observations.items()})
         order = self._calculate_order()
         self._sorted_observations.update({name: observations[name][order] for name in observations.keys()})
-        self._n_lower = self._percentile_func()
+        self._n_lower = self._percentile_func() if percentile_func is None else percentile_func()
         n_observations = self._observations[self._objective_names[0]].size
         self._percentile = self._n_lower / n_observations
         self._update_parzen_estimators()

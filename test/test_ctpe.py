@@ -164,12 +164,12 @@ def test_get_config_candidates() -> None:
 def test_apply_knowledge_augmentation() -> None:
     size = 50
     observations = {key: np.random.random(size) for key in ["x0", "x1", "loss", "c1", "c2"]}
-    for key in ["c2", "loss", None]:
+    for key in ["loss", "c2", None]:
         opt = _get_default_opt_with_multi_constraints()
         opt.apply_knowledge_augmentation(observations)
-        all_constraints_exist = all(key in observations for key in ["c1", "c2"])
+        all_metrics_exist = all(key in observations for key in ["c1", "c2", "loss"])
         assert isinstance(opt._sampler, ConstraintTPE)
-        assert opt._sampler._satisfied_flag.size == (all_constraints_exist * 50)
+        assert opt._sampler._satisfied_flag.size == (all_metrics_exist * 50)
         for name in ["c1", "c2"]:
             if name in observations:
                 assert opt._sampler._feasible_counts[name] > 0
@@ -178,6 +178,12 @@ def test_apply_knowledge_augmentation() -> None:
 
         if key is not None:
             observations.pop(key)
+
+    opt = _get_default_opt_with_multi_constraints()
+    observations = {key: np.random.random(size) for key in ["x0", "x1", "loss", "c1", "c2"]}
+    observations.pop("c1")
+    with pytest.raises(ValueError):
+        opt.apply_knowledge_augmentation(observations)
 
     opt = _get_default_multi_opt_with_multi_constraints()
     observations = {key: np.random.random(size) for key in ["x0", "x1", "loss", "f2", "c1", "c2"]}
@@ -210,7 +216,44 @@ def test_init_samplers() -> None:
 
 
 def test_percentile_func_for_objective() -> None:
-    pass
+    opt = _get_default_opt_with_multi_constraints()
+    size = 17
+    n_lower = int(np.ceil(0.25 * np.sqrt(size)))  # ==> 2
+    assert n_lower == 2
+    observations = {key: np.random.random(size) for key in ["x0", "x1"]}
+    observations["c1"] = np.asarray([0.6, 0.4, 0.4, 0.4, 0.6, 0.4, 0.4, 0.6, 0.4, 0.6] + [1.0] * 7)
+    observations["c2"] = np.asarray([0.6, 0.4, 0.4, 0.6, 0.6, 0.6, 0.4, 0.4, 0.4, 0.4] + [1.0] * 7)
+    observations["loss"] = np.array([0.1, 0.9, 0.2, 0.8, 0.3, 0.7, 0.4, 0.6, 0.5, 1.0] + [1.0] * 7)
+    opt.apply_knowledge_augmentation(observations)
+
+    lower_indices_set = [
+        np.array([0, 2, 4, 6]),
+        np.arange(size)[observations["c1"] == 0.4],
+        np.arange(size)[observations["c2"] == 0.4],
+    ]
+    assert isinstance(opt._sampler, ConstraintTPE)
+    for metric_name, lower_indices in zip(["objective", "c1", "c2"], lower_indices_set):
+        pe_dict = opt._sampler._samplers[metric_name]._mvpe_lower._parzen_estimators
+        assert opt._sampler._samplers[metric_name]._mvpe_lower.size - 1 == lower_indices.size
+        for hp_name in ["x0", "x1"]:
+            assert set(pe_dict[hp_name]._means[:-1]) == set(observations[hp_name][lower_indices])
+
+    opt = _get_default_opt_with_multi_constraints()
+    opt.optimize()
+    assert isinstance(opt._sampler, ConstraintTPE)
+    assert opt._sampler._percentile_func_for_objective() == opt._sampler._samplers["objective"]._mvpe_lower.size - 1
+    assert opt._sampler._feasible_counts["c1"] == opt._sampler._samplers["c1"]._mvpe_lower.size - 1
+    assert opt._sampler._feasible_counts["c2"] == opt._sampler._samplers["c2"]._mvpe_lower.size - 1
+
+    opt = _get_default_opt_with_multi_constraints()
+    observations.pop("loss")
+    observations.pop("c2")
+    opt.apply_knowledge_augmentation(observations)
+    opt.optimize()
+    assert isinstance(opt._sampler, ConstraintTPE)
+    assert opt._sampler._percentile_func_for_objective() == opt._sampler._samplers["objective"]._mvpe_lower.size - 1
+    assert opt._sampler._feasible_counts["c1"] == opt._sampler._samplers["c1"]._mvpe_lower.size - 1
+    assert opt._sampler._feasible_counts["c2"] == opt._sampler._samplers["c2"]._mvpe_lower.size - 1
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import ConfigSpace as CS
 
@@ -56,10 +56,24 @@ class ConstraintTPE(AbstractTPE):
     def _is_satisfied(self, results: Dict[str, float]) -> bool:
         return all(results[name] <= threshold for name, threshold in self._constraints.items())
 
-    def _validate_observations(self, n_observations: int, observations: Dict[str, np.ndarray]) -> None:
+    def _validate_observations(self, n_observations: int, observations: Dict[str, np.ndarray]) -> Tuple[bool, bool]:
         for vals in observations.values():
             if vals.size != n_observations:
                 raise ValueError("Each parameter must have the same number of observations")
+
+        main_sampler = self._samplers[OBJECTIVE_KEY]
+        if any(main_sampler._observations[objective_name].size != 0 for objective_name in self._objective_names):
+            raise ValueError("Knowledge augmentation must be applied before the optimization.")
+
+        all_objectives_exist = all(objective_name in observations for objective_name in self._objective_names)
+        all_constraints_exist = all(name in observations for name in self._constraints.keys())
+        if all_objectives_exist and not all_constraints_exist:
+            raise ValueError("All constraints must be provided for knowledge augmentation including objectives")
+
+        if all_objectives_exist and all_constraints_exist:
+            self._satisfied_flag = self._get_is_satisfied_flag_from_data(n_observations, observations)
+
+        return all_objectives_exist, all_constraints_exist
 
     def _get_is_satisfied_flag_from_data(self, n_observations: int, observations: Dict[str, np.ndarray]) -> np.ndarray:
         satisfied_flag = np.zeros(n_observations, dtype=np.bool8)
@@ -72,18 +86,16 @@ class ConstraintTPE(AbstractTPE):
         main_sampler = self._samplers[OBJECTIVE_KEY]
         n_observations = len(list(observations.values())[0])
         hp_names = main_sampler._hp_names[:]
-        self._validate_observations(n_observations=n_observations, observations=observations)
-        if any(main_sampler._observations[objective_name].size != 0 for objective_name in self._objective_names):
-            raise ValueError("Knowledge augmentation must be applied before the optimization.")
 
-        all_objectives_exist = all(objective_name in observations for objective_name in self._objective_names)
-        all_constraints_exist = all(name in observations for name in self._constraints.keys())
-        if all_objectives_exist and all_constraints_exist:
-            self._satisfied_flag = self._get_is_satisfied_flag_from_data(n_observations, observations)
+        all_objectives_exist, all_constraints_exist = self._validate_observations(
+            n_observations=n_observations, observations=observations
+        )
 
         if all_objectives_exist:
             _observations = _copy_observations(observations=observations, param_names=hp_names + self._objective_names)
-            main_sampler.apply_knowledge_augmentation(observations=_observations)
+            main_sampler.apply_knowledge_augmentation(
+                observations=_observations, percentile_func=self._percentile_func_for_objective
+            )
 
         for name, threshold in self._constraints.items():
             if name not in observations:
@@ -91,7 +103,9 @@ class ConstraintTPE(AbstractTPE):
 
             _observations = _copy_observations(observations=observations, param_names=hp_names + [name])
             self._feasible_counts[name] = np.sum(observations[name] <= threshold)
-            self._samplers[name].apply_knowledge_augmentation(observations=_observations)
+            self._samplers[name].apply_knowledge_augmentation(
+                observations=_observations, percentile_func=lambda: max(1, self._feasible_counts[name])
+            )
 
     def _percentile_func_for_objective(self) -> int:
         sampler = self._samplers[OBJECTIVE_KEY]
@@ -100,7 +114,7 @@ class ConstraintTPE(AbstractTPE):
         n_satisfied = sorted_satisfied_flag.cumsum()
         # Take at least `n_lower` feasible solutions in the better group
         idx = np.searchsorted(n_satisfied, n_lower, side="left") + 1
-        return min(idx, n_satisfied.size)
+        return int(min(idx, n_satisfied.size))
 
     def update_observations(
         self, eval_config: Dict[str, NumericType], results: Dict[str, float], runtime: float

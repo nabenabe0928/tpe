@@ -60,7 +60,7 @@ if __name__ == "__main__":
         obj_func=small2d,
         config_space=cs,
         min_bandwidth_factor=1e-2,
-        max_evals=1000,
+        max_evals=100,
         constraints={"c": -0.95},
     )
     opt.optimize(logger_name="small2d")
