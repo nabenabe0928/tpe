@@ -5,10 +5,9 @@ import ConfigSpace as CS
 import numpy as np
 
 from tpe.optimizer.models import AbstractTPE, MultiObjectiveTPE, TPE
-from tpe.utils.constants import NumericType
+from tpe.utils.constants import NumericType, OBJECTIVE_KEY
 
 
-OBJECTIVE_KEY = "objective"
 TPESamplerType = Union[TPE, MultiObjectiveTPE]
 
 
@@ -28,6 +27,9 @@ class ConstraintTPE(AbstractTPE):
         top: float,
         constraints: Dict[str, float],
     ):
+        if OBJECTIVE_KEY in constraints:
+            raise KeyError(f"constraints cannot include the key name {OBJECTIVE_KEY}")
+
         tpe_params = dict(
             config_space=config_space,
             n_ei_candidates=n_ei_candidates,

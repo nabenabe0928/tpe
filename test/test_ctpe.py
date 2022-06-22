@@ -152,10 +152,12 @@ def test_observations() -> None:
 
 def test_get_config_candidates() -> None:
     opt = _get_default_opt_with_multi_constraints()
+    assert isinstance(opt._sampler, ConstraintTPE)
     opt.optimize()
     n_ei_samples = opt._sampler._n_ei_candidates
     assert opt._sampler.get_config_candidates()["x0"].size == n_ei_samples * 3
     opt = _get_default_multi_opt_with_multi_constraints()
+    assert isinstance(opt._sampler, ConstraintTPE)
     opt.optimize()
     n_ei_samples = opt._sampler._n_ei_candidates
     assert opt._sampler.get_config_candidates()["x0"].size == n_ei_samples * 3
@@ -213,6 +215,9 @@ def test_init_samplers() -> None:
     opt = _get_default_multi_opt_with_multi_constraints()
     assert isinstance(opt._sampler, ConstraintTPE)
     assert all(key in opt._sampler._samplers for key in ["objective", "c1", "c2"])
+
+    with pytest.raises(KeyError):
+        TPEOptimizer(obj_func=opt._obj_func, config_space=opt._config_space, constraints={"objective": 0})
 
 
 def test_percentile_func_for_objective() -> None:

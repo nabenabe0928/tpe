@@ -5,7 +5,7 @@ import ConfigSpace as CS
 import numpy as np
 
 from tpe.optimizer.base_optimizer import BaseOptimizer, ObjectiveFunc
-from tpe.optimizer.models import ConstraintTPE, MultiObjectiveTPE, TPE
+from tpe.optimizer.models import ConstraintTPE, MetaLearnTPE, MultiObjectiveTPE, TPE
 
 
 DEFAULT_OBJECTIVE_NAMES = ["loss"]
@@ -71,8 +71,23 @@ class TPEOptimizer(BaseOptimizer):
             min_bandwidth_factor=min_bandwidth_factor,
             top=top,
         )
-        self._sampler: Union[TPE, ConstraintTPE, MultiObjectiveTPE]
-        if constraints is not None:
+        self._sampler: Union[TPE, ConstraintTPE, MetaLearnTPE, MultiObjectiveTPE]
+        self._init_samplers(
+            objective_names=objective_names, constraints=constraints, metadata=metadata, tpe_params=tpe_params
+        )
+
+    def _init_samplers(
+        self,
+        objective_names: List[str],
+        metadata: Optional[Dict[str, Dict[str, np.ndarray]]],
+        constraints: Optional[Dict[str, float]],
+        tpe_params: Dict[str, Any],
+    ) -> None:
+        if metadata is not None:
+            self._sampler = MetaLearnTPE(
+                objective_names=objective_names, constraints=constraints, metadata=metadata, **tpe_params
+            )
+        elif constraints is not None:
             self._sampler = ConstraintTPE(objective_names=objective_names, constraints=constraints, **tpe_params)
         elif len(objective_names) == 1:
             self._sampler = TPE(objective_name=objective_names[0], **tpe_params)

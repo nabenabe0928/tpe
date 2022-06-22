@@ -9,7 +9,7 @@ import numpy as np
 import unittest
 
 from tpe.optimizer.tpe_optimizer import TPEOptimizer
-from tpe.optimizer.models import ConstraintTPE
+from tpe.optimizer.models import ConstraintTPE, MetaLearnTPE
 from tpe.utils.utils import get_logger
 
 
@@ -79,7 +79,7 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
         eval_config = {hp_name: 0.0 for hp_name in self.hp_names_cat}
         eval_config["func"] = "cosine"  # type: ignore
         opt._sampler.update_observations(eval_config=eval_config, results={objective_name: 0}, runtime=0)
-        assert not isinstance(opt._sampler, ConstraintTPE)
+        assert not isinstance(opt._sampler, (ConstraintTPE, MetaLearnTPE))
         assert opt._sampler._sorted_observations[objective_name][0] == 0.0
         assert opt._sampler._sorted_observations[objective_name].size == max_evals + 1
         for hp_name in self.hp_names:
@@ -123,7 +123,7 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
 
         sorted_ob = {k: x[order] for k, x in ob.items()}
         for hp_name in ob.keys():
-            assert not isinstance(opt._sampler, ConstraintTPE)
+            assert not isinstance(opt._sampler, (ConstraintTPE, MetaLearnTPE))
             cnt = np.count_nonzero(opt._sampler._sorted_observations[hp_name] != sorted_ob[hp_name])
             assert cnt == 0
 
@@ -143,7 +143,7 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
         )
         opt.optimize(logger_name="test")
 
-        assert not isinstance(opt._sampler, ConstraintTPE)
+        assert not isinstance(opt._sampler, (ConstraintTPE, MetaLearnTPE))
         opt._sampler._n_ei_candidates = 3
         config_cands = opt._sampler.get_config_candidates()
         assert len(config_cands) == len(self.hp_names)
@@ -175,7 +175,7 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
         )
         opt.optimize(logger_name="test")
 
-        assert not isinstance(opt._sampler, ConstraintTPE)
+        assert not isinstance(opt._sampler, (ConstraintTPE, MetaLearnTPE))
         opt._sampler._n_ei_candidates = 5
         config_cands = opt._sampler.get_config_candidates()
         assert len(config_cands) == len(self.hp_names_cat)
