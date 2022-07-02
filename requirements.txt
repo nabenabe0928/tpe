@@ -2,3 +2,4 @@ numpy
 ConfigSpace
 parzen_estimator
 fast-pareto
+hpo-task-similarity

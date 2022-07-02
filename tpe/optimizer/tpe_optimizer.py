@@ -29,6 +29,7 @@ class TPEOptimizer(BaseOptimizer):
         metadata: Optional[Dict[str, Dict[str, np.ndarray]]] = None,
         min_bandwidth_factor: float = 1e-1,
         top: float = 1.0,
+        warmstart_configs: Optional[Dict[str, np.ndarray]] = None,
     ):
         """
         Args:
@@ -49,12 +50,14 @@ class TPEOptimizer(BaseOptimizer):
                 Dict[task name, Dict[hyperparam/objective name, observation array]].
             min_bandwidth_factor (float): The minimum bandwidth for numerical parameters
             top (float): The hyperparam of the cateogircal kernel. It defines the prob of the top category.
+            warmstart_configs (Optional[Dict[str, np.ndarray]]):
+                The configurations that will be evaluated as the initialization.
         """
         super().__init__(
             obj_func=obj_func,
             config_space=config_space,
             resultfile=resultfile,
-            n_init=n_init,
+            n_init=0 if warmstart_configs is not None else int(n_init),
             max_evals=max_evals,
             seed=seed,
             constraints=constraints,
@@ -72,6 +75,9 @@ class TPEOptimizer(BaseOptimizer):
             top=top,
         )
         self._sampler: Union[TPE, ConstraintTPE, MetaLearnTPE, MultiObjectiveTPE]
+        self._warmstart_configs = warmstart_configs
+        self._n_warmstart_configs = 0 if warmstart_configs is None else warmstart_configs[self._hp_names[0]].size
+        self._warmstart_counter = 0
         self._init_samplers(
             objective_names=objective_names, constraints=constraints, metadata=metadata, tpe_params=tpe_params
         )
@@ -130,8 +136,18 @@ class TPEOptimizer(BaseOptimizer):
         Returns:
             eval_config (Dict[str, Any]): A sampled configuration from TPE
         """
+        if self._warmstart_configs is not None and self._warmstart_counter < self._n_warmstart_configs:
+            return self._warmstart_sample()
+
         config_cands = self._sampler.get_config_candidates()
         pi_config = self._compute_probability_improvement(config_cands=config_cands)
         best_idx = int(np.argmax(pi_config))
         eval_config = {hp_name: config_cands[hp_name][best_idx] for dim, hp_name in enumerate(self._hp_names)}
         return self._revert_eval_config(eval_config)
+
+    def _warmstart_sample(self) -> Dict[str, Any]:
+        idx = self._warmstart_counter
+        assert self._warmstart_configs is not None  # mypy re-definition
+        eval_config = {hp_name: self._warmstart_configs[hp_name][idx] for hp_name in self._hp_names}
+        self._warmstart_counter += 1
+        return eval_config
