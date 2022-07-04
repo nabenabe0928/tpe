@@ -115,7 +115,7 @@ class MetaLearnTPE(AbstractTPE):
         sim = self._compute_task_similarity()
         task_weights = self._compute_task_weights(sim)
         n_cands = config_cands[list(config_cands.keys())[0]].size
-        taskwise_ll_lower, taskwise_ll_upper = np.zeros((task_weights.size, n_cands))
+        taskwise_ll_lower, taskwise_ll_upper = np.zeros((2, task_weights.size, n_cands))
 
         for idx, sampler in enumerate(self._samplers.values()):
             ll_lower, ll_upper = sampler.compute_config_loglikelihoods(config_cands)
