@@ -43,6 +43,7 @@ class MetaLearnTPE(AbstractTPE):
             min_bandwidth_factor=min_bandwidth_factor,
             top=top,
         )
+        self._objective_names = objective_names[:]
         self._n_samples = n_samples
         self._rng = np.random.RandomState(seed)
         self._config_space = config_space
@@ -87,12 +88,13 @@ class MetaLearnTPE(AbstractTPE):
 
     def _compute_task_similarity(self) -> np.ndarray:
         observations_set: List[Dict[str, np.ndarray]] = [
-            self._samplers[OBJECTIVE_KEY].observations for task_name in self._task_names
+            self._samplers[task_name].observations for task_name in self._task_names
         ]
         ts = IoUTaskSimilarity(
             n_samples=self._n_samples,
             config_space=self._config_space,
             observations_set=observations_set,
+            objective_names=self._objective_names,
             promising_quantile=0.1,
             rng=self._rng,
         )
@@ -105,15 +107,20 @@ class MetaLearnTPE(AbstractTPE):
         n_tasks = len(self._task_names)
         weights = np.zeros_like(sim)
 
-        weights[0] = 1 / n_tasks + np.sum((1 - sim[1:]) / n_tasks)
+        weights[0] = 1 - np.sum(sim[1:]) / n_tasks
         for i in range(1, n_tasks):
             weights[i] = sim[i] / n_tasks
 
         return weights
 
-    def compute_probability_improvement(self, config_cands: Dict[str, np.ndarray]) -> np.ndarray:
+    def get_task_weights(self) -> np.ndarray:
         sim = self._compute_task_similarity()
+        print(sim)
         task_weights = self._compute_task_weights(sim)
+        return task_weights
+
+    def compute_probability_improvement(self, config_cands: Dict[str, np.ndarray]) -> np.ndarray:
+        task_weights = self.get_task_weights()
         n_cands = config_cands[list(config_cands.keys())[0]].size
         taskwise_ll_lower, taskwise_ll_upper = np.zeros((2, task_weights.size, n_cands))
 
