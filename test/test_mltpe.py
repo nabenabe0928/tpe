@@ -44,9 +44,7 @@ def get_metadata(dim: int) -> Dict[str, Dict[str, np.ndarray]]:
     for shift, task_name in enumerate(metadata.keys(), start=1):
         metadata[task_name]["loss"] = np.array(
             [
-                sphere(
-                    {f"x{d}": metadata[task_name][f"x{d}"][i] for d in range(dim)}, shift=shift
-                )[0]["loss"]
+                sphere({f"x{d}": metadata[task_name][f"x{d}"][i] for d in range(dim)}, shift=shift)[0]["loss"]
                 for i in range(n_evals)
             ]
         )

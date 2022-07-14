@@ -30,6 +30,7 @@ class TPEOptimizer(BaseOptimizer):
         min_bandwidth_factor: float = 1e-1,
         top: float = 1.0,
         warmstart_configs: Optional[Dict[str, np.ndarray]] = None,
+        random_ratio: Optional[float] = None,
     ):
         """
         Args:
@@ -52,6 +53,11 @@ class TPEOptimizer(BaseOptimizer):
             top (float): The hyperparam of the cateogircal kernel. It defines the prob of the top category.
             warmstart_configs (Optional[Dict[str, np.ndarray]]):
                 The configurations that will be evaluated as the initialization.
+            random_ratio (Optional[float]):
+                How often we should sample a random configuration.
+                In other words, epsillon in the epsillon-greedy algorithm.
+                random_ratio of non-zero guarantees global optimization
+                while random_ratio of zero (or None) is suitable for local optimization.
         """
         super().__init__(
             obj_func=obj_func,
@@ -78,6 +84,7 @@ class TPEOptimizer(BaseOptimizer):
         self._warmstart_configs = warmstart_configs
         self._n_warmstart_configs = 0 if warmstart_configs is None else warmstart_configs[self._hp_names[0]].size
         self._warmstart_counter = 0
+        self._random_ratio = random_ratio if random_ratio is not None else 0.0
         self._init_samplers(
             objective_names=objective_names, constraints=constraints, metadata=metadata, tpe_params=tpe_params
         )
@@ -138,6 +145,9 @@ class TPEOptimizer(BaseOptimizer):
         """
         if self._warmstart_configs is not None and self._warmstart_counter < self._n_warmstart_configs:
             return self._warmstart_sample()
+
+        if self._rng.random() < self._random_ratio:  # random policy for the epsillon-greedy
+            return self.initial_sample()
 
         config_cands = self._sampler.get_config_candidates()
         pi_config = self._compute_probability_improvement(config_cands=config_cands)
