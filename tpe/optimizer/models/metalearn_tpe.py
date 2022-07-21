@@ -115,21 +115,25 @@ class MetaLearnTPE(AbstractTPE):
 
     def get_task_weights(self) -> np.ndarray:
         sim = self._compute_task_similarity()
-        print(sim)
         task_weights = self._compute_task_weights(sim)
         return task_weights
 
     def compute_probability_improvement(self, config_cands: Dict[str, np.ndarray]) -> np.ndarray:
         task_weights = self.get_task_weights()
+        n_samples_in_lower, n_samples_in_upper = np.zeros_like(task_weights), np.zeros_like(task_weights)
         n_cands = config_cands[list(config_cands.keys())[0]].size
         taskwise_ll_lower, taskwise_ll_upper = np.zeros((2, task_weights.size, n_cands))
 
         for idx, sampler in enumerate(self._samplers.values()):
             ll_lower, ll_upper = sampler.compute_config_loglikelihoods(config_cands)
+            n_samples_in_lower[idx] += sampler._mvpe_lower.size
+            n_samples_in_upper[idx] += sampler._mvpe_upper.size
             taskwise_ll_lower[idx] += ll_lower
             taskwise_ll_upper[idx] += ll_upper
 
-        return (task_weights @ exp(taskwise_ll_lower)) / (task_weights @ exp(taskwise_ll_upper))
+        task_weights_lower = task_weights * n_samples_in_lower
+        task_weights_upper = task_weights * n_samples_in_upper
+        return (task_weights_lower @ exp(taskwise_ll_lower)) / (task_weights_upper @ exp(taskwise_ll_upper))
 
     def get_config_candidates(self) -> Dict[str, np.ndarray]:
         config_cands: Dict[str, np.ndarray] = {}
