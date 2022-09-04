@@ -95,7 +95,7 @@ class MetaLearnTPE(AbstractTPE):
             config_space=self._config_space,
             observations_set=observations_set,
             objective_names=self._objective_names,
-            promising_quantile=0.1,
+            promising_quantile=0.10,  # same as in mo-tpe, and this must be adapted
             rng=self._rng,
         )
         n_tasks = len(self._task_names)

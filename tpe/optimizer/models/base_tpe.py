@@ -278,6 +278,11 @@ class BaseTPE(AbstractTPE, metaclass=ABCMeta):
         return pe_lower, pe_upper
 
     @property
-    def observations(self) -> Dict[str, np.ndarray]:
+    def size(self) -> int:
         n_evals = self._observations[self._objective_names[0]].size
+        return n_evals
+
+    @property
+    def observations(self) -> Dict[str, np.ndarray]:
+        n_evals = self.size
         return {hp_name: vals[-n_evals:].copy() for hp_name, vals in self._observations.items()}

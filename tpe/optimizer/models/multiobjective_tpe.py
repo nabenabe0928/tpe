@@ -35,7 +35,7 @@ class MultiObjectiveTPE(BaseTPE):
     def _percentile_func(self) -> int:
         # TODO: Check ==> percentile_func for MO without max(n_fronts, ...)
         n_observations = self._observations[self._objective_names[0]].size
-        return max(self._n_fronts, int(np.ceil(0.15 * n_observations)))
+        return max(self._n_fronts, int(np.ceil(0.10 * n_observations)))
 
     def _calculate_order(self, results: Optional[Dict[str, float]] = None) -> np.ndarray:
         with_new_result = results is not None
