@@ -29,6 +29,7 @@ class MetaLearnTPE(AbstractTPE):
         metadata: Dict[str, Dict[str, np.ndarray]],
         constraints: Optional[Dict[str, float]] = None,
         n_samples: int = 200,
+        dim_reduction_factor: float = 5.0,
     ):
         if OBJECTIVE_KEY in metadata:
             raise KeyError(f"metadata cannot include the key name {OBJECTIVE_KEY}")
@@ -43,6 +44,8 @@ class MetaLearnTPE(AbstractTPE):
             min_bandwidth_factor=min_bandwidth_factor,
             top=top,
         )
+        self._dim_reduction_factor = dim_reduction_factor
+        self._source_task_hp_importance: Optional[Dict[str, np.ndarray]] = None
         self._objective_names = objective_names[:]
         self._n_samples = n_samples
         self._rng = np.random.RandomState(seed)
@@ -97,7 +100,12 @@ class MetaLearnTPE(AbstractTPE):
             objective_names=self._objective_names,
             promising_quantile=0.10,  # same as in mo-tpe, and this must be adapted
             rng=self._rng,
+            dim_reduction_factor=self._dim_reduction_factor,
+            source_task_hp_importance=self._source_task_hp_importance,
         )
+        if self._source_task_hp_importance is None:
+            self._source_task_hp_importance = ts.source_task_hp_importance
+
         n_tasks = len(self._task_names)
         sim = ts.compute(task_pairs=[(0, i) for i in range(1, n_tasks)])
         assert isinstance(sim[0], np.ndarray)  # mypy re-definition
