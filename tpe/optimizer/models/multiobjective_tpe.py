@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional
 
 import ConfigSpace as CS
 
@@ -19,6 +19,8 @@ class MultiObjectiveTPE(BaseTPE):
         seed: Optional[int],
         min_bandwidth_factor: float,
         top: float,
+        # TODO: Make it possible to change tie_break_method from outside
+        tie_break_method: Literal["crowding_distance", "avg_rank"] = "avg_rank",
     ):
         super().__init__(
             config_space=config_space,
@@ -30,6 +32,7 @@ class MultiObjectiveTPE(BaseTPE):
             top=top,
         )
         self._n_fronts: int
+        self._tie_break_method = tie_break_method
         self._nondominated_ranks: np.ndarray
 
     def _percentile_func(self) -> int:
@@ -57,7 +60,7 @@ class MultiObjectiveTPE(BaseTPE):
 
             costs[-1, idx] = new_loss
 
-        self._nondominated_ranks = nondominated_rank(costs, tie_break=True)
+        self._nondominated_ranks = nondominated_rank(costs, tie_break=self._tie_break_method)
         self._n_fronts = np.sum(is_pareto_front(costs))
         self._order = np.argsort(self._nondominated_ranks)
         return self._order
