@@ -18,10 +18,9 @@ class TreeStructuredParzenEstimator:
     def __init__(
         self,
         config_space: CS.ConfigurationSpace,
-        percentile_func: Callable[[np.ndarray], int],
+        quantile_func: Callable[[np.ndarray], int],
         n_ei_candidates: int,
         metric_name: str,
-        runtime_name: str,
         seed: Optional[int],
         min_bandwidth_factor: float,
         top: float,
@@ -33,14 +32,13 @@ class TreeStructuredParzenEstimator:
             config_space (CS.ConfigurationSpace): The searching space of the task
             hp_names (List[str]): The list of hyperparameter names
             metric_name (str): The name of the metric (or objective function value)
-            runtime_name (str): The name of the runtime metric.
             observations (Dict[str, Any]): The storage of the observations
             sorted_observations (Dict[str, Any]): The storage of the observations sorted based on loss
             min_bandwidth_factor (float): The minimum bandwidth for numerical parameters
             top (float): The hyperparam of the cateogircal kernel. It defines the prob of the top category.
             is_categoricals (Dict[str, bool]): Whether the given hyperparameter is categorical
             is_ordinals (Dict[str, bool]): Whether the given hyperparameter is ordinal
-            percentile_func (Callable[[np.ndarray], int]):
+            quantile_func (Callable[[np.ndarray], int]):
                 The function that returns the number of a better group based on the total number of evaluations.
         """
         self._rng = np.random.RandomState(seed)
@@ -48,9 +46,8 @@ class TreeStructuredParzenEstimator:
         self._config_space = config_space
         self._hp_names = list(config_space._hyperparameters.keys())
         self._metric_name = metric_name
-        self._runtime_name = runtime_name
         self._n_lower = 0
-        self._percentile = 0
+        self._quantile = 0
         self._min_bandwidth_factor = min_bandwidth_factor
         self._top = top
 
@@ -58,10 +55,8 @@ class TreeStructuredParzenEstimator:
         self._sorted_observations = {hp_name: np.array([]) for hp_name in self._hp_names}
         self._observations[self._metric_name] = np.array([])
         self._sorted_observations[self._metric_name] = np.array([])
-        self._observations[self._runtime_name] = np.array([])
-        self._sorted_observations[self._runtime_name] = np.array([])
 
-        self._percentile_func = percentile_func
+        self._quantile_func = quantile_func
 
         self._is_categoricals = {
             hp_name: self._config_space.get_hyperparameter(hp_name).__class__.__name__ == "CategoricalHyperparameter"
@@ -74,20 +69,6 @@ class TreeStructuredParzenEstimator:
         }
         self._mvpe_lower: MultiVariateParzenEstimator
         self._mvpe_upper: MultiVariateParzenEstimator
-
-    def apply_knowledge_augmentation(self, observations: Dict[str, np.ndarray]) -> None:
-        if self.observations[self._metric_name].size != 0:
-            raise ValueError("Knowledge augmentation must be applied before the optimization.")
-
-        self._observations = {hp_name: vals.copy() for hp_name, vals in observations.items()}
-        order = np.argsort(self.observations[self._metric_name])
-        self._sorted_observations = {
-            hp_name: observations[order] for hp_name, observations in self.observations.items()
-        }
-        self._n_lower = self._percentile_func(self._sorted_observations[self._metric_name])
-        n_observations = self._observations[self._metric_name].size
-        self._percentile = self._n_lower / n_observations
-        self._update_parzen_estimators()
 
     def _insert_observations(
         self, key: str, insert_loc: int, val: Any, is_categorical: bool, dtype: Optional[Type[np.number]] = None
@@ -107,26 +88,13 @@ class TreeStructuredParzenEstimator:
             data[key] = np.append(data[key], val).astype(dtype)
             sorted_data[key] = np.insert(sorted_data[key], insert_loc, val).astype(dtype)
 
-    def update_observations(self, eval_config: Dict[str, NumericType], loss: float, runtime: float) -> None:
-        """
-        Update the observations for the TPE construction.
-        Users can customize here by inheriting the class.
-
-        Args:
-            eval_config (Dict[str, NumericType]): The configuration to evaluate (after conversion)
-            loss (float): The loss value as a result of the evaluation
-            runtime (float): The runtime for both sampling and training
-        """
-        self._update_observations(eval_config, loss, runtime)
-
-    def _update_observations(self, eval_config: Dict[str, NumericType], loss: float, runtime: float) -> None:
+    def update_observations(self, eval_config: Dict[str, NumericType], loss: float) -> None:
         """
         Update the observations for the TPE construction
 
         Args:
             eval_config (Dict[str, NumericType]): The configuration to evaluate (after conversion)
             loss (float): The loss value as a result of the evaluation
-            runtime (float): The runtime for both sampling and training
         """
         sorted_losses, losses = (
             self._sorted_observations[self._metric_name],
@@ -135,8 +103,8 @@ class TreeStructuredParzenEstimator:
         insert_loc = np.searchsorted(sorted_losses, loss, side="right")
         self._observations[self._metric_name] = np.append(losses, loss)
         self._sorted_observations[self._metric_name] = np.insert(sorted_losses, insert_loc, loss)
-        self._n_lower = self._percentile_func(self._sorted_observations[self._metric_name])
-        self._percentile = self._n_lower / self._observations[self._metric_name].size
+        self._n_lower = self._quantile_func(self._sorted_observations[self._metric_name])
+        self._quantile = self._n_lower / self._observations[self._metric_name].size
 
         for hp_name in self._hp_names:
             is_categorical = self._is_categoricals[hp_name]
@@ -148,12 +116,8 @@ class TreeStructuredParzenEstimator:
                 is_categorical=is_categorical,
                 dtype=config2type[config_type] if not is_categorical else None,
             )
-        else:
-            self._update_parzen_estimators()
-            runtime_key = self._runtime_name
-            self._insert_observations(
-                key=runtime_key, insert_loc=insert_loc, val=runtime, is_categorical=False, dtype=np.float32
-            )
+
+        self._update_parzen_estimators()
 
     def _update_parzen_estimators(self) -> None:
         n_lower = self._n_lower
@@ -177,7 +141,7 @@ class TreeStructuredParzenEstimator:
         self._mvpe_lower = MultiVariateParzenEstimator(pe_lower_dict)
         self._mvpe_upper = MultiVariateParzenEstimator(pe_upper_dict)
 
-    def get_config_candidates(self, n_samples: Optional[int] = None) -> Dict[str, np.ndarray]:
+    def get_config_candidates(self) -> Dict[str, np.ndarray]:
         """
         Since we compute the probability improvement of each objective independently,
         we need to sample the configurations in advance.
@@ -191,28 +155,9 @@ class TreeStructuredParzenEstimator:
             config_cands (Dict[str, np.ndarray]):
                 A dict of arrays of candidates in each dimension
         """
-        n_samples = n_samples if n_samples is not None else self._n_ei_candidates
-        return self._mvpe_lower.sample(n_samples=n_samples, rng=self._rng, dim_independent=True, return_dict=True)
-
-    def compute_config_loglikelihoods(self, config_cands: Dict[str, np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Compute the probability improvement given configurations
-
-        Args:
-            config_cands (Dict[str, np.ndarray]):
-                The dict of candidate values for each dimension.
-                The length is the number of dimensions and
-                each array has the length of n_ei_candidates.
-
-        Returns:
-            config_ll_lower, config_ll_upper (Tuple[np.ndarray]):
-                The loglikelihoods of each configuration in
-                the good group or bad group.
-                The shape is (n_ei_candidates, ) for each.
-        """
-        config_ll_lower = self._mvpe_lower.log_pdf(config_cands)
-        config_ll_upper = self._mvpe_upper.log_pdf(config_cands)
-        return config_ll_lower, config_ll_upper
+        return self._mvpe_lower.sample(
+            n_samples=self._n_ei_candidates, rng=self._rng, dim_independent=True, return_dict=True
+        )
 
     def compute_probability_improvement(self, config_cands: Dict[str, np.ndarray]) -> np.ndarray:
         """
@@ -228,17 +173,14 @@ class TreeStructuredParzenEstimator:
             config_ll_ratio (np.ndarray):
                 The log of the likelihood ratios of each configuration.
                 The shape is (n_ei_candidates, )
-
-        Note:
-            In this implementation, we consider the gamma
-                (gamma + (1 - gamma)g(x)/l(x))^-1
-                = exp(log(gamma)) + exp(log(1 - gamma) + log(g(x)/l(x)))
         """
         EPS = 1e-12
-        cll_lower, cll_upper = self.compute_config_loglikelihoods(config_cands)
-        first_term = np.log(self._percentile + EPS)
-        second_term = np.log(1.0 - self._percentile + EPS) + cll_upper - cll_lower
+        config_ll_lower = self._mvpe_lower.log_pdf(config_cands)
+        config_ll_upper = self._mvpe_upper.log_pdf(config_cands)
+        first_term = np.log(self._quantile + EPS)
+        second_term = np.log(1.0 - self._quantile + EPS) + config_ll_upper - config_ll_lower
         pi = -np.logaddexp(first_term, second_term)
+        # return config_ll_lower - config_ll_upper
         return pi
 
     def _get_parzen_estimator(

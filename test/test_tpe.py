@@ -1,7 +1,6 @@
 import os
-import pytest
 
-from typing import Dict, Tuple, Union
+from typing import Dict, Union
 
 import ConfigSpace as CS
 import ConfigSpace.hyperparameters as CSH
@@ -12,13 +11,13 @@ from tpe.optimizer.tpe_optimizer import TPEOptimizer
 from tpe.utils.utils import get_logger
 
 
-def sphere(eval_config: Dict[str, float]) -> Tuple[Dict[str, float], float]:
+def sphere(eval_config: Dict[str, float]) -> float:
     vals = np.array(list(eval_config.values()))
     vals *= vals
-    return {"loss": vals.sum()}, 0.0
+    return vals.sum()
 
 
-def rosen(eval_config: Dict[str, float]) -> Tuple[Dict[str, float], float]:
+def rosen(eval_config: Dict[str, float]) -> float:
     val = 0
     vals = np.array(list(eval_config.values()))
     dim = len(vals)
@@ -26,22 +25,25 @@ def rosen(eval_config: Dict[str, float]) -> Tuple[Dict[str, float], float]:
         t1 = 100 * (vals[d + 1] - vals[d] ** 2) ** 2
         t2 = (vals[d] - 1) ** 2
         val += t1 + t2
-    return {"loss": val}, 0.0
+    return val
 
 
-def mix_func(eval_config: Dict[str, Union[str, float]]) -> Tuple[Dict[str, float], float]:
+def mix_func(eval_config: Dict[str, Union[str, float]]) -> float:
     func_dict = {"cosine": np.cos, "sine": np.sin}
     vals = np.array([v for v in eval_config.values() if isinstance(v, float)])
     vals *= vals
     assert isinstance(eval_config["func"], str)
     func_name: str = eval_config["func"]
-    return {"loss": 1 - func_dict[func_name](vals.sum()) ** 2}, 0.0
+    return 1 - func_dict[func_name](vals.sum()) ** 2
 
 
 def cleanup() -> None:
     os.remove("log/test.log")
     os.remove("results/test.json")
-    os.remove("incumbents/test.json")
+    try:
+        os.remove("incumbents/test.json")
+    except FileNotFoundError:
+        pass
 
 
 class TestTreeStructuredParzenEstimator(unittest.TestCase):
@@ -75,20 +77,19 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
         )
         opt.optimize(logger_name="test")
         try:
-            opt._tpe_samplers[metric_name]._insert_observations("x0", insert_loc=1, val=0, is_categorical=False)
+            opt._tpe_sampler._insert_observations("x0", insert_loc=1, val=0, is_categorical=False)
         except ValueError:
             pass
         else:
             raise RuntimeError("Did not yield ValueError")
 
     def test_update_observations(self) -> None:
-        max_evals, metric_name, runtime_name = 20, "loss", "test_run"
+        max_evals, metric_name = 20, "loss"
         opt = TPEOptimizer(
             obj_func=mix_func,
             config_space=self.cs_cat,
             max_evals=max_evals,
             metric_name=metric_name,
-            runtime_name=runtime_name,
             resultfile="test",
             min_bandwidth_factor=1e-2,
             top=0.8,
@@ -97,56 +98,22 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
 
         eval_config = {hp_name: 0.0 for hp_name in self.hp_names_cat}
         eval_config["func"] = "cosine"  # type: ignore
-        opt._tpe_samplers[metric_name].update_observations(eval_config=eval_config, loss=0, runtime=0)
-        assert opt._tpe_samplers[metric_name]._sorted_observations[metric_name][0] == 0.0
-        assert opt._tpe_samplers[metric_name]._sorted_observations[runtime_name][0] == 0.0
-        assert opt._tpe_samplers[metric_name]._sorted_observations[metric_name].size == max_evals + 1
+        opt._tpe_sampler.update_observations(eval_config=eval_config, loss=0)
+        assert opt._tpe_sampler._sorted_observations[metric_name][0] == 0.0
+        assert opt._tpe_sampler._sorted_observations[metric_name].size == max_evals + 1
         for hp_name in self.hp_names:
-            assert opt._tpe_samplers[metric_name].observations[hp_name].size == max_evals + 1
-            assert opt._tpe_samplers[metric_name].observations[hp_name][-1] == 0.0
-            assert opt._tpe_samplers[metric_name]._sorted_observations[hp_name].size == max_evals + 1
-            assert opt._tpe_samplers[metric_name]._sorted_observations[hp_name][0] == 0.0
+            assert opt._tpe_sampler.observations[hp_name].size == max_evals + 1
+            assert opt._tpe_sampler.observations[hp_name][-1] == 0.0
+            assert opt._tpe_sampler._sorted_observations[hp_name].size == max_evals + 1
+            assert opt._tpe_sampler._sorted_observations[hp_name][0] == 0.0
 
         min_value = np.inf
         # The sorted_observations must be sorted
-        for v in opt._tpe_samplers[metric_name]._sorted_observations[metric_name]:
+        for v in opt._tpe_sampler._sorted_observations[metric_name]:
             assert min_value >= v
             min_value = min(min_value, np.inf)
 
         cleanup()
-
-    def test_apply_knowledge_augmentation(self) -> None:
-        metric_name = "loss"
-        opt = TPEOptimizer(
-            obj_func=sphere,
-            config_space=self.cs,
-            max_evals=10,
-            metric_name=metric_name,
-            resultfile="test",
-            min_bandwidth_factor=1e-2,
-            top=0.8,
-        )
-        ob = {}
-        n_samples = 10
-        rng = np.random.RandomState(0)
-        ob[metric_name] = rng.random(n_samples)
-        for hp_name in self.hp_names:
-            ob[hp_name] = rng.random(n_samples)
-
-        order = np.argsort(ob[metric_name])
-        opt._tpe_samplers[metric_name].apply_knowledge_augmentation(ob)  # type: ignore
-
-        for hp_name in ob.keys():
-            cnt = np.count_nonzero(opt._tpe_samplers[metric_name].observations[hp_name] != ob[hp_name])
-            assert cnt == 0
-
-        sorted_ob = {k: x[order] for k, x in ob.items()}
-        for hp_name in ob.keys():
-            cnt = np.count_nonzero(opt._tpe_samplers[metric_name]._sorted_observations[hp_name] != sorted_ob[hp_name])
-            assert cnt == 0
-
-        with pytest.raises(ValueError):
-            opt._tpe_samplers[metric_name].apply_knowledge_augmentation(ob)  # type: ignore
 
     def test_get_config_candidates(self) -> None:
         max_evals = 5
@@ -160,12 +127,11 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
             top=0.8,
         )
         opt.optimize(logger_name="test")
-        metric_name = opt._metric_name
 
-        opt._tpe_samplers[metric_name]._n_ei_candidates = 3
-        config_cands = opt._tpe_samplers[metric_name].get_config_candidates()
+        opt._tpe_sampler._n_ei_candidates = 3
+        config_cands = opt._tpe_sampler.get_config_candidates()
         assert len(config_cands) == len(self.hp_names)
-        assert config_cands[self.hp_names[0]].size == opt._tpe_samplers[metric_name]._n_ei_candidates
+        assert config_cands[self.hp_names[0]].size == opt._tpe_sampler._n_ei_candidates
 
         ans = [
             [4.8431215412066475, -1.8158257273119596, -3.744716909802062],
@@ -193,10 +159,10 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
         )
         opt.optimize(logger_name="test")
 
-        opt._tpe_samplers[metric_name]._n_ei_candidates = 5
-        config_cands = opt._tpe_samplers[metric_name].get_config_candidates()
+        opt._tpe_sampler._n_ei_candidates = 5
+        config_cands = opt._tpe_sampler.get_config_candidates()
         assert len(config_cands) == len(self.hp_names_cat)
-        assert config_cands[self.hp_names[0]].size == opt._tpe_samplers[metric_name]._n_ei_candidates
+        assert config_cands[self.hp_names[0]].size == opt._tpe_sampler._n_ei_candidates
 
         ans = [
             [0, 1, 0, 0, 0],
@@ -213,7 +179,7 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
         ]
 
         assert np.allclose(ans, list(config_cands.values()))
-        for i in range(opt._tpe_samplers[metric_name]._n_ei_candidates):
+        for i in range(opt._tpe_sampler._n_ei_candidates):
             eval_config = {hp: a[-1] for a, hp in zip(ans, self.hp_names_cat)}
             ord_v = opt._revert_eval_config(eval_config)[self.hp_names_cat[-1]]
             assert ord_v in self.cs_cat.get_hyperparameter(self.hp_names_cat[-1]).sequence
@@ -232,10 +198,9 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
             top=0.8,
         )
         opt.optimize(logger_name="test")
-        metric_name = opt._metric_name
 
         config_cands = {hp_name: np.array([0.0]) for hp_name in self.hp_names}
-        ll_ratio = opt._tpe_samplers[metric_name].compute_probability_improvement(config_cands)
+        ll_ratio = opt._tpe_sampler.compute_probability_improvement(config_cands)
 
         assert ll_ratio.size == 1
         self.assertAlmostEqual(ll_ratio[0], 0.333536394021221)
@@ -271,7 +236,7 @@ class TestTPEOptimizer(unittest.TestCase):
                 )
                 _, best_loss = opt.optimize(logger_name="test")
                 losses[i] = best_loss
-                assert opt._tpe_samplers[opt._metric_name].observations["x0"].size == max_evals
+                assert opt._tpe_sampler.observations["x0"].size == max_evals
 
             # performance test
             assert losses.mean() < threshold

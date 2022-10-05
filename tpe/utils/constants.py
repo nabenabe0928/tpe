@@ -31,12 +31,12 @@ type2config = {
 }
 
 
-class PercentileFuncMaker(Protocol):
+class QuantileFuncMaker(Protocol):
     def __call__(self, **kwargs: Dict[str, Any]) -> Callable[[np.ndarray], int]:
         raise NotImplementedError
 
 
-def default_percentile_maker() -> Callable[[np.ndarray], int]:
+def default_quantile_maker() -> Callable[[np.ndarray], int]:
     def _imp(vals: np.ndarray) -> int:
         size = vals.size
         return int(np.ceil(0.25 * np.sqrt(size)))
