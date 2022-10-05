@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict, Protocol, Union
+from typing import Protocol, Union
 
 import ConfigSpace.hyperparameters as CSH
 
@@ -31,14 +31,10 @@ type2config = {
 }
 
 
-class QuantileFuncMaker(Protocol):
-    def __call__(self, **kwargs: Dict[str, Any]) -> Callable[[np.ndarray], int]:
+class QuantileFunc(Protocol):
+    def __call__(self, size: int) -> int:
         raise NotImplementedError
 
 
-def default_quantile_maker() -> Callable[[np.ndarray], int]:
-    def _imp(vals: np.ndarray) -> int:
-        size = vals.size
-        return int(np.ceil(0.25 * np.sqrt(size)))
-
-    return _imp
+def default_quantile(size: int) -> int:
+    return int(np.ceil(0.25 * np.sqrt(size)))

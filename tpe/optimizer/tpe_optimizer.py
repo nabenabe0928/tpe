@@ -6,7 +6,7 @@ import numpy as np
 
 from tpe.optimizer.base_optimizer import BaseOptimizer, ObjectiveFunc
 from tpe.optimizer.tpe import TreeStructuredParzenEstimator
-from tpe.utils.constants import QuantileFuncMaker, default_quantile_maker
+from tpe.utils.constants import QuantileFunc, default_quantile
 
 
 class TPEOptimizer(BaseOptimizer):
@@ -23,7 +23,7 @@ class TPEOptimizer(BaseOptimizer):
         n_ei_candidates: int = 24,
         min_bandwidth_factor: float = 1e-1,
         top: float = 1.0,
-        quantile_func_maker: QuantileFuncMaker = default_quantile_maker,
+        quantile_func: QuantileFunc = default_quantile,
         weight_func: Optional[Any] = None,
     ):
         """
@@ -59,7 +59,7 @@ class TPEOptimizer(BaseOptimizer):
             seed=seed,
             min_bandwidth_factor=min_bandwidth_factor,
             top=top,
-            quantile_func=quantile_func_maker(),
+            quantile_func=quantile_func,
         )
 
     def update(self, eval_config: Dict[str, Any], loss: float) -> None:

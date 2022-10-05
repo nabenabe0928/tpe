@@ -103,8 +103,10 @@ class TreeStructuredParzenEstimator:
         insert_loc = np.searchsorted(sorted_losses, loss, side="right")
         self._observations[self._metric_name] = np.append(losses, loss)
         self._sorted_observations[self._metric_name] = np.insert(sorted_losses, insert_loc, loss)
-        self._n_lower = self._quantile_func(self._sorted_observations[self._metric_name])
-        self._quantile = self._n_lower / self._observations[self._metric_name].size
+
+        size = self._observations[self._metric_name].size
+        self._n_lower = self._quantile_func(size)
+        self._quantile = self._n_lower / size
 
         for hp_name in self._hp_names:
             is_categorical = self._is_categoricals[hp_name]
