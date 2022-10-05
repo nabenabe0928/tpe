@@ -36,7 +36,6 @@ class MultiObjectiveTPE(BaseTPE):
         self._nondominated_ranks: np.ndarray
 
     def _percentile_func(self) -> int:
-        # TODO: Check ==> percentile_func for MO without max(n_fronts, ...)
         n_observations = self._observations[self._objective_names[0]].size
         return max(self._n_fronts, int(np.ceil(0.10 * n_observations)))
 

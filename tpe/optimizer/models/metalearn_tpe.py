@@ -29,7 +29,7 @@ class MetaLearnTPE(AbstractTPE):
         metadata: Dict[str, Dict[str, np.ndarray]],
         constraints: Optional[Dict[str, float]] = None,
         n_samples: int = 200,
-        dim_reduction_factor: float = 5.0,
+        dim_reduction_factor: float = 2.5,
     ):
         if OBJECTIVE_KEY in metadata:
             raise KeyError(f"metadata cannot include the key name {OBJECTIVE_KEY}")
