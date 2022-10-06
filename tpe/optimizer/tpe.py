@@ -56,6 +56,7 @@ class TreeStructuredParzenEstimator:
         self._sorted_observations = {hp_name: np.array([]) for hp_name in self._hp_names}
         self._observations[self._metric_name] = np.array([])
         self._sorted_observations[self._metric_name] = np.array([])
+        self._order = np.array([])
 
         self._quantile_func = quantile_func
         self._weight_func = weight_func
@@ -98,6 +99,7 @@ class TreeStructuredParzenEstimator:
             eval_config (Dict[str, NumericType]): The configuration to evaluate (after conversion)
             loss (float): The loss value as a result of the evaluation
         """
+        size = self._observations[self._metric_name].size
         sorted_losses, losses = (
             self._sorted_observations[self._metric_name],
             self._observations[self._metric_name],
@@ -105,8 +107,9 @@ class TreeStructuredParzenEstimator:
         insert_loc = np.searchsorted(sorted_losses, loss, side="right")
         self._observations[self._metric_name] = np.append(losses, loss)
         self._sorted_observations[self._metric_name] = np.insert(sorted_losses, insert_loc, loss)
+        self._order = np.insert(self._order, insert_loc, size)
 
-        size = self._observations[self._metric_name].size
+        size += 1
         self._n_lower = self._quantile_func(size)
         self._quantile = self._n_lower / size
 

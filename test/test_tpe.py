@@ -236,7 +236,9 @@ class TestTPEOptimizer(unittest.TestCase):
                 )
                 _, best_loss = opt.optimize(logger_name="test")
                 losses[i] = best_loss
-                assert opt._tpe_sampler.observations["x0"].size == max_evals
+                assert opt._tpe_sampler._observations["x0"].size == max_evals
+                loss_vals = opt._tpe_sampler._observations["loss"]
+                assert np.allclose(np.argsort(loss_vals), opt._tpe_sampler._order)
 
             # performance test
             assert losses.mean() < threshold
