@@ -33,26 +33,44 @@ def test_quantile_func() -> None:
 
 
 def test_weight_funcs() -> None:
+    with pytest.raises(ValueError):
+        WeightFuncs(choice="dummy")
+
     size = 5
     for _ in range(5):
         loss_vals = np.random.random(size)
         order = np.argsort(loss_vals)
+        sorted_loss_vals = loss_vals[order]
         order_inv = np.zeros_like(order)
         order_inv[order] = np.arange(order.size)
+        kwargs = dict(size=size, sorted_loss_vals=sorted_loss_vals, order=order)
+
         weights = WeightFuncs.older_smaller(order)
+        assert np.allclose(WeightFuncs("older-smaller")(**kwargs), weights)
+        weight_for_prior = weights[-1]
+        assert np.min(weights) == weight_for_prior  # prior is the smallest weight
+        weights = weights[:-1]
         assert np.allclose(weights[order_inv], np.maximum.accumulate(weights[order_inv]))
-        assert np.isclose(weights.sum(), 1.0)
-        if size > 5:
-            assert np.allclose(weights[order_inv], WeightFuncs._decayed_weight(size))
+        assert np.isclose(weights.sum(), 1.0 - weight_for_prior)
 
-        weights = WeightFuncs.weaker_smaller(loss_vals[order])
+        weights = WeightFuncs.weaker_smaller(sorted_loss_vals)
+        assert np.allclose(WeightFuncs("weaker-smaller")(**kwargs), weights)
+        assert np.min(weights) == weights[-1]  # prior is the smallest weight
         assert np.allclose(weights, np.minimum.accumulate(weights))
         assert np.isclose(weights.sum(), 1.0)
 
-        weights = WeightFuncs.expected_improvement(loss_vals[order])
-        assert np.allclose(weights, np.minimum.accumulate(weights))
+        weights = WeightFuncs.expected_improvement(sorted_loss_vals)
+        assert np.allclose(WeightFuncs("expected-improvement")(**kwargs, lower_group=True), weights)
+        assert np.allclose(WeightFuncs("expected-improvement")(**kwargs), WeightFuncs.uniform(size))
+        assert np.allclose(weights[:-1], np.minimum.accumulate(weights[:-1]))
         assert np.isclose(weights.sum(), 1.0)
+        assert np.isclose(weights[-1], 1.0 / (size + 1))  # prior is the uniform weight
         size = 50
+    else:
+        f = WeightFuncs("expected-improvement")
+        f._choice = "dummy"
+        with pytest.raises(NotImplementedError):
+            f(**kwargs)
 
 
 class TestFuncs(unittest.TestCase):

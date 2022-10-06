@@ -11,7 +11,7 @@ from parzen_estimator import (
     build_numerical_parzen_estimator,
 )
 
-from tpe.utils.constants import NumericType, config2type
+from tpe.utils.constants import NumericType, WeightFuncType, config2type
 
 
 class TreeStructuredParzenEstimator:
@@ -19,7 +19,7 @@ class TreeStructuredParzenEstimator:
         self,
         config_space: CS.ConfigurationSpace,
         quantile_func: Callable[[int], int],
-        weight_func: Callable[[int], np.ndarray],
+        weight_func: WeightFuncType,
         n_ei_candidates: int,
         metric_name: str,
         seed: Optional[int],
@@ -126,10 +126,28 @@ class TreeStructuredParzenEstimator:
 
         self._update_parzen_estimators()
 
+    def _calculate_weights(self) -> Tuple[np.ndarray, np.ndarray]:
+        sorted_loss_vals = self._sorted_observations[self._metric_name]
+        n_lower, n_upper = self._n_lower, sorted_loss_vals.size - self._n_lower
+        weights_lower = self._weight_func(
+            size=n_lower,
+            order=self._order[:n_lower],
+            sorted_loss_vals=sorted_loss_vals[:n_lower],
+            lower_group=True,
+        )
+        weights_upper = self._weight_func(
+            size=n_upper,
+            order=self._order[n_lower:],
+            sorted_loss_vals=sorted_loss_vals[n_lower:],
+            lower_group=False,
+        )
+        return weights_lower, weights_upper
+
     def _update_parzen_estimators(self) -> None:
         n_lower = self._n_lower
         pe_lower_dict: Dict[str, ParzenEstimatorType] = {}
         pe_upper_dict: Dict[str, ParzenEstimatorType] = {}
+        weights_lower, weights_upper = self._calculate_weights()
         for hp_name in self._hp_names:
             is_categorical = self._is_categoricals[hp_name]
             sorted_observations = self._sorted_observations[hp_name]
@@ -141,6 +159,8 @@ class TreeStructuredParzenEstimator:
             pe_lower_dict[hp_name], pe_upper_dict[hp_name] = self._get_parzen_estimator(
                 lower_vals=lower_vals,
                 upper_vals=upper_vals,
+                weights_lower=weights_lower,
+                weights_upper=weights_upper,
                 hp_name=hp_name,
                 is_categorical=is_categorical,
             )
@@ -189,6 +209,8 @@ class TreeStructuredParzenEstimator:
         self,
         lower_vals: np.ndarray,
         upper_vals: np.ndarray,
+        weights_lower: np.ndarray,
+        weights_upper: np.ndarray,
         hp_name: str,
         is_categorical: bool,
     ) -> Tuple[ParzenEstimatorType, ParzenEstimatorType]:
@@ -198,6 +220,8 @@ class TreeStructuredParzenEstimator:
         Args:
             lower_vals (np.ndarray): The array of the values in the lower group
             upper_vals (np.ndarray): The array of the values in the upper group
+            weights_lower (np.ndarray): The weights for the values in the lower group
+            weights_upper (np.ndarray): The weights for the values in the upper group
             hp_name (str): The name of the hyperparameter
             is_categorical (bool): Whether the given hyperparameter is categorical
 
@@ -211,20 +235,20 @@ class TreeStructuredParzenEstimator:
         config = self._config_space.get_hyperparameter(hp_name)
         config_type = config.__class__.__name__
         is_ordinal = self._is_ordinals[hp_name]
-        kwargs = dict(config=config, weight_func=self._weight_func)
+        kwargs = dict(config=config)
 
         if is_categorical:
             kwargs.update(top=self._top)
-            pe_lower = build_categorical_parzen_estimator(vals=lower_vals, **kwargs)
-            pe_upper = build_categorical_parzen_estimator(vals=upper_vals, **kwargs)
+            pe_lower = build_categorical_parzen_estimator(vals=lower_vals, weights=weights_lower, **kwargs)
+            pe_upper = build_categorical_parzen_estimator(vals=upper_vals, weights=weights_upper, **kwargs)
         else:
             kwargs.update(
                 dtype=config2type[config_type],
                 is_ordinal=is_ordinal,
                 default_min_bandwidth_factor=self._min_bandwidth_factor,
             )
-            pe_lower = build_numerical_parzen_estimator(vals=lower_vals, **kwargs)
-            pe_upper = build_numerical_parzen_estimator(vals=upper_vals, **kwargs)
+            pe_lower = build_numerical_parzen_estimator(vals=lower_vals, weights=weights_lower, **kwargs)
+            pe_upper = build_numerical_parzen_estimator(vals=upper_vals, weights=weights_upper, **kwargs)
 
         return pe_lower, pe_upper
 
