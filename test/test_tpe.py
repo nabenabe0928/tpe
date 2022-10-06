@@ -203,7 +203,7 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
         ll_ratio = opt._tpe_sampler.compute_probability_improvement(config_cands)
 
         assert ll_ratio.size == 1
-        self.assertAlmostEqual(ll_ratio[0], 0.333536394021221)
+        self.assertAlmostEqual(ll_ratio[0], 0.4377575167814207)
 
 
 class TestTPEOptimizer(unittest.TestCase):

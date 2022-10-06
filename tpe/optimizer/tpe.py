@@ -176,14 +176,9 @@ class TreeStructuredParzenEstimator:
                 The log of the likelihood ratios of each configuration.
                 The shape is (n_ei_candidates, )
         """
-        EPS = 1e-12
         config_ll_lower = self._mvpe_lower.log_pdf(config_cands)
         config_ll_upper = self._mvpe_upper.log_pdf(config_cands)
-        first_term = np.log(self._quantile + EPS)
-        second_term = np.log(1.0 - self._quantile + EPS) + config_ll_upper - config_ll_lower
-        pi = -np.logaddexp(first_term, second_term)
-        # return config_ll_lower - config_ll_upper
-        return pi
+        return config_ll_lower - config_ll_upper
 
     def _get_parzen_estimator(
         self,
