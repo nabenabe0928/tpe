@@ -1,4 +1,4 @@
-from typing import Protocol, Union
+from typing import Union
 
 import ConfigSpace.hyperparameters as CSH
 
@@ -31,10 +31,9 @@ type2config = {
 }
 
 
-class QuantileFunc(Protocol):
-    def __call__(self, size: int) -> int:
-        raise NotImplementedError
-
-
 def default_quantile(size: int) -> int:
     return int(np.ceil(0.25 * np.sqrt(size)))
+
+
+def default_weight(size: int) -> np.ndarray:
+    return np.full(size, 1.0 / size)

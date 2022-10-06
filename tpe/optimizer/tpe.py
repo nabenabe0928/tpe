@@ -18,7 +18,8 @@ class TreeStructuredParzenEstimator:
     def __init__(
         self,
         config_space: CS.ConfigurationSpace,
-        quantile_func: Callable[[np.ndarray], int],
+        quantile_func: Callable[[int], int],
+        weight_func: Callable[[int], np.ndarray],
         n_ei_candidates: int,
         metric_name: str,
         seed: Optional[int],
@@ -57,6 +58,7 @@ class TreeStructuredParzenEstimator:
         self._sorted_observations[self._metric_name] = np.array([])
 
         self._quantile_func = quantile_func
+        self._weight_func = weight_func
 
         self._is_categoricals = {
             hp_name: self._config_space.get_hyperparameter(hp_name).__class__.__name__ == "CategoricalHyperparameter"
@@ -206,11 +208,12 @@ class TreeStructuredParzenEstimator:
         config = self._config_space.get_hyperparameter(hp_name)
         config_type = config.__class__.__name__
         is_ordinal = self._is_ordinals[hp_name]
-        kwargs = dict(config=config)
+        kwargs = dict(config=config, weight_func=self._weight_func)
 
         if is_categorical:
-            pe_lower = build_categorical_parzen_estimator(vals=lower_vals, **kwargs, top=self._top)
-            pe_upper = build_categorical_parzen_estimator(vals=upper_vals, **kwargs, top=self._top)
+            kwargs.update(top=self._top)
+            pe_lower = build_categorical_parzen_estimator(vals=lower_vals, **kwargs)
+            pe_upper = build_categorical_parzen_estimator(vals=upper_vals, **kwargs)
         else:
             kwargs.update(
                 dtype=config2type[config_type],

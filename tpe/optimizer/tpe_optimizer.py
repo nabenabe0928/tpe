@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 import ConfigSpace as CS
 
@@ -6,7 +6,7 @@ import numpy as np
 
 from tpe.optimizer.base_optimizer import BaseOptimizer, ObjectiveFunc
 from tpe.optimizer.tpe import TreeStructuredParzenEstimator
-from tpe.utils.constants import QuantileFunc, default_quantile
+from tpe.utils.constants import default_quantile, default_weight
 
 
 class TPEOptimizer(BaseOptimizer):
@@ -23,8 +23,8 @@ class TPEOptimizer(BaseOptimizer):
         n_ei_candidates: int = 24,
         min_bandwidth_factor: float = 1e-1,
         top: float = 1.0,
-        quantile_func: QuantileFunc = default_quantile,
-        weight_func: Optional[Any] = None,
+        quantile_func: Callable[[int], int] = default_quantile,
+        weight_func: Callable[[int], np.ndarray] = default_weight,
     ):
         """
         Args:
@@ -60,6 +60,7 @@ class TPEOptimizer(BaseOptimizer):
             min_bandwidth_factor=min_bandwidth_factor,
             top=top,
             quantile_func=quantile_func,
+            weight_func=weight_func,
         )
 
     def update(self, eval_config: Dict[str, Any], loss: float) -> None:
