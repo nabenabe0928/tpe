@@ -1,10 +1,58 @@
+import pytest
+
 import ConfigSpace as CS
 import ConfigSpace.hyperparameters as CSH
 
 import numpy as np
 import unittest
 
+from tpe.utils.constants import QuantileFunc, WeightFuncs
 from tpe.utils.utils import get_random_sample, revert_eval_config
+
+
+def test_quantile_func() -> None:
+    f = QuantileFunc(alpha=0.25, choice="sqrt")
+    ans = [1] * 16 + [2] * 48 + [3] * 35
+    assert np.allclose(ans, [f(i) for i in range(1, 100)])
+
+    f = QuantileFunc(alpha=0.6, choice="sqrt")
+    ans = [1] * 2 + [2] * 9 + [3] * 14 + [4] * 19 + [5] * 25 + [6] * 30
+    assert np.allclose(ans, [f(i) for i in range(1, 100)])
+
+    f = QuantileFunc(alpha=0.25, choice="linear")
+    ans = [1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5]
+    assert np.allclose(ans, [f(i) for i in range(1, 20)])
+
+    f = QuantileFunc(alpha=0.6, choice="linear")
+    ans = [1, 2, 2, 3, 3, 4, 5, 5, 6, 6, 7, 8, 8, 9, 9, 10, 11, 11, 12]
+    assert np.allclose(ans, [f(i) for i in range(1, 20)])
+
+    with pytest.raises(ValueError):
+        f = QuantileFunc(choice="dummy")
+        f(1)
+
+
+def test_weight_funcs() -> None:
+    size = 5
+    for _ in range(5):
+        loss_vals = np.random.random(size)
+        order = np.argsort(loss_vals)
+        order_inv = np.zeros_like(order)
+        order_inv[order] = np.arange(order.size)
+        weights = WeightFuncs.older_smaller(order)
+        assert np.allclose(weights[order_inv], np.maximum.accumulate(weights[order_inv]))
+        assert np.isclose(weights.sum(), 1.0)
+        if size > 5:
+            assert np.allclose(weights[order_inv], WeightFuncs._decayed_weight(size))
+
+        weights = WeightFuncs.weaker_smaller(loss_vals[order])
+        assert np.allclose(weights, np.minimum.accumulate(weights))
+        assert np.isclose(weights.sum(), 1.0)
+
+        weights = WeightFuncs.expected_improvement(loss_vals[order])
+        assert np.allclose(weights, np.minimum.accumulate(weights))
+        assert np.isclose(weights.sum(), 1.0)
+        size = 50
 
 
 class TestFuncs(unittest.TestCase):
