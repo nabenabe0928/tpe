@@ -6,6 +6,8 @@ incumbents/
 **/.mypy_cache
 **/.pytest_cache
 .coverage
+figs/
+.ipynb_checkpoints/
 
 build/
 dist/
