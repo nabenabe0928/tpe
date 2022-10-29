@@ -25,6 +25,7 @@ class TPEOptimizer(BaseOptimizer):
         top: float = 1.0,
         quantile_func: Callable[[int], int] = QuantileFunc(),
         weight_func_choice: Literal["uniform", "older-smaller", "weaker-smaller", "expected-improvement"] = "uniform",
+        multivariate: bool = True,
     ):
         """
         Args:
@@ -40,6 +41,7 @@ class TPEOptimizer(BaseOptimizer):
             n_ei_candidates (int): The number of samplings to optimize the EI value
             min_bandwidth_factor (float): The minimum bandwidth for numerical parameters
             top (float): The hyperparam of the cateogircal kernel. It defines the prob of the top category.
+            multivariate (bool): Whether to use multivariate kernel or not.
         """
         super().__init__(
             obj_func=obj_func,
@@ -61,6 +63,7 @@ class TPEOptimizer(BaseOptimizer):
             top=top,
             quantile_func=quantile_func,
             weight_func=WeightFuncs(choice=weight_func_choice),
+            multivariate=multivariate,
         )
 
     def update(self, eval_config: Dict[str, Any], loss: float) -> None:
@@ -84,6 +87,15 @@ class TPEOptimizer(BaseOptimizer):
         """
         config_cands = self._get_config_cands()
         pi_config = self._compute_probability_improvement(config_cands)
-        best_idx = int(np.argmax(pi_config))
-        eval_config = {hp_name: config_cands[hp_name][best_idx] for dim, hp_name in enumerate(self._hp_names)}
+
+        eval_config: Dict[str, Any] = {}
+        if self._tpe_sampler._multivariate:
+            best_idx = int(np.argmax(pi_config))
+            eval_config = {hp_name: config_cands[hp_name][best_idx] for dim, hp_name in enumerate(self._hp_names)}
+        else:
+            best_indices = np.argmax(pi_config, axis=-1)
+            eval_config = {
+                hp_name: config_cands[hp_name][best_indices[dim]] for dim, hp_name in enumerate(self._hp_names)
+            }
+
         return self._revert_eval_config(eval_config=eval_config)

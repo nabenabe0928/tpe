@@ -1,4 +1,4 @@
-from typing import List, Literal, Protocol, Union
+from typing import List, Literal, Optional, Protocol, Union
 
 import ConfigSpace.hyperparameters as CSH
 
@@ -34,7 +34,9 @@ type2config = {
 
 
 class WeightFuncType(Protocol):
-    def __call__(self, size: int, order: np.ndarray, sorted_loss_vals: np.ndarray, lower_group: bool) -> np.ndarray:
+    def __call__(
+        self, size: int, order: np.ndarray, sorted_loss_vals: np.ndarray, lower_group: bool, threshold: Optional[float]
+    ) -> np.ndarray:
         raise NotImplementedError
 
 
@@ -53,6 +55,7 @@ class WeightFuncs:
         order: np.ndarray,
         sorted_loss_vals: np.ndarray,
         lower_group: bool = False,
+        threshold: Optional[float] = None,
     ) -> np.ndarray:
         # NOTE: We always add a weight for prior and thus weights.size is always size + 1
         if self._choice == "uniform":
@@ -62,7 +65,7 @@ class WeightFuncs:
         elif self._choice == "weaker-smaller":
             return self.weaker_smaller(sorted_loss_vals)
         elif self._choice == "expected-improvement":
-            return self.expected_improvement(sorted_loss_vals) if lower_group else self.uniform(size)
+            return self.expected_improvement(sorted_loss_vals, threshold) if lower_group else self.uniform(size)
         else:
             raise NotImplementedError(f"Unknown choice {self._choice}")
 
@@ -98,8 +101,13 @@ class WeightFuncs:
         return weights[::-1]  # prior is the weakest
 
     @classmethod
-    def expected_improvement(cls, sorted_loss_vals: np.ndarray) -> np.ndarray:
-        threshold = np.max(sorted_loss_vals)
+    def expected_improvement(cls, sorted_loss_vals: np.ndarray, threshold: Optional[float]) -> np.ndarray:
+        if threshold is None:
+            raise ValueError("threshold must be provided for expected improvement")
+
+        if threshold == np.inf:
+            return cls.uniform(size=sorted_loss_vals.size)
+
         weights = threshold - sorted_loss_vals
         # prior is 1.0 / size (uniform weight)
         weights = np.append(weights, np.mean(weights))

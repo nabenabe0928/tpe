@@ -59,8 +59,11 @@ def test_weight_funcs() -> None:
         assert np.allclose(weights, np.minimum.accumulate(weights))
         assert np.isclose(weights.sum(), 1.0)
 
-        weights = WeightFuncs.expected_improvement(sorted_loss_vals)
-        assert np.allclose(WeightFuncs("expected-improvement")(**kwargs, lower_group=True), weights)
+        threshold = np.max(sorted_loss_vals) + 1e-2
+        weights = WeightFuncs.expected_improvement(sorted_loss_vals, threshold=threshold)
+        assert np.allclose(
+            WeightFuncs("expected-improvement")(**kwargs, lower_group=True, threshold=threshold), weights
+        )
         assert np.allclose(WeightFuncs("expected-improvement")(**kwargs), WeightFuncs.uniform(size))
         assert np.allclose(weights[:-1], np.minimum.accumulate(weights[:-1]))
         assert np.isclose(weights.sum(), 1.0)

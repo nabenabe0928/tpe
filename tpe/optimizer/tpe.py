@@ -25,6 +25,7 @@ class TreeStructuredParzenEstimator:
         seed: Optional[int],
         min_bandwidth_factor: float,
         top: float,
+        multivariate: bool,
     ):
         """
         Attributes:
@@ -42,6 +43,7 @@ class TreeStructuredParzenEstimator:
             quantile_func (Callable[[np.ndarray], int]):
                 The function that returns the number of a better group based on the total number of evaluations.
         """
+        self._multivariate = multivariate
         self._rng = np.random.RandomState(seed)
         self._n_ei_candidates = n_ei_candidates
         self._config_space = config_space
@@ -129,16 +131,19 @@ class TreeStructuredParzenEstimator:
     def _calculate_weights(self) -> Tuple[np.ndarray, np.ndarray]:
         sorted_loss_vals = self._sorted_observations[self._metric_name]
         n_lower, n_upper = self._n_lower, sorted_loss_vals.size - self._n_lower
+        lower_vals, upper_vals = sorted_loss_vals[:n_lower], sorted_loss_vals[n_lower:]
+        threshold = upper_vals[0] if upper_vals.size > 0 else np.inf
         weights_lower = self._weight_func(
             size=n_lower,
             order=self._order[:n_lower],
-            sorted_loss_vals=sorted_loss_vals[:n_lower],
+            sorted_loss_vals=lower_vals,
             lower_group=True,
+            threshold=threshold,
         )
         weights_upper = self._weight_func(
             size=n_upper,
             order=self._order[n_lower:],
-            sorted_loss_vals=sorted_loss_vals[n_lower:],
+            sorted_loss_vals=upper_vals,
             lower_group=False,
         )
         return weights_lower, weights_upper
@@ -199,11 +204,25 @@ class TreeStructuredParzenEstimator:
         Returns:
             config_ll_ratio (np.ndarray):
                 The log of the likelihood ratios of each configuration.
-                The shape is (n_ei_candidates, )
+                The shape is (n_ei_candidates, ) if multivariate.
+                If univariate, the shape is (dim, n_ei_candidates).
         """
-        config_ll_lower = self._mvpe_lower.log_pdf(config_cands)
-        config_ll_upper = self._mvpe_upper.log_pdf(config_cands)
-        return config_ll_lower - config_ll_upper
+        dim = len(self._hp_names)
+        n_samples = next(iter(config_cands.values())).size
+        if self._multivariate:
+            density_ratios = np.zeros((n_samples,))
+            config_ll_lower = self._mvpe_lower.log_pdf(config_cands)
+            config_ll_upper = self._mvpe_upper.log_pdf(config_cands)
+            density_ratios = config_ll_lower - config_ll_upper
+        else:
+            density_ratios = np.zeros((dim, n_samples))
+            pdf_lower = self._mvpe_lower.dimension_wise_pdf(config_cands)
+            pdf_upper = self._mvpe_upper.dimension_wise_pdf(config_cands)
+
+            for d in range(dim):
+                density_ratios[d] = pdf_lower[d] / pdf_upper[d]
+
+        return density_ratios
 
     def _get_parzen_estimator(
         self,

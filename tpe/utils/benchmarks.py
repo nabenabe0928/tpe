@@ -33,13 +33,13 @@ class Sphere(AbstractFunc):
     def func(cls, eval_config: Dict[str, float]) -> float:
         # min: 0
         vals = config2array(eval_config, cls._R)
-        return np.sum(vals ** 2)
+        return np.sum(vals**2)
 
     @classmethod
     def func2d(cls, X: np.ndarray, Y: np.ndarray) -> np.ndarray:
         x = cls._R * X
         y = cls._R * Y
-        return x ** 2 + y ** 2
+        return x**2 + y**2
 
 
 class Styblinski(AbstractFunc):
@@ -51,8 +51,8 @@ class Styblinski(AbstractFunc):
     def func(cls, eval_config: Dict[str, float]) -> float:
         # min: -39.166165 * DIM
         vals = config2array(eval_config, R=cls._R)
-        t1 = np.sum(vals ** 4)
-        t2 = -16 * np.sum(vals ** 2)
+        t1 = np.sum(vals**4)
+        t2 = -16 * np.sum(vals**2)
         t3 = 5 * np.sum(vals)
         return 0.5 * (t1 + t2 + t3)
 
@@ -60,8 +60,8 @@ class Styblinski(AbstractFunc):
     def func2d(cls, X: np.ndarray, Y: np.ndarray) -> np.ndarray:
         x = cls._R * X
         y = cls._R * Y
-        t1 = x ** 4 + y ** 4
-        t2 = -16 * (x ** 2 + y ** 2)
+        t1 = x**4 + y**4
+        t2 = -16 * (x**2 + y**2)
         t3 = 5 * (x + y)
         return 0.5 * (t1 + t2 + t3)
 
@@ -77,7 +77,7 @@ class Rastrigin(AbstractFunc):
         dim = len(eval_config)
         vals = config2array(eval_config, R=cls._R)
         t1 = 10 * dim
-        t2 = np.sum(vals ** 2)
+        t2 = np.sum(vals**2)
         t3 = -10 * np.sum(np.cos(2 * np.pi * vals))
         return t1 + t2 + t3
 
@@ -86,7 +86,7 @@ class Rastrigin(AbstractFunc):
         x = cls._R * X
         y = cls._R * Y
         cos_term = np.cos(2 * np.pi * x) + np.cos(2 * np.pi * y)
-        return 20 + x ** 2 + y ** 2 - 10 * cos_term
+        return 20 + x**2 + y**2 - 10 * cos_term
 
 
 class Schwefel(AbstractFunc):
@@ -118,7 +118,7 @@ class Ackley(AbstractFunc):
     def func(cls, eval_config: Dict[str, float]) -> float:
         # min: 0
         vals = config2array(eval_config, R=cls._R)
-        t1 = -20 * np.exp(-0.2 * np.sqrt(np.mean(vals ** 2)))
+        t1 = -20 * np.exp(-0.2 * np.sqrt(np.mean(vals**2)))
         t2 = -np.exp(np.mean(np.cos(2 * np.pi * vals)))
         return 20 + np.e + t1 + t2
 
@@ -126,7 +126,7 @@ class Ackley(AbstractFunc):
     def func2d(cls, X: np.ndarray, Y: np.ndarray) -> np.ndarray:
         x = cls._R * X
         y = cls._R * Y
-        t1 = -20 * np.exp(-0.2 * np.sqrt(0.5 * (x ** 2 + y ** 2)))
+        t1 = -20 * np.exp(-0.2 * np.sqrt(0.5 * (x**2 + y**2)))
         t2 = -np.exp(0.5 * (np.cos(2 * np.pi * x) + np.cos(2 * np.pi * y)))
         return 20 + np.e + t1 + t2
 
@@ -140,7 +140,7 @@ class Griewank(AbstractFunc):
     def func(cls, eval_config: Dict[str, float]) -> float:
         dim = len(eval_config)
         vals = config2array(eval_config, R=cls._R)
-        t1 = np.sum(vals ** 2) / 4000
+        t1 = np.sum(vals**2) / 4000
         t2 = -np.prod(np.cos(vals / np.sqrt(np.arange(1, dim + 1))))
         return 1 + t1 + t2
 
@@ -148,7 +148,7 @@ class Griewank(AbstractFunc):
     def func2d(cls, X: np.ndarray, Y: np.ndarray) -> np.ndarray:
         x = cls._R * X
         y = cls._R * Y
-        t1 = (x ** 2 + y ** 2) / 4000
+        t1 = (x**2 + y**2) / 4000
         t2 = np.cos(x) * np.cos(y / np.sqrt(2))
         return 1 + t1 - t2
 
@@ -167,7 +167,7 @@ class Perm(AbstractFunc):
         ret = 0
         for d in indices:
             center = (1 / indices) ** d
-            factor = vals ** d
+            factor = vals**d
             ret += ((indices + cls._beta) @ (factor - center)) ** 2
 
         return ret
@@ -176,10 +176,9 @@ class Perm(AbstractFunc):
     def func2d(cls, X: np.ndarray, Y: np.ndarray) -> np.ndarray:
         x = cls._R * X
         y = cls._R * Y
-        z = (
-            ((cls._beta + 1) * (x - 1) + (cls._beta + 2) * (y - 0.5)) ** 2
-            + ((cls._beta + 1) * (x ** 2 - 1) + (cls._beta + 2) * (y - 0.25)) ** 2
-        )
+        z = ((cls._beta + 1) * (x - 1) + (cls._beta + 2) * (y - 0.5)) ** 2 + (
+            (cls._beta + 1) * (x**2 - 1) + (cls._beta + 2) * (y - 0.25)
+        ) ** 2
         return z
 
 
@@ -194,13 +193,13 @@ class KTablet(AbstractFunc):
         k = (dim + 3) // 4
         vals = config2array(eval_config, R=cls._R)
         vals[k:] *= 100
-        return np.sum(vals ** 2)
+        return np.sum(vals**2)
 
     @classmethod
     def func2d(cls, X: np.ndarray, Y: np.ndarray) -> np.ndarray:
         x = cls._R * X
         y = cls._R * Y
-        return x ** 2 + 10000 * y ** 2
+        return x**2 + 10000 * y**2
 
 
 class WeightedSphere(AbstractFunc):
@@ -213,13 +212,13 @@ class WeightedSphere(AbstractFunc):
         dim = len(eval_config)
         vals = config2array(eval_config, R=cls._R)
         weights = np.arange(dim) + 1
-        return weights @ (vals ** 2)
+        return weights @ (vals**2)
 
     @classmethod
     def func2d(cls, X: np.ndarray, Y: np.ndarray) -> np.ndarray:
         x = cls._R * X
         y = cls._R * Y
-        return x ** 2 + 2 * y ** 2
+        return x**2 + 2 * y**2
 
 
 class Rosenbrock(AbstractFunc):
@@ -238,7 +237,7 @@ class Rosenbrock(AbstractFunc):
     def func2d(cls, X: np.ndarray, Y: np.ndarray) -> np.ndarray:
         x = cls._R * X
         y = cls._R * Y
-        return 100 * (y - x ** 2) ** 2 + (x - 1) ** 2
+        return 100 * (y - x**2) ** 2 + (x - 1) ** 2
 
 
 class DifferentPower(AbstractFunc):
@@ -268,13 +267,13 @@ class XinSheYang(AbstractFunc):
     @classmethod
     def func(cls, eval_config: Dict[str, float]) -> float:
         vals = config2array(eval_config, R=cls._R)
-        return np.sum(np.abs(vals)) * np.exp(-np.sum(np.sin(vals ** 2)))
+        return np.sum(np.abs(vals)) * np.exp(-np.sum(np.sin(vals**2)))
 
     @classmethod
     def func2d(cls, X: np.ndarray, Y: np.ndarray) -> np.ndarray:
         x = cls._R * X
         y = cls._R * Y
-        return (np.abs(x) + np.abs(y)) * np.exp(-(np.sin(x ** 2) + np.sin(y ** 2)))
+        return (np.abs(x) + np.abs(y)) * np.exp(-(np.sin(x**2) + np.sin(y**2)))
 
 
 class Levy(AbstractFunc):
