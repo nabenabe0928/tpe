@@ -205,6 +205,38 @@ class TestTreeStructuredParzenEstimator(unittest.TestCase):
         assert ll_ratio.size == 1
         self.assertAlmostEqual(ll_ratio[0], 0.4377575167814207)
 
+    def test_compute_univariate_probability_improvement(self) -> None:
+        opt = TPEOptimizer(
+            obj_func=sphere,
+            config_space=self.cs,
+            max_evals=20,
+            resultfile="test",
+            seed=0,
+            min_bandwidth_factor=1e-2,
+            top=0.8,
+            multivariate=False,
+        )
+        opt.optimize(logger_name="test")
+
+        config_cands = {hp_name: np.array([0.0]) for hp_name in self.hp_names}
+        ll_ratio = opt._tpe_sampler.compute_probability_improvement(config_cands)
+
+        assert ll_ratio.size == len(self.hp_names)
+        print(ll_ratio.flatten())
+        ans = [
+            0.18269177,
+            0.31465651,
+            0.29719869,
+            0.2192919,
+            0.28202578,
+            0.31770592,
+            0.20347506,
+            0.60758679,
+            0.5507691,
+            4.97165526,
+        ]
+        assert np.allclose(ll_ratio[:, 0], ans)
+
 
 class TestTPEOptimizer(unittest.TestCase):
     def setUp(self) -> None:

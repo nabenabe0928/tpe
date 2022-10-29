@@ -33,10 +33,15 @@ def test_quantile_func() -> None:
 
 
 def test_weight_funcs() -> None:
+    size = 5
     with pytest.raises(ValueError):
         WeightFuncs(choice="dummy")
+    with pytest.raises(ValueError):
+        WeightFuncs.expected_improvement(np.zeros(size), threshold=None)
 
-    size = 5
+    assert np.allclose(
+        WeightFuncs.expected_improvement(np.zeros(size), threshold=np.inf), np.full(size + 1, 1 / (size + 1))
+    )
     for _ in range(5):
         loss_vals = np.random.random(size)
         order = np.argsort(loss_vals)
