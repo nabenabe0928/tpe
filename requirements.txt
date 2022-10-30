@@ -1,3 +1,7 @@
+jahs-bench
 numpy
 ConfigSpace
 parzen_estimator
+h5py
+ipython
+pyarrow
