@@ -24,6 +24,7 @@ class TreeStructuredParzenEstimator:
         metric_name: str,
         seed: Optional[int],
         min_bandwidth_factor: float,
+        min_bandwidth_factor_for_discrete: float,
         top: float,
         multivariate: bool,
     ):
@@ -52,6 +53,7 @@ class TreeStructuredParzenEstimator:
         self._n_lower = 0
         self._quantile = 0
         self._min_bandwidth_factor = min_bandwidth_factor
+        self._min_bandwidth_factor_for_discrete = min_bandwidth_factor_for_discrete
         self._top = top
 
         self._observations = {hp_name: np.array([]) for hp_name in self._hp_names}
@@ -265,6 +267,7 @@ class TreeStructuredParzenEstimator:
                 dtype=config2type[config_type],
                 is_ordinal=is_ordinal,
                 default_min_bandwidth_factor=self._min_bandwidth_factor,
+                default_min_bandwidth_factor_for_discrete=self._min_bandwidth_factor_for_discrete,
             )
             pe_lower = build_numerical_parzen_estimator(vals=lower_vals, weights=weights_lower, **kwargs)
             pe_upper = build_numerical_parzen_estimator(vals=upper_vals, weights=weights_upper, **kwargs)

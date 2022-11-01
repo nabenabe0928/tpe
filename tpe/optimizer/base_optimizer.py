@@ -105,13 +105,13 @@ class BaseOptimizer(metaclass=ABCMeta):
 
         observations = self.fetch_observations()
         logger.info(f"Best loss: {best_loss:.4e}")
-        store_results(
-            best_config=best_config,
-            logger=logger,
-            observations=observations,
-            file_name=self.resultfile,
-            requirements=self._requirements,
-        )
+        # store_results(
+        #     best_config=best_config,
+        #     logger=logger,
+        #     observations=observations,
+        #     file_name=self.resultfile,
+        #     requirements=self._requirements,
+        # )
 
         return best_config, best_loss
 
