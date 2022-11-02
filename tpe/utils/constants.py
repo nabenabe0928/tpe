@@ -108,7 +108,7 @@ class WeightFuncs:
         if threshold == np.inf:
             return cls.uniform(size=sorted_loss_vals.size)
 
-        weights = threshold - sorted_loss_vals
+        weights = np.maximum(1e-12, threshold - sorted_loss_vals)
         # prior is 1.0 / size (uniform weight)
         weights = np.append(weights, np.mean(weights))
         weights /= np.sum(weights)

@@ -94,11 +94,14 @@ if __name__ == "__main__":
         ["uniform", "older-smaller", "expected-improvement"],  # weight_func_choice
         FUNCS,
     )):
-        collect_data(
-            bench=params[-1],
-            min_bandwidth_factor_for_discrete=params[0],
-            multivariate=params[1],
-            choice=params[2][0],
-            alpha=params[2][1],
-            weight_func_choice=params[3],
-        )
+        try:
+            collect_data(
+                bench=params[-1],
+                min_bandwidth_factor_for_discrete=params[0],
+                multivariate=params[1],
+                choice=params[2][0],
+                alpha=params[2][1],
+                weight_func_choice=params[3],
+            )
+        except Exception as e:
+            print(f"Failed with error {e}")
