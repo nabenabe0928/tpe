@@ -123,7 +123,7 @@ def collect_data(
 
 if __name__ == "__main__":
     for params in itertools.product(*(
-        [1/100, 1/50, 1/10, 1/5],  # min_bandwidth_factor
+        [0.01, 0.03, 0.1, 0.3],  # min_bandwidth_factor
         # [],  # min_bandwidth_factor_for_discrete
         [True, False],  # multivariate
         [

@@ -85,8 +85,8 @@ def collect_data(
 
 if __name__ == "__main__":
     for params in itertools.product(*(
-        [1/100, 1/50, 1/10, 1/5],  # min_bandwidth_factor
-        [0.5, 1.0, 1.5],  # min_bandwidth_factor_for_discrete
+        [0.01, 0.03, 0.1, 0.3],  # min_bandwidth_factor
+        [0.25, 0.5, 1.0, 2.0],  # min_bandwidth_factor_for_discrete
         [True, False],  # multivariate
         [
             (LINEAR, 0.05), (LINEAR, 0.1), (LINEAR, 0.15), (LINEAR, 0.2),
