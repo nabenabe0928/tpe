@@ -20,6 +20,7 @@ from tpe.utils.benchmarks import (
     WeightedSphere,
     Rosenbrock,
     Levy,
+    XinSheYang,
 )
 from tpe.utils.constants import QuantileFunc
 
@@ -41,6 +42,7 @@ FUNCS = [
     WeightedSphere,
     Rosenbrock,
     Levy,
+    XinSheYang,
 ]
 N_SEEDS = 10
 MAX_EVALS = 200

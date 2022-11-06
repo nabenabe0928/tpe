@@ -8,7 +8,7 @@ import ujson as json
 
 
 if __name__ == "__main__":
-    dir_names = os.listdir("results/")
+    dir_names = [d for d in os.listdir("results/") if not d.endswith(".csv")]
     data = {
         "multivariate": [],
         "quantile": [],
@@ -18,6 +18,11 @@ if __name__ == "__main__":
         "min_bandwidth_factor_for_discrete": [],
     }
     epochs = [epoch - 1 for epoch in [50, 100, 150, 200]]
+    mean_vals = {
+        "setting_index": [],
+        "target": [],
+    }
+    mean_vals.update({f"n_evals{i+1:0>3}": [] for i in range(200)})
     results = {
         "setting_index": [],
         "target": [],
@@ -35,7 +40,7 @@ if __name__ == "__main__":
     index = 0
     for dir_name in dir_names:
         for col in cols:
-            if col not in dir_name:
+            if (col + "=") not in dir_name:
                 data[col].append(None)
                 continue
 
@@ -45,20 +50,23 @@ if __name__ == "__main__":
             dir_path = os.path.join("results", dir_name)
             files = os.listdir(dir_path)
             for fn in files:
-                try:
-                    cum_vals = np.minimum.accumulate(json.load(open(os.path.join(dir_path, fn))), axis=-1)[:, epochs]
-                    means = np.mean(cum_vals, axis=0)
-                    stes = np.std(cum_vals, axis=0) / np.sqrt(cum_vals.shape[0])
-                    results["setting_index"].append(index)
-                    results["target"].append(fn.split(".json")[0])
-                    for i in range(4):
-                        e = 50 * (i + 1)
-                        results[f"mean@n_evals{e:0>3}"].append(means[i])
-                        results[f"ste@n_evals{e:0>3}"].append(stes[i])
-                except Exception:
-                    pass
+                cum_vals = np.minimum.accumulate(json.load(open(os.path.join(dir_path, fn))), axis=-1)
+                means = np.mean(cum_vals, axis=0)
+                stes = np.std(cum_vals[:, epochs], axis=0) / np.sqrt(cum_vals.shape[0])
+                results["setting_index"].append(index)
+                results["target"].append(fn.split(".json")[0])
+                mean_vals["setting_index"].append(index)
+                mean_vals["target"].append(fn.split(".json")[0])
+                for i in range(4):
+                    e = 50 * (i + 1)
+                    results[f"mean@n_evals{e:0>3}"].append(means[epochs[i]])
+                    results[f"ste@n_evals{e:0>3}"].append(stes[i])
+                for i in range(200):
+                    mean_vals[f"n_evals{i+1:0>3}"].append(means[i])
 
         index += 1
 
-    print(pd.DataFrame(data).to_csv())
-    print(pd.DataFrame(results).to_csv(index=False))
+    pd.DataFrame(data).to_csv("results/setting-table.csv")
+    pd.DataFrame(results).to_csv("results/summary.csv", index=False)
+    mean_vals = {k: np.asarray(v, dtype=np.float32) if k.startswith("n_evals") else v for k, v in mean_vals.items()}
+    pd.DataFrame(mean_vals).to_csv("results/mean_vals.csv", index=False)

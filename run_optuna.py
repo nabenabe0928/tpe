@@ -19,6 +19,7 @@ from tpe.utils.benchmarks import (
     WeightedSphere,
     Rosenbrock,
     Levy,
+    XinSheYang,
 )
 from tpe.utils.tabular_benchmarks import HPOBench, HPOLib, JAHSBench201
 
@@ -36,6 +37,7 @@ FUNCS = [
     WeightedSphere,
     Rosenbrock,
     Levy,
+    XinSheYang,
 ]
 FUNCS += [HPOBench(dataset_id=i, seed=None) for i in range(8)]
 FUNCS += [HPOLib(dataset_id=i, seed=None) for i in range(4)]

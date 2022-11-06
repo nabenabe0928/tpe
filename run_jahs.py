@@ -50,7 +50,6 @@ def collect_data(
 ) -> None:
 
     func_name = bench.dataset_name
-    print(func_name, multivariate, choice, alpha, weight_func_choice)
     dir_name = "_".join([
         f"multivariate={multivariate}",
         f"quantile={choice}",
@@ -64,6 +63,7 @@ def collect_data(
         return
 
     results = []
+    print("Collect", dir_name, file_name)
     for seed in range(N_SEEDS):
         opt = TPEOptimizer(
             obj_func=bench,
