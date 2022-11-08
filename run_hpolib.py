@@ -4,11 +4,11 @@ import os
 from typing import Dict, List
 
 from tpe.optimizer import TPEOptimizer
-from tpe.utils.tabular_benchmarks import AbstractBench, HPOBench, HPOLib
+from tpe.utils.tabular_benchmarks import AbstractBench, HPOLib
 from tpe.utils.constants import QuantileFunc
 
 
-FUNCS = [HPOBench(dataset_id=i, seed=None) for i in range(8)] + [HPOLib(dataset_id=i, seed=None) for i in range(4)]
+FUNCS = [HPOLib(dataset_id=i, seed=None) for i in range(4)]
 N_SEEDS = 10
 MAX_EVALS = 200
 N_INIT = 200 * 5 // 100
@@ -46,6 +46,7 @@ def collect_data(
     choice: str,
     alpha: float,
     weight_func_choice: str,
+    top: float,
 ) -> None:
 
     func_name = bench.dataset_name
@@ -56,6 +57,7 @@ def collect_data(
         f"alpha={alpha}",
         f"weight={weight_func_choice}",
         f"min_bandwidth_factor_for_discrete={min_bandwidth_factor_for_discrete}",
+        f"top={top}",
     ])
     file_name = f"{func_name}.json"
     if exist_file(dir_name, file_name):
@@ -75,6 +77,7 @@ def collect_data(
             min_bandwidth_factor_for_discrete=min_bandwidth_factor_for_discrete,
             seed=seed,
             resultfile=os.path.join(dir_name, file_name),
+            top=top,
         )
         opt.optimize()
         results.append(opt.fetch_observations()["loss"].tolist())
@@ -91,7 +94,8 @@ if __name__ == "__main__":
             (LINEAR, 0.05), (LINEAR, 0.1), (LINEAR, 0.15), (LINEAR, 0.2),
             (SQRT, 0.25), (SQRT, 0.5), (SQRT, 0.75), (SQRT, 1.0),
         ],  # quantile_func
-        ["uniform", "older-smaller", "expected-improvement"],  # weight_func_choice
+        ["uniform", "older-smaller", "expected-improvement", "weaker-smaller"],  # weight_func_choice
+        [0.8, 0.9, 1.0],  # top
         FUNCS,
     )):
         try:
@@ -102,6 +106,7 @@ if __name__ == "__main__":
                 choice=params[2][0],
                 alpha=params[2][1],
                 weight_func_choice=params[3],
+                top=params[4],
             )
         except Exception as e:
             print(f"Failed with error {e}")

@@ -1,58 +1,18 @@
 import itertools
 import json
 import os
-from argparse import ArgumentParser
 from typing import Dict, List
 
-import ConfigSpace as CS
-
 from tpe.optimizer import TPEOptimizer
-from tpe.utils.benchmarks import (
-    AbstractFunc,
-    Sphere,
-    Styblinski,
-    Rastrigin,
-    Schwefel,
-    Ackley,
-    Griewank,
-    Perm,
-    KTablet,
-    WeightedSphere,
-    Rosenbrock,
-    Levy,
-    XinSheYang,
-)
+from tpe.utils.tabular_benchmarks import AbstractBench, HPOBench
 from tpe.utils.constants import QuantileFunc
 
 
-parser = ArgumentParser()
-parser.add_argument("--dim", type=int, choices=[5, 10, 30], required=True)
-args = parser.parse_args()
-DIM = args.dim
-
-FUNCS = [
-    Sphere,
-    Styblinski,
-    Rastrigin,
-    Schwefel,
-    Ackley,
-    Griewank,
-    Perm,
-    KTablet,
-    WeightedSphere,
-    Rosenbrock,
-    Levy,
-    XinSheYang,
-]
+FUNCS = [HPOBench(dataset_id=i, seed=None) for i in range(8)]
 N_SEEDS = 10
 MAX_EVALS = 200
 N_INIT = 200 * 5 // 100
 LINEAR, SQRT = "linear", "sqrt"
-CONFIG_SPACE = CS.ConfigurationSpace()
-CONFIG_SPACE.add_hyperparameters([
-    CS.UniformFloatHyperparameter(name=f"x{d}", lower=-1, upper=1)
-    for d in range(DIM)
-])
 
 
 def save_observations(
@@ -80,38 +40,39 @@ def exist_file(dir_name: str, file_name: str) -> bool:
 
 
 def collect_data(
-    func_cls: AbstractFunc,
-    min_bandwidth_factor: float,
+    bench: AbstractBench,
+    min_bandwidth_factor_for_discrete: float,
     multivariate: bool,
     choice: str,
     alpha: float,
     weight_func_choice: str,
 ) -> None:
 
-    func_name = func_cls().__class__.__name__
-    print(func_name, min_bandwidth_factor, multivariate, choice, alpha, weight_func_choice)
+    func_name = bench.dataset_name
+    print(func_name, min_bandwidth_factor_for_discrete, multivariate, choice, alpha, weight_func_choice)
     dir_name = "_".join([
         f"multivariate={multivariate}",
         f"quantile={choice}",
         f"alpha={alpha}",
         f"weight={weight_func_choice}",
-        f"min_bandwidth_factor={min_bandwidth_factor}",
+        f"min_bandwidth_factor_for_discrete={min_bandwidth_factor_for_discrete}",
     ])
-    file_name = f"{func_name}_{DIM:0>2}d.json"
+    file_name = f"{func_name}.json"
     if exist_file(dir_name, file_name):
         return
 
     results = []
     for seed in range(N_SEEDS):
+        bench.reseed(seed)
         opt = TPEOptimizer(
-            obj_func=func_cls.func,
-            config_space=CONFIG_SPACE,
+            obj_func=bench,
+            config_space=bench.config_space,
             max_evals=MAX_EVALS,
             n_init=N_INIT,
             weight_func_choice=weight_func_choice,
             quantile_func=QuantileFunc(choice=choice, alpha=alpha),
             multivariate=multivariate,
-            min_bandwidth_factor=min_bandwidth_factor,
+            min_bandwidth_factor_for_discrete=min_bandwidth_factor_for_discrete,
             seed=seed,
             resultfile=os.path.join(dir_name, file_name),
         )
@@ -123,8 +84,8 @@ def collect_data(
 
 if __name__ == "__main__":
     for params in itertools.product(*(
-        [0.01, 0.03, 0.1, 0.3],  # min_bandwidth_factor
-        # [],  # min_bandwidth_factor_for_discrete
+        # [1/100, 1/50, 1/10, 1/5],  # min_bandwidth_factor
+        [0.25, 0.5, 1.0, 2.0],  # min_bandwidth_factor_for_discrete
         [True, False],  # multivariate
         [
             (LINEAR, 0.05), (LINEAR, 0.1), (LINEAR, 0.15), (LINEAR, 0.2),
@@ -133,11 +94,14 @@ if __name__ == "__main__":
         ["uniform", "older-smaller", "expected-improvement", "weaker-smaller"],  # weight_func_choice
         FUNCS,
     )):
-        collect_data(
-            func_cls=params[-1],
-            min_bandwidth_factor=params[0],
-            multivariate=params[1],
-            choice=params[2][0],
-            alpha=params[2][1],
-            weight_func_choice=params[3],
-        )
+        try:
+            collect_data(
+                bench=params[-1],
+                min_bandwidth_factor_for_discrete=params[0],
+                multivariate=params[1],
+                choice=params[2][0],
+                alpha=params[2][1],
+                weight_func_choice=params[3],
+            )
+        except Exception as e:
+            print(f"Failed with error {e}")
