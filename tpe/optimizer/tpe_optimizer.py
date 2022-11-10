@@ -23,7 +23,7 @@ class TPEOptimizer(BaseOptimizer):
         n_ei_candidates: int = 24,
         min_bandwidth_factor: float = 1e-1,
         min_bandwidth_factor_for_discrete: float = 1.0,
-        top: float = 1.0,
+        top: Optional[float] = 1.0,
         quantile_func: Callable[[int], int] = QuantileFunc(),
         weight_func_choice: Literal["uniform", "older-smaller", "weaker-smaller", "expected-improvement"] = "uniform",
         multivariate: bool = True,
@@ -41,7 +41,11 @@ class TPEOptimizer(BaseOptimizer):
             only_requirements (bool): If True, we only save runtime and loss.
             n_ei_candidates (int): The number of samplings to optimize the EI value
             min_bandwidth_factor (float): The minimum bandwidth for numerical parameters
-            top (float): The hyperparam of the cateogircal kernel. It defines the prob of the top category.
+            top (Optional[float]):
+                The hyperparam of the cateogircal kernel. It defines the prob of the top category.
+                If None, it adapts the parameter in a way that Optuna does.
+                top := (1 + 1/N) / (1 + c/N) where
+                c is the number of choices and N is the number of observations.
             multivariate (bool): Whether to use multivariate kernel or not.
         """
         super().__init__(

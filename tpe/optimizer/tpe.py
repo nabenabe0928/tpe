@@ -11,7 +11,7 @@ from parzen_estimator import (
     build_numerical_parzen_estimator,
 )
 
-from tpe.utils.constants import NumericType, WeightFuncType, config2type
+from tpe.utils.constants import CategoricalHPType, NumericType, WeightFuncType, config2type
 
 
 class TreeStructuredParzenEstimator:
@@ -25,7 +25,7 @@ class TreeStructuredParzenEstimator:
         seed: Optional[int],
         min_bandwidth_factor: float,
         min_bandwidth_factor_for_discrete: float,
-        top: float,
+        top: Optional[float],
         multivariate: bool,
     ):
         """
@@ -38,7 +38,11 @@ class TreeStructuredParzenEstimator:
             observations (Dict[str, Any]): The storage of the observations
             sorted_observations (Dict[str, Any]): The storage of the observations sorted based on loss
             min_bandwidth_factor (float): The minimum bandwidth for numerical parameters
-            top (float): The hyperparam of the cateogircal kernel. It defines the prob of the top category.
+            top (Optional[float]):
+                The hyperparam of the cateogircal kernel. It defines the prob of the top category.
+                If None, it adapts the parameter in a way that Optuna does.
+                top := (1 + 1/N) / (1 + c/N) where
+                c is the number of choices and N is the number of observations.
             is_categoricals (Dict[str, bool]): Whether the given hyperparameter is categorical
             is_ordinals (Dict[str, bool]): Whether the given hyperparameter is ordinal
             quantile_func (Callable[[np.ndarray], int]):
@@ -259,8 +263,11 @@ class TreeStructuredParzenEstimator:
         kwargs = dict(config=config)
 
         if is_categorical:
-            kwargs.update(top=self._top)
+            top_lower = self._top if self._top is not None else self._calculate_adapted_top(config, lower_vals.size)
+            top_upper = self._top if self._top is not None else self._calculate_adapted_top(config, upper_vals.size)
+            kwargs.update(top=top_lower)
             pe_lower = build_categorical_parzen_estimator(vals=lower_vals, weights=weights_lower, **kwargs)
+            kwargs.update(top=top_upper)
             pe_upper = build_categorical_parzen_estimator(vals=upper_vals, weights=weights_upper, **kwargs)
         else:
             kwargs.update(
@@ -273,6 +280,24 @@ class TreeStructuredParzenEstimator:
             pe_upper = build_numerical_parzen_estimator(vals=upper_vals, weights=weights_upper, **kwargs)
 
         return pe_lower, pe_upper
+
+    def _calculate_adapted_top(self, config: CategoricalHPType, n_observations: int) -> float:
+        """
+        Calculate the top in the Optuna way
+
+        Args:
+            config (CategoricalHPType):
+                The categorical parameter to be input.
+            n_observations (int):
+                The number of observations.
+
+        Return:
+            adapted_top (float):
+                top := (1 + 1/N) / (1 + c/N) where
+                c is the number of choices and N is the number of observations + 1.
+        """
+        n_choices, N = len(config.choices), n_observations + 1
+        return (1 + 1 / N) / (1 + n_choices / N)
 
     @property
     def observations(self) -> Dict[str, np.ndarray]:

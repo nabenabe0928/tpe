@@ -66,6 +66,7 @@ def collect_data(
 
     results = []
     print("Collect", dir_name, file_name)
+    top = top if top < 1.1 else None
     for seed in range(N_SEEDS):
         opt = TPEOptimizer(
             obj_func=bench,
@@ -96,7 +97,7 @@ if __name__ == "__main__":
             (SQRT, 0.25), (SQRT, 0.5), (SQRT, 0.75), (SQRT, 1.0),
         ],  # quantile_func
         ["uniform", "older-smaller", "expected-improvement", "weaker-smaller"],  # weight_func_choice
-        [0.8, 0.9, 1.0],  # top
+        [0.8, 0.9, 1.0, 2.0],  # top/ 2.0 is for the Optuna version
         FUNCS,
     )):
         try:
