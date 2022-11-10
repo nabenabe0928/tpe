@@ -1,6 +1,6 @@
 **/__pycache__
 .vscode/
-results/
+results*/
 log/
 incumbents/
 **/.mypy_cache

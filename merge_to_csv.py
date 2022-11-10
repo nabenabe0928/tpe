@@ -16,6 +16,7 @@ if __name__ == "__main__":
         "weight": [],
         "min_bandwidth_factor": [],
         "min_bandwidth_factor_for_discrete": [],
+        "top": [],
     }
     epochs = [epoch - 1 for epoch in [50, 100, 150, 200]]
     mean_vals = {
