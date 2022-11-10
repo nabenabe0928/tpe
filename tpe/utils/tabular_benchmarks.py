@@ -140,7 +140,7 @@ class JAHSBench201(AbstractBench):
     ):
         # https://ml.informatik.uni-freiburg.de/research-artifacts/jahs_bench_201/v1.0.0/assembled_surrogates.tar
         # "colorectal_histology" caused memory error, so we do not use it
-        self.dataset_name = ["cifar10", "fashion_mnist"][dataset_id]
+        self.dataset_name = ["cifar10", "fashion_mnist", "colorectal_histology"][dataset_id]
         data_dir = os.path.join(DATA_DIR_NAME, "jahs_bench_data")
         self._surrogate = jahs_bench.Benchmark(task=self.dataset_name, download=False, save_dir=data_dir)
         self._value_range = VALUE_RANGES["jahs-bench"]

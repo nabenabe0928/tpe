@@ -8,7 +8,7 @@ from tpe.utils.tabular_benchmarks import JAHSBench201
 from tpe.utils.constants import QuantileFunc
 
 
-FUNCS = [JAHSBench201(dataset_id=i) for i in range(2)]
+FUNCS = [JAHSBench201(dataset_id=i) for i in range(3)]
 N_SEEDS = 10
 MAX_EVALS = 200
 N_INIT = 200 * 5 // 100
