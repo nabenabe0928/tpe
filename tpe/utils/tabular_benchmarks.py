@@ -133,6 +133,8 @@ class HPOLib(AbstractBench):
 
 
 class JAHSBench201(AbstractBench):
+    _target_metric = "valid-acc"
+
     def __init__(
         self,
         dataset_id: int,
@@ -142,7 +144,9 @@ class JAHSBench201(AbstractBench):
         # "colorectal_histology" caused memory error, so we do not use it
         self.dataset_name = ["cifar10", "fashion_mnist", "colorectal_histology"][dataset_id]
         data_dir = os.path.join(DATA_DIR_NAME, "jahs_bench_data")
-        self._surrogate = jahs_bench.Benchmark(task=self.dataset_name, download=False, save_dir=data_dir)
+        self._surrogate = jahs_bench.Benchmark(
+            task=self.dataset_name, download=False, save_dir=data_dir, metrics=[self._target_metric]
+        )
         self._value_range = VALUE_RANGES["jahs-bench"]
 
     def __call__(self, config: Dict[str, Union[int, str, float]]) -> float:
@@ -152,7 +156,7 @@ class JAHSBench201(AbstractBench):
         assert isinstance(config["WeightDecay"], float) and 1e-5 - EPS <= config["WeightDecay"] <= 1e-2 + EPS
         config.update(Optimizer="SGD", Resolution=1.0)
         config = {k: int(v) if k[:-1] == "Op" else v for k, v in config.items()}
-        return 100 - self._surrogate(config, nepochs=200)[200]["valid-acc"]
+        return 100 - self._surrogate(config, nepochs=200)[200][self._target_metric]
 
     @property
     def config_space(self) -> CS.ConfigurationSpace:
