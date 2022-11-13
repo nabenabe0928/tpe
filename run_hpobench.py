@@ -15,11 +15,7 @@ N_INIT = 200 * 5 // 100
 LINEAR, SQRT = "linear", "sqrt"
 
 
-def save_observations(
-    dir_name: str,
-    file_name: str,
-    data: Dict[str, List[List[float]]]
-) -> None:
+def save_observations(dir_name: str, file_name: str, data: Dict[str, List[List[float]]]) -> None:
     path = os.path.join("results", dir_name)
     with open(os.path.join(path, file_name), mode="w") as f:
         json.dump(data, f, indent=4)
@@ -50,13 +46,15 @@ def collect_data(
 
     func_name = bench.dataset_name
     print(func_name, min_bandwidth_factor_for_discrete, multivariate, choice, alpha, weight_func_choice)
-    dir_name = "_".join([
-        f"multivariate={multivariate}",
-        f"quantile={choice}",
-        f"alpha={alpha}",
-        f"weight={weight_func_choice}",
-        f"min_bandwidth_factor_for_discrete={min_bandwidth_factor_for_discrete}",
-    ])
+    dir_name = "_".join(
+        [
+            f"multivariate={multivariate}",
+            f"quantile={choice}",
+            f"alpha={alpha}",
+            f"weight={weight_func_choice}",
+            f"min_bandwidth_factor_for_discrete={min_bandwidth_factor_for_discrete}",
+        ]
+    )
     file_name = f"{func_name}.json"
     if exist_file(dir_name, file_name):
         return
@@ -83,17 +81,25 @@ def collect_data(
 
 
 if __name__ == "__main__":
-    for params in itertools.product(*(
-        # [1/100, 1/50, 1/10, 1/5],  # min_bandwidth_factor
-        [0.25, 0.5, 1.0, 2.0],  # min_bandwidth_factor_for_discrete
-        [True, False],  # multivariate
-        [
-            (LINEAR, 0.05), (LINEAR, 0.1), (LINEAR, 0.15), (LINEAR, 0.2),
-            (SQRT, 0.25), (SQRT, 0.5), (SQRT, 0.75), (SQRT, 1.0),
-        ],  # quantile_func
-        ["uniform", "older-smaller", "expected-improvement", "weaker-smaller"],  # weight_func_choice
-        FUNCS,
-    )):
+    for params in itertools.product(
+        *(
+            # [1/100, 1/50, 1/10, 1/5],  # min_bandwidth_factor
+            [0.25, 0.5, 1.0, 2.0],  # min_bandwidth_factor_for_discrete
+            [True, False],  # multivariate
+            [
+                (LINEAR, 0.05),
+                (LINEAR, 0.1),
+                (LINEAR, 0.15),
+                (LINEAR, 0.2),
+                (SQRT, 0.25),
+                (SQRT, 0.5),
+                (SQRT, 0.75),
+                (SQRT, 1.0),
+            ],  # quantile_func
+            ["uniform", "older-smaller", "expected-improvement", "weaker-smaller"],  # weight_func_choice
+            FUNCS,
+        )
+    ):
         try:
             collect_data(
                 bench=params[-1],

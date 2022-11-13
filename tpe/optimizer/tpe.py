@@ -11,7 +11,7 @@ from parzen_estimator import (
     build_numerical_parzen_estimator,
 )
 
-from tpe.utils.constants import CategoricalHPType, NumericalHPType, NumericType, WeightFuncType, config2type
+from tpe.utils.constants import CategoricalHPType, NumericType, NumericalHPType, WeightFuncType, config2type
 
 
 class TreeStructuredParzenEstimator:

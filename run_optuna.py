@@ -71,9 +71,9 @@ def collect_data(bench: Callable, dim: Optional[int] = None) -> None:
 
     config_space = CS.ConfigurationSpace()
     if dim is not None:
-        config_space.add_hyperparameters([
-            CS.UniformFloatHyperparameter(f"x{d}", lower=-1, upper=1) for d in range(dim)
-        ])
+        config_space.add_hyperparameters(
+            [CS.UniformFloatHyperparameter(f"x{d}", lower=-1, upper=1) for d in range(dim)]
+        )
 
     for multivariate in [True, False]:
         print(f"multivariate: {multivariate}")
