@@ -45,7 +45,8 @@ if __name__ == "__main__":
                 data[col].append(None)
                 continue
 
-            val = dir_name[dir_name.find(col):].split("=")[1].split("_")[0]
+            loc = dir_name.find(col)
+            val = dir_name[loc:].split("=")[1].split("_")[0]
             data[col].append(val)
         else:
             dir_path = os.path.join("results", dir_name)

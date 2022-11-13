@@ -11,7 +11,7 @@ from parzen_estimator import (
     build_numerical_parzen_estimator,
 )
 
-from tpe.utils.constants import CategoricalHPType, NumericType, WeightFuncType, config2type
+from tpe.utils.constants import CategoricalHPType, NumericalHPType, NumericType, WeightFuncType, config2type
 
 
 class TreeStructuredParzenEstimator:
@@ -24,7 +24,7 @@ class TreeStructuredParzenEstimator:
         metric_name: str,
         seed: Optional[int],
         min_bandwidth_factor: float,
-        min_bandwidth_factor_for_discrete: float,
+        min_bandwidth_factor_for_discrete: Optional[float],
         top: Optional[float],
         multivariate: bool,
     ):
@@ -37,7 +37,10 @@ class TreeStructuredParzenEstimator:
             metric_name (str): The name of the metric (or objective function value)
             observations (Dict[str, Any]): The storage of the observations
             sorted_observations (Dict[str, Any]): The storage of the observations sorted based on loss
-            min_bandwidth_factor (float): The minimum bandwidth for numerical parameters
+            min_bandwidth_factor (float): The minimum bandwidth for continuous.
+            min_bandwidth_factor_for_discrete (Optional[float]):
+                The minimum bandwidth factor for discrete.
+                If None, it adapts so that the factor gives 0.1 after the discrete modifications.
             top (Optional[float]):
                 The hyperparam of the cateogircal kernel. It defines the prob of the top category.
                 If None, it adapts the parameter in a way that Optuna does.
@@ -274,12 +277,34 @@ class TreeStructuredParzenEstimator:
                 dtype=config2type[config_type],
                 is_ordinal=is_ordinal,
                 default_min_bandwidth_factor=self._min_bandwidth_factor,
-                default_min_bandwidth_factor_for_discrete=self._min_bandwidth_factor_for_discrete,
+                default_min_bandwidth_factor_for_discrete=(
+                    self._calculate_adapted_bw_factor(config)
+                    if self._min_bandwidth_factor_for_discrete is None
+                    else self._min_bandwidth_factor_for_discrete
+                ),
             )
             pe_lower = build_numerical_parzen_estimator(vals=lower_vals, weights=weights_lower, **kwargs)
             pe_upper = build_numerical_parzen_estimator(vals=upper_vals, weights=weights_upper, **kwargs)
 
         return pe_lower, pe_upper
+
+    def _calculate_adapted_bw_factor(self, config: NumericalHPType) -> float:
+        """
+        Calculate the adapted min_bandwidth_factor for discrete.
+
+        Args:
+            config (CategoricalHPType):
+                The numerical parameter to be input.
+
+        Return:
+            adapted_bw_factor (float):
+                n_grids * 0.1.
+                It adapts the bandwidth to be range * 0.1.
+        """
+        lb, ub, q = config.lower, config.upper, config.q
+        q = q if q is not None else 1
+        n_grids = int((ub - lb) / q) + 1
+        return n_grids * 0.1
 
     def _calculate_adapted_top(self, config: CategoricalHPType, n_observations: int) -> float:
         """
