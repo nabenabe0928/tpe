@@ -1,11 +1,11 @@
 import itertools
-import json
 import os
-from typing import Dict, List
 
 from tpe.optimizer import TPEOptimizer
 from tpe.utils.tabular_benchmarks import AbstractBench, HPOLib
 from tpe.utils.constants import QuantileFunc
+
+from experiment_utils import exist_file, save_observations
 
 
 FUNCS = [HPOLib(dataset_id=i, seed=None) for i in range(4)]
@@ -13,26 +13,6 @@ N_SEEDS = 10
 MAX_EVALS = 200
 N_INIT = 200 * 5 // 100
 LINEAR, SQRT = "linear", "sqrt"
-
-
-def save_observations(dir_name: str, file_name: str, data: Dict[str, List[List[float]]]) -> None:
-    path = os.path.join("results", dir_name)
-    with open(os.path.join(path, file_name), mode="w") as f:
-        json.dump(data, f, indent=4)
-
-
-def exist_file(dir_name: str, file_name: str) -> bool:
-    path = os.path.join("results", dir_name)
-    file_path = os.path.join(path, file_name)
-    if os.path.exists(file_path):
-        print(f"{file_path} exists; skip")
-        return True
-    else:
-        os.makedirs(path, exist_ok=True)
-        with open(os.path.join(path, file_name), mode="w"):
-            pass
-
-        return False
 
 
 def collect_data(

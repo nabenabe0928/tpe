@@ -32,7 +32,7 @@ class AbstractBench(metaclass=ABCMeta):
         config_space.add_hyperparameters(
             [
                 CS.UniformIntegerHyperparameter(name=name, lower=0, upper=len(choices) - 1)
-                if not isinstance(choices[0], str)
+                if not isinstance(choices[0], (str, bool))
                 else CS.CategoricalHyperparameter(name=name, choices=[str(i) for i in range(len(choices))])
                 for name, choices in self._value_range.items()
             ]
