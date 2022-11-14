@@ -8,7 +8,7 @@ import ujson as json
 
 
 if __name__ == "__main__":
-    dir_names = [d for d in os.listdir("results/") if not d.endswith(".csv")]
+    dir_names = [d for d in os.listdir("results/") if not d.endswith(".csv") and "recommended" not in d]
     data = {
         "multivariate": [],
         "quantile": [],

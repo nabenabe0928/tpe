@@ -7,6 +7,7 @@ import ConfigSpace as CS
 
 import optuna
 
+from tpe.optimizer import TPEOptimizer
 from tpe.utils.benchmarks import (
     Sphere,
     Styblinski,
@@ -41,7 +42,7 @@ FUNCS = [
 ]
 FUNCS += [HPOBench(dataset_id=i, seed=None) for i in range(8)]
 FUNCS += [HPOLib(dataset_id=i, seed=None) for i in range(4)]
-FUNCS += [JAHSBench201(dataset_id=i) for i in range(2)]
+FUNCS += [JAHSBench201(dataset_id=i) for i in range(3)]
 
 
 def wrapper_func(bench: Callable, config_space: CS.ConfigurationSpace) -> Callable:
@@ -62,6 +63,46 @@ def wrapper_func(bench: Callable, config_space: CS.ConfigurationSpace) -> Callab
         return target(eval_config)
 
     return func
+
+
+def add_init_configs_to_study(
+    study: optuna.Study,
+    bench: Callable,
+    config_space: CS.ConfigurationSpace,
+    seed: int,
+) -> None:
+    random_sampler = TPEOptimizer(
+        obj_func=bench.func if isinstance(bench, ABCMeta) else bench,
+        config_space=config_space,
+        n_init=10,
+        max_evals=10,
+        seed=seed,
+    )
+    random_sampler.optimize()
+    data = random_sampler.fetch_observations()
+    distributions, names = dict(), []
+    for hp in config_space.get_hyperparameters():
+        name = hp.name
+        names.append(name)
+        if isinstance(hp, CS.CategoricalHyperparameter):
+            distributions[name] = optuna.distributions.CategoricalDistribution(choices=hp.choices)
+        elif isinstance(hp, CS.UniformFloatHyperparameter):
+            distributions[name] = optuna.distributions.FloatDistribution(low=hp.lower, high=hp.upper, log=hp.log)
+        elif isinstance(hp, CS.UniformIntegerHyperparameter):
+            distributions[name] = optuna.distributions.IntDistribution(low=hp.lower, high=hp.upper)
+        else:
+            raise TypeError(f"{type(type(hp))} is not supported")
+
+    n_init = data["loss"].size
+    assert n_init == 10
+    study.add_trials([
+        optuna.create_trial(
+            params={name: data[name][i] for name in names},
+            distributions=distributions,
+            value=data["loss"][i],
+        )
+        for i in range(n_init)
+    ])
 
 
 def collect_data(bench: Callable, dim: Optional[int] = None) -> None:
@@ -92,6 +133,7 @@ def collect_data(bench: Callable, dim: Optional[int] = None) -> None:
 
             sampler = optuna.samplers.TPESampler(multivariate=multivariate, seed=seed, n_startup_trials=10)
             study = optuna.create_study(sampler=sampler)
+            add_init_configs_to_study(study=study, bench=bench, config_space=config_space, seed=seed)
 
             config_space = config_space if isinstance(bench, ABCMeta) else bench.config_space
             study.optimize(wrapper_func(bench=bench, config_space=config_space), n_trials=200)
