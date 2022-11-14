@@ -131,11 +131,11 @@ def collect_data(bench: Callable, dim: Optional[int] = None) -> None:
             if hasattr(bench, "reseed"):
                 bench.reseed(seed)
 
+            config_space = config_space if isinstance(bench, ABCMeta) else bench.config_space
             sampler = optuna.samplers.TPESampler(multivariate=multivariate, seed=seed, n_startup_trials=10)
             study = optuna.create_study(sampler=sampler)
             add_init_configs_to_study(study=study, bench=bench, config_space=config_space, seed=seed)
 
-            config_space = config_space if isinstance(bench, ABCMeta) else bench.config_space
             study.optimize(wrapper_func(bench=bench, config_space=config_space), n_trials=200)
             vals = [trial.value for trial in study.trials]
             results.append(vals)
