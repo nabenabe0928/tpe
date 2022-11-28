@@ -27,6 +27,7 @@ class TreeStructuredParzenEstimator:
         min_bandwidth_factor_for_discrete: Optional[float],
         top: Optional[float],
         multivariate: bool,
+        magic_clip: bool,
     ):
         """
         Attributes:
@@ -50,6 +51,8 @@ class TreeStructuredParzenEstimator:
             is_ordinals (Dict[str, bool]): Whether the given hyperparameter is ordinal
             quantile_func (Callable[[np.ndarray], int]):
                 The function that returns the number of a better group based on the total number of evaluations.
+            magic_clip (bool):
+                Whether to use the magic clip in TPE.
         """
         self._multivariate = multivariate
         self._rng = np.random.RandomState(seed)
@@ -61,6 +64,7 @@ class TreeStructuredParzenEstimator:
         self._quantile = 0
         self._min_bandwidth_factor = min_bandwidth_factor
         self._min_bandwidth_factor_for_discrete = min_bandwidth_factor_for_discrete
+        self._magic_clip = magic_clip
         self._top = top
 
         self._observations = {hp_name: np.array([]) for hp_name in self._hp_names}
@@ -282,6 +286,7 @@ class TreeStructuredParzenEstimator:
                     if self._min_bandwidth_factor_for_discrete is None
                     else self._min_bandwidth_factor_for_discrete
                 ),
+                magic_clip=self._magic_clip
             )
             pe_lower = build_numerical_parzen_estimator(vals=lower_vals, weights=weights_lower, **kwargs)
             pe_upper = build_numerical_parzen_estimator(vals=upper_vals, weights=weights_upper, **kwargs)

@@ -27,6 +27,7 @@ class TPEOptimizer(BaseOptimizer):
         quantile_func: Callable[[int], int] = QuantileFunc(),
         weight_func_choice: Literal["uniform", "older-smaller", "weaker-smaller", "expected-improvement"] = "uniform",
         multivariate: bool = True,
+        magic_clip: bool = False,
     ):
         """
         Args:
@@ -50,6 +51,8 @@ class TPEOptimizer(BaseOptimizer):
                 top := (1 + 1/N) / (1 + c/N) where
                 c is the number of choices and N is the number of observations.
             multivariate (bool): Whether to use multivariate kernel or not.
+            magic_clip (bool):
+                Whether to use the magic clip in TPE.
         """
         super().__init__(
             obj_func=obj_func,
@@ -73,6 +76,7 @@ class TPEOptimizer(BaseOptimizer):
             quantile_func=quantile_func,
             weight_func=WeightFuncs(choice=weight_func_choice),
             multivariate=multivariate,
+            magic_clip=magic_clip,
         )
 
     def update(self, eval_config: Dict[str, Any], loss: float) -> None:
