@@ -50,3 +50,7 @@
 5: 5 / 60 = 0.08
 
 Optuna TPE is not recency decay, but decay by performance.
+
+Optuna TPE bw selection:
+1. `sigmas0` does not depend on `std`
+2. `magic_clipping` uses `min(100.0, means.size)`

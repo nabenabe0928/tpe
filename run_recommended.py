@@ -26,7 +26,7 @@ from tpe.utils.tabular_benchmarks import AbstractBench, HPOBench, HPOLib, JAHSBe
 
 from experiment_utils import exist_file, save_observations
 
-
+"""
 FUNCS = [
     Sphere,
     Styblinski,
@@ -41,22 +41,23 @@ FUNCS = [
     Levy,
     XinSheYang,
 ]
-FUNCS += [HPOBench(dataset_id=i, seed=None) for i in range(8)]
-FUNCS += [HPOLib(dataset_id=i, seed=None) for i in range(4)]
-FUNCS += [JAHSBench201(dataset_id=i) for i in range(3)]
+# """
+FUNCS = [HPOBench(dataset_id=i, seed=None) for i in range(8)]
+# FUNCS += [HPOLib(dataset_id=i, seed=None) for i in range(4)]
+# FUNCS += [JAHSBench201(dataset_id=i) for i in range(3)]
 N_SEEDS = 10
 MAX_EVALS = 200
 N_INIT = 200 * 5 // 100
 LINEAR, SQRT = "linear", "sqrt"
 
 # Control params
-WEIGHT_FUNC_CHOICE = ["uniform", "older-smaller", "weaker-smaller", "expected-improvement"][0]
-QUANTILE_CHOICE = ["linear", "sqrt"][1]
-ALPHA = [0.05, 0.1, 0.15, 0.2, 0.25, 0.5, 0.75, 1.0][5]
+WEIGHT_FUNC_CHOICE = ["uniform", "older-smaller", "weaker-smaller", "expected-improvement"][1]
+QUANTILE_CHOICE = ["linear", "sqrt"][0]
+ALPHA = [0.05, 0.1, 0.15, 0.2, 0.25, 0.5, 0.75, 1.0][1]
 MULTIVARIATE = [True, False][0]
 BW_CONT = [0.01, 0.03, 0.1, 0.3][0]
-BW_DISC = [0.25, 0.5, 1.0, 2.0, None][1]
-TOP = [0.8, 0.9, 1.0, 2.0][0]
+BW_DISC = [0.25, 0.5, 1.0, 2.0, None][-1]
+TOP = [0.8, 0.9, 1.0, 2.0][-1]
 
 DIR_BENCH = "_".join(
     [
@@ -116,7 +117,11 @@ def check_file(bench_name: str) -> Optional[List[List[float]]]:
         return None
 
     path = os.path.join("results", dir_name, fn)
-    return json.load(open(path))
+    try:
+        return json.load(open(path))
+    except FileNotFoundError:
+        print(f"Could not find {path}")
+        return None
 
 
 def collect_data(bench: AbstractBench, dim: Optional[int] = None) -> None:

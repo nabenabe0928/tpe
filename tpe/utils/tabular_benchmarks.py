@@ -140,7 +140,7 @@ class JAHSBench201(AbstractBench):
         dataset_id: int,
         seed: Optional[int] = None,  # surrogate is not stochastic
     ):
-        # https://ml.informatik.uni-freiburg.de/research-artifacts/jahs_bench_201/v1.0.0/assembled_surrogates.tar
+        # https://ml.informatik.uni-freiburg.de/research-artifacts/jahs_bench_201/v1.1.0/assembled_surrogates.tar
         # "colorectal_histology" caused memory error, so we do not use it
         self.dataset_name = ["cifar10", "fashion_mnist", "colorectal_histology"][dataset_id]
         data_dir = os.path.join(DATA_DIR_NAME, "jahs_bench_data")
