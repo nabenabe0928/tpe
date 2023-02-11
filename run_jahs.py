@@ -17,12 +17,11 @@ LINEAR, SQRT = "linear", "sqrt"
 
 def collect_data(
     bench: JAHSBench201,
-    min_bandwidth_factor: float,
-    min_bandwidth_factor_for_discrete: float,
     multivariate: bool,
     choice: str,
     alpha: float,
     weight_func_choice: str,
+    prior: bool,
     top: float,
 ) -> None:
 
@@ -33,8 +32,7 @@ def collect_data(
             f"quantile={choice}",
             f"alpha={alpha}",
             f"weight={weight_func_choice}",
-            f"min_bandwidth_factor={min_bandwidth_factor}",
-            f"min_bandwidth_factor_for_discrete={min_bandwidth_factor_for_discrete}",
+            f"prior={prior}",
             f"top={top}",
         ]
     )
@@ -54,10 +52,10 @@ def collect_data(
             weight_func_choice=weight_func_choice,
             quantile_func=QuantileFunc(choice=choice, alpha=alpha),
             multivariate=multivariate,
-            min_bandwidth_factor=min_bandwidth_factor,
-            min_bandwidth_factor_for_discrete=min_bandwidth_factor_for_discrete,
             seed=seed,
             resultfile=os.path.join(dir_name, file_name),
+            prior=prior,
+            magic_clip=True,
             top=top,
         )
         opt.optimize()
@@ -69,8 +67,6 @@ def collect_data(
 if __name__ == "__main__":
     for params in itertools.product(
         *(
-            [0.01, 0.03, 0.1, 0.3],  # min_bandwidth_factor
-            [0.25, 0.5, 1.0, 2.0],  # min_bandwidth_factor_for_discrete
             [True, False],  # multivariate
             [
                 (LINEAR, 0.05),
@@ -83,6 +79,7 @@ if __name__ == "__main__":
                 (SQRT, 1.0),
             ],  # quantile_func
             ["uniform", "older-smaller", "expected-improvement", "weaker-smaller"],  # weight_func_choice
+            [True, False],  # prior
             [0.8, 0.9, 1.0, 2.0],  # top/ 2.0 is for the Optuna version
             FUNCS,
         )
@@ -90,13 +87,12 @@ if __name__ == "__main__":
         try:
             collect_data(
                 bench=params[-1],
-                min_bandwidth_factor=params[0],
-                min_bandwidth_factor_for_discrete=params[1],
-                multivariate=params[2],
-                choice=params[3][0],
-                alpha=params[3][1],
-                weight_func_choice=params[4],
-                top=params[5],
+                multivariate=params[0],
+                choice=params[1][0],
+                alpha=params[1][1],
+                weight_func_choice=params[2],
+                prior=params[3],
+                top=params[4],
             )
         except Exception as e:
             print(f"Failed with error {e}")

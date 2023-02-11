@@ -74,22 +74,22 @@ def exist_file(dir_name: str, file_name: str) -> bool:
 
 def collect_data(
     func_cls: AbstractFunc,
-    min_bandwidth_factor: float,
     multivariate: bool,
     choice: str,
     alpha: float,
     weight_func_choice: str,
+    prior: bool,
 ) -> None:
 
     func_name = func_cls().__class__.__name__
-    print(func_name, min_bandwidth_factor, multivariate, choice, alpha, weight_func_choice)
+    print(func_name, multivariate, choice, alpha, weight_func_choice, prior)
     dir_name = "_".join(
         [
             f"multivariate={multivariate}",
             f"quantile={choice}",
             f"alpha={alpha}",
             f"weight={weight_func_choice}",
-            f"min_bandwidth_factor={min_bandwidth_factor}",
+            f"prior={prior}",
         ]
     )
     file_name = f"{func_name}_{DIM:0>2}d.json"
@@ -106,9 +106,10 @@ def collect_data(
             weight_func_choice=weight_func_choice,
             quantile_func=QuantileFunc(choice=choice, alpha=alpha),
             multivariate=multivariate,
-            min_bandwidth_factor=min_bandwidth_factor,
             seed=seed,
             resultfile=os.path.join(dir_name, file_name),
+            prior=prior,
+            magic_clip=True,
         )
         opt.optimize()
         results.append(opt.fetch_observations()["loss"].tolist())
@@ -119,8 +120,6 @@ def collect_data(
 if __name__ == "__main__":
     for params in itertools.product(
         *(
-            [0.01, 0.03, 0.1, 0.3],  # min_bandwidth_factor
-            # [],  # min_bandwidth_factor_for_discrete
             [True, False],  # multivariate
             [
                 (LINEAR, 0.05),
@@ -133,14 +132,15 @@ if __name__ == "__main__":
                 (SQRT, 1.0),
             ],  # quantile_func
             ["uniform", "older-smaller", "expected-improvement", "weaker-smaller"],  # weight_func_choice
+            [True, False],  # prior
             FUNCS,
         )
     ):
         collect_data(
             func_cls=params[-1],
-            min_bandwidth_factor=params[0],
-            multivariate=params[1],
-            choice=params[2][0],
-            alpha=params[2][1],
-            weight_func_choice=params[3],
+            multivariate=params[0],
+            choice=params[1][0],
+            alpha=params[1][1],
+            weight_func_choice=params[2],
+            prior=params[3],
         )

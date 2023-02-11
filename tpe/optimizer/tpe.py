@@ -28,6 +28,7 @@ class TreeStructuredParzenEstimator:
         top: Optional[float],
         multivariate: bool,
         magic_clip: bool,
+        prior: bool,
     ):
         """
         Attributes:
@@ -65,6 +66,7 @@ class TreeStructuredParzenEstimator:
         self._min_bandwidth_factor = min_bandwidth_factor
         self._min_bandwidth_factor_for_discrete = min_bandwidth_factor_for_discrete
         self._magic_clip = magic_clip
+        self._prior = prior
         self._top = top
 
         self._observations = {hp_name: np.array([]) for hp_name in self._hp_names}
@@ -267,7 +269,7 @@ class TreeStructuredParzenEstimator:
         config = self._config_space.get_hyperparameter(hp_name)
         config_type = config.__class__.__name__
         is_ordinal = self._is_ordinals[hp_name]
-        kwargs = dict(config=config)
+        kwargs = dict(config=config, prior=self._prior)
 
         if is_categorical:
             top_lower = self._top if self._top is not None else self._calculate_adapted_top(config, lower_vals.size)
@@ -281,11 +283,12 @@ class TreeStructuredParzenEstimator:
                 dtype=config2type[config_type],
                 is_ordinal=is_ordinal,
                 default_min_bandwidth_factor=self._min_bandwidth_factor,
-                default_min_bandwidth_factor_for_discrete=(
-                    self._calculate_adapted_bw_factor(config)
-                    if self._min_bandwidth_factor_for_discrete is None
-                    else self._min_bandwidth_factor_for_discrete
-                ),
+                # default_min_bandwidth_factor_for_discrete=(
+                #     self._calculate_adapted_bw_factor(config)
+                #     if self._min_bandwidth_factor_for_discrete is None
+                #     else self._min_bandwidth_factor_for_discrete
+                # ),
+                default_min_bandwidth_factor_for_discrete=self._min_bandwidth_factor_for_discrete,
                 magic_clip=self._magic_clip
             )
             pe_lower = build_numerical_parzen_estimator(vals=lower_vals, weights=weights_lower, **kwargs)
