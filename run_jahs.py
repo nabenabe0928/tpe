@@ -1,3 +1,5 @@
+from argparse import ArgumentParser
+
 import itertools
 import os
 
@@ -8,7 +10,12 @@ from tpe.utils.constants import QuantileFunc
 from experiment_utils import exist_file, save_observations
 
 
-FUNCS = [JAHSBench201(dataset_id=i) for i in range(3)]
+parser = ArgumentParser()
+parser.add_argument("dataset_id", type=int, choices=list(range(3)))
+args = parser.parse_args()
+
+# FUNCS = [JAHSBench201(dataset_id=i) for i in range(3)]
+FUNCS = [JAHSBench201(dataset_id=args.dataset_id)]
 N_SEEDS = 10
 MAX_EVALS = 200
 N_INIT = 200 * 5 // 100
@@ -78,7 +85,7 @@ if __name__ == "__main__":
                 (SQRT, 0.75),
                 (SQRT, 1.0),
             ],  # quantile_func
-            ["uniform", "older-smaller", "expected-improvement", "weaker-smaller"],  # weight_func_choice
+            ["uniform", "older-smaller", "older-drop", "expected-improvement", "weaker-smaller"],  # weight_func_choice
             [True, False],  # prior
             [0.8, 0.9, 1.0, 2.0],  # top/ 2.0 is for the Optuna version
             FUNCS,

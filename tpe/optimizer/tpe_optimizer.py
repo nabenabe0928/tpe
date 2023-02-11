@@ -25,9 +25,12 @@ class TPEOptimizer(BaseOptimizer):
         min_bandwidth_factor_for_discrete: Optional[float] = None,
         top: Optional[float] = 1.0,
         quantile_func: Callable[[int], int] = QuantileFunc(),
-        weight_func_choice: Literal["uniform", "older-smaller", "weaker-smaller", "expected-improvement"] = "uniform",
+        weight_func_choice: Literal[
+            "uniform", "older-smaller", "older-drop", "weaker-smaller", "expected-improvement"
+        ] = "uniform",
         multivariate: bool = True,
         magic_clip: bool = False,
+        prior: bool = True,
     ):
         """
         Args:
@@ -77,6 +80,7 @@ class TPEOptimizer(BaseOptimizer):
             weight_func=WeightFuncs(choice=weight_func_choice),
             multivariate=multivariate,
             magic_clip=magic_clip,
+            prior=prior,
         )
 
     def update(self, eval_config: Dict[str, Any], loss: float) -> None:

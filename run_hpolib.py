@@ -79,7 +79,7 @@ if __name__ == "__main__":
                 (SQRT, 0.75),
                 (SQRT, 1.0),
             ],  # quantile_func
-            ["uniform", "older-smaller", "expected-improvement", "weaker-smaller"],  # weight_func_choice
+            ["uniform", "older-smaller", "older-drop", "expected-improvement", "weaker-smaller"],  # weight_func_choice
             [True, False],  # prior
             [0.8, 0.9, 1.0, 2.0],  # top/ 2.0 is for the Optuna version
             FUNCS,

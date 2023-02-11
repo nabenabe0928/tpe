@@ -1,23 +1,23 @@
-while getopts ":m:" o; do
-    case "${o}" in
-        m) mode=${OPTARG};;
-    esac
-done
-
-if [[ "$mode" == "jahs" ]]
-then
-    echo "This process handles JAHS"
-fi
-
-python run_benchmarks.py --dim 10
-
+echo `date '+%y/%m/%d %H:%M:%S'`
 python run_benchmarks.py --dim 5
 
+echo `date '+%y/%m/%d %H:%M:%S'`
+python run_benchmarks.py --dim 10
+
+echo `date '+%y/%m/%d %H:%M:%S'`
 python run_benchmarks.py --dim 30
 
-python run_tabular.py
+echo `date '+%y/%m/%d %H:%M:%S'`
+python run_hpolib.py
 
-if [[ "$mode" == "jahs" ]]
-then
-    python run_jahs.py
-fi
+echo `date '+%y/%m/%d %H:%M:%S'`
+python run_hpobench.py
+
+echo `date '+%y/%m/%d %H:%M:%S'`
+python run_jahs.py --dataset_id 0
+
+echo `date '+%y/%m/%d %H:%M:%S'`
+python run_jahs.py --dataset_id 1
+
+echo `date '+%y/%m/%d %H:%M:%S'`
+python run_jahs.py --dataset_id 2

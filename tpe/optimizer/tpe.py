@@ -68,6 +68,7 @@ class TreeStructuredParzenEstimator:
         self._magic_clip = magic_clip
         self._prior = prior
         self._top = top
+        self._size = 0
 
         self._observations = {hp_name: np.array([]) for hp_name in self._hp_names}
         self._sorted_observations = {hp_name: np.array([]) for hp_name in self._hp_names}
@@ -116,7 +117,6 @@ class TreeStructuredParzenEstimator:
             eval_config (Dict[str, NumericType]): The configuration to evaluate (after conversion)
             loss (float): The loss value as a result of the evaluation
         """
-        size = self._observations[self._metric_name].size
         sorted_losses, losses = (
             self._sorted_observations[self._metric_name],
             self._observations[self._metric_name],
@@ -124,11 +124,11 @@ class TreeStructuredParzenEstimator:
         insert_loc = np.searchsorted(sorted_losses, loss, side="right")
         self._observations[self._metric_name] = np.append(losses, loss)
         self._sorted_observations[self._metric_name] = np.insert(sorted_losses, insert_loc, loss)
-        self._order = np.insert(self._order, insert_loc, size)
+        self._order = np.insert(self._order, insert_loc, self.size)
 
-        size += 1
-        self._n_lower = self._quantile_func(size)
-        self._quantile = self._n_lower / size
+        self._size += 1
+        self._n_lower = self._quantile_func(self.size)
+        self._quantile = self._n_lower / self.size
 
         for hp_name in self._hp_names:
             is_categorical = self._is_categoricals[hp_name]
@@ -154,12 +154,14 @@ class TreeStructuredParzenEstimator:
             sorted_loss_vals=lower_vals,
             lower_group=True,
             threshold=threshold,
+            prior=self.prior,
         )
         weights_upper = self._weight_func(
             size=n_upper,
             order=self._order[n_lower:],
             sorted_loss_vals=upper_vals,
             lower_group=False,
+            prior=self.prior,
         )
         return weights_lower, weights_upper
 
@@ -269,7 +271,7 @@ class TreeStructuredParzenEstimator:
         config = self._config_space.get_hyperparameter(hp_name)
         config_type = config.__class__.__name__
         is_ordinal = self._is_ordinals[hp_name]
-        kwargs = dict(config=config, prior=self._prior)
+        kwargs = dict(config=config, prior=self.prior)
 
         if is_categorical:
             top_lower = self._top if self._top is not None else self._calculate_adapted_top(config, lower_vals.size)
@@ -289,7 +291,7 @@ class TreeStructuredParzenEstimator:
                 #     else self._min_bandwidth_factor_for_discrete
                 # ),
                 default_min_bandwidth_factor_for_discrete=self._min_bandwidth_factor_for_discrete,
-                magic_clip=self._magic_clip
+                magic_clip=self._magic_clip,
             )
             pe_lower = build_numerical_parzen_estimator(vals=lower_vals, weights=weights_lower, **kwargs)
             pe_upper = build_numerical_parzen_estimator(vals=upper_vals, weights=weights_upper, **kwargs)
@@ -335,3 +337,12 @@ class TreeStructuredParzenEstimator:
     @property
     def observations(self) -> Dict[str, np.ndarray]:
         return {hp_name: vals.copy() for hp_name, vals in self._observations.items()}
+
+    @property
+    def size(self) -> int:
+        return self._size
+
+    @property
+    def prior(self) -> bool:
+        # Avoid size error in the update when n_observations = 1
+        return self._prior or self.size <= 1
