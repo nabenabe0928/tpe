@@ -345,4 +345,6 @@ class TreeStructuredParzenEstimator:
     @property
     def prior(self) -> bool:
         # Avoid size error in the update when n_observations = 1
-        return self._prior or self.size <= 1
+        n_lower = self._n_lower
+        n_upper = self.size - n_lower
+        return self._prior or n_lower == 0 or n_upper == 0

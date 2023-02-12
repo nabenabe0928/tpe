@@ -29,6 +29,7 @@ def collect_data(
     alpha: float,
     weight_func_choice: str,
     prior: bool,
+    magic_clip: bool,
     top: float,
 ) -> None:
 
@@ -40,6 +41,7 @@ def collect_data(
             f"alpha={alpha}",
             f"weight={weight_func_choice}",
             f"prior={prior}",
+            f"magic-clip={magic_clip}"
             f"top={top}",
         ]
     )
@@ -62,7 +64,7 @@ def collect_data(
             seed=seed,
             resultfile=os.path.join(dir_name, file_name),
             prior=prior,
-            magic_clip=True,
+            magic_clip=magic_clip,
             top=top,
         )
         opt.optimize()
@@ -87,6 +89,7 @@ if __name__ == "__main__":
             ],  # quantile_func
             ["uniform", "older-smaller", "older-drop", "expected-improvement", "weaker-smaller"],  # weight_func_choice
             [True, False],  # prior
+            [True, False],  # magic_clip
             [0.8, 0.9, 1.0, 2.0],  # top/ 2.0 is for the Optuna version
             FUNCS,
         )
@@ -99,7 +102,8 @@ if __name__ == "__main__":
                 alpha=params[1][1],
                 weight_func_choice=params[2],
                 prior=params[3],
-                top=params[4],
+                magic_clip=params[4],
+                top=params[5],
             )
         except Exception as e:
             print(f"Failed with error {e}")

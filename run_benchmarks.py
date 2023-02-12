@@ -79,6 +79,7 @@ def collect_data(
     alpha: float,
     weight_func_choice: str,
     prior: bool,
+    magic_clip: bool,
 ) -> None:
 
     func_name = func_cls().__class__.__name__
@@ -89,6 +90,7 @@ def collect_data(
             f"quantile={choice}",
             f"alpha={alpha}",
             f"weight={weight_func_choice}",
+            f"magic-clip={magic_clip}"
             f"prior={prior}",
         ]
     )
@@ -109,7 +111,7 @@ def collect_data(
             seed=seed,
             resultfile=os.path.join(dir_name, file_name),
             prior=prior,
-            magic_clip=True,
+            magic_clip=magic_clip,
         )
         opt.optimize()
         results.append(opt.fetch_observations()["loss"].tolist())
@@ -133,6 +135,7 @@ if __name__ == "__main__":
             ],  # quantile_func
             ["uniform", "older-smaller", "older-drop", "expected-improvement", "weaker-smaller"],  # weight_func_choice
             [True, False],  # prior
+            [True, False],  # magic_clip
             FUNCS,
         )
     ):
@@ -143,4 +146,5 @@ if __name__ == "__main__":
             alpha=params[1][1],
             weight_func_choice=params[2],
             prior=params[3],
+            magic_clip=params[4],
         )
