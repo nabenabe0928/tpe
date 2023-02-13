@@ -33,8 +33,8 @@ def collect_data(
             f"quantile={choice}",
             f"alpha={alpha}",
             f"weight={weight_func_choice}",
-            f"magic-clip={magic_clip}"
             f"prior={prior}",
+            f"magic-clip={magic_clip}",
         ]
     )
     file_name = f"{func_name}.json"

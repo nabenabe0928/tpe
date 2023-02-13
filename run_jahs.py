@@ -11,7 +11,7 @@ from experiment_utils import exist_file, save_observations
 
 
 parser = ArgumentParser()
-parser.add_argument("dataset_id", type=int, choices=list(range(3)))
+parser.add_argument("--dataset_id", type=int, choices=list(range(3)))
 args = parser.parse_args()
 
 # FUNCS = [JAHSBench201(dataset_id=i) for i in range(3)]
@@ -41,7 +41,7 @@ def collect_data(
             f"alpha={alpha}",
             f"weight={weight_func_choice}",
             f"prior={prior}",
-            f"magic-clip={magic_clip}"
+            f"magic-clip={magic_clip}",
             f"top={top}",
         ]
     )

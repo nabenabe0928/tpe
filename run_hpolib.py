@@ -35,7 +35,7 @@ def collect_data(
             f"alpha={alpha}",
             f"weight={weight_func_choice}",
             f"prior={prior}",
-            f"magic-clip={magic_clip}"
+            f"magic-clip={magic_clip}",
             f"top={top}",
         ]
     )
