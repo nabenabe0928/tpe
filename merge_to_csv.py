@@ -14,8 +14,8 @@ if __name__ == "__main__":
         "quantile": [],
         "alpha": [],
         "weight": [],
-        "min_bandwidth_factor": [],
-        "min_bandwidth_factor_for_discrete": [],
+        "prior": [],
+        "magic-clip": [],
         "top": [],
     }
     epochs = [epoch - 1 for epoch in [50, 100, 150, 200]]
