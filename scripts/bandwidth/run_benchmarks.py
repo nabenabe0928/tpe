@@ -79,6 +79,7 @@ def collect_data(
     alpha: float,
     weight_func_choice: str,
     magic_clip: bool,
+    heuristic: bool,
 ) -> None:
 
     func_name = func_cls().__class__.__name__
@@ -90,6 +91,7 @@ def collect_data(
             f"alpha={alpha}",
             f"weight={weight_func_choice}",
             f"magic-clip={magic_clip}",
+            f"heuristic={heuristic}",
         ]
     )
     file_name = f"{func_name}_{DIM:0>2}d.json"
@@ -109,6 +111,7 @@ def collect_data(
             seed=seed,
             resultfile=os.path.join(dir_name, file_name),
             magic_clip=magic_clip,
+            heuristic=heuristic,
         )
         opt.optimize()
         results.append(opt.fetch_observations()["loss"].tolist())
@@ -127,6 +130,7 @@ if __name__ == "__main__":
             ],  # quantile_func
             ["uniform", "older-smaller"],  # weight_func_choice
             [True, False],  # magic_clip
+            [True, False],  # heuristics
             FUNCS,
         )
     ):
@@ -137,4 +141,5 @@ if __name__ == "__main__":
             alpha=params[1][1],
             weight_func_choice=params[2],
             magic_clip=params[3],
+            heuristic=params[4],
         )
