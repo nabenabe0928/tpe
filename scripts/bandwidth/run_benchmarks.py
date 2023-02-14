@@ -80,10 +80,12 @@ def collect_data(
     weight_func_choice: str,
     magic_clip: bool,
     heuristic: bool,
+    min_bandwidth_factor: float,
 ) -> None:
 
     func_name = func_cls().__class__.__name__
-    print(func_name, multivariate, choice, alpha, weight_func_choice)
+    heuristic_name = heuristic if heuristic is not None else "scott"
+    print(func_name, multivariate, choice, alpha, weight_func_choice, heuristic_name, min_bandwidth_factor)
     dir_name = "_".join(
         [
             f"multivariate={multivariate}",
@@ -91,7 +93,8 @@ def collect_data(
             f"alpha={alpha}",
             f"weight={weight_func_choice}",
             f"magic-clip={magic_clip}",
-            f"heuristic={heuristic}",
+            f"heuristic={heuristic_name}",
+            f"min_bandwidth_factor={min_bandwidth_factor}",
         ]
     )
     file_name = f"{func_name}_{DIM:0>2}d.json"
@@ -112,6 +115,7 @@ def collect_data(
             resultfile=os.path.join(dir_name, file_name),
             magic_clip=magic_clip,
             heuristic=heuristic,
+            min_bandwidth_factor=min_bandwidth_factor,
         )
         opt.optimize()
         results.append(opt.fetch_observations()["loss"].tolist())
@@ -130,7 +134,8 @@ if __name__ == "__main__":
             ],  # quantile_func
             ["uniform", "older-smaller"],  # weight_func_choice
             [True, False],  # magic_clip
-            [True, False],  # heuristics
+            [None, "optuna", "hyperopt"],  # heuristics
+            [0.01, 0.03, 0.1, 0.3],  # min bandwidth factor
             FUNCS,
         )
     ):
@@ -142,4 +147,5 @@ if __name__ == "__main__":
             weight_func_choice=params[2],
             magic_clip=params[3],
             heuristic=params[4],
+            min_bandwidth_factor=params[5],
         )
