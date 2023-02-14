@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict, Optional, Tuple, Type
+from typing import Any, Callable, Dict, Literal, Optional, Tuple, Type
 
 import ConfigSpace as CS
 
@@ -29,7 +29,7 @@ class TreeStructuredParzenEstimator:
         multivariate: bool,
         magic_clip: bool,
         prior: bool,
-        heuristic: bool,
+        heuristic: Optional[Literal["optuna", "hyperopt"]] = None,
     ):
         """
         Attributes:

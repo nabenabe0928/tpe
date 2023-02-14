@@ -31,7 +31,7 @@ class TPEOptimizer(BaseOptimizer):
         multivariate: bool = True,
         magic_clip: bool = False,
         prior: bool = True,
-        heuristic: bool = False,
+        heuristic: Optional[Literal["optuna", "hyperopt"]] = None,
     ):
         """
         Args:
