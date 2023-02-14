@@ -29,6 +29,7 @@ class TreeStructuredParzenEstimator:
         multivariate: bool,
         magic_clip: bool,
         prior: bool,
+        heuristic: bool,
     ):
         """
         Attributes:
@@ -66,6 +67,7 @@ class TreeStructuredParzenEstimator:
         self._min_bandwidth_factor = min_bandwidth_factor
         self._min_bandwidth_factor_for_discrete = min_bandwidth_factor_for_discrete
         self._magic_clip = magic_clip
+        self._heuristic = heuristic
         self._prior = prior
         self._top = top
         self._size = 0
@@ -292,6 +294,7 @@ class TreeStructuredParzenEstimator:
                 # ),
                 default_min_bandwidth_factor_for_discrete=self._min_bandwidth_factor_for_discrete,
                 magic_clip=self._magic_clip,
+                heuristic=self._heuristic,
             )
             pe_lower = build_numerical_parzen_estimator(vals=lower_vals, weights=weights_lower, **kwargs)
             pe_upper = build_numerical_parzen_estimator(vals=upper_vals, weights=weights_upper, **kwargs)

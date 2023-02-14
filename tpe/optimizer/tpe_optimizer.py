@@ -31,6 +31,7 @@ class TPEOptimizer(BaseOptimizer):
         multivariate: bool = True,
         magic_clip: bool = False,
         prior: bool = True,
+        heuristic: bool = False,
     ):
         """
         Args:
@@ -81,6 +82,7 @@ class TPEOptimizer(BaseOptimizer):
             multivariate=multivariate,
             magic_clip=magic_clip,
             prior=prior,
+            heuristic=heuristic,
         )
 
     def update(self, eval_config: Dict[str, Any], loss: float) -> None:

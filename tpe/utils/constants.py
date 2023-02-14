@@ -137,6 +137,7 @@ class WeightFuncs:
 
 class QuantileFunc:
     choices: List[str] = ["linear", "sqrt"]
+    _max_lower_size = 25
 
     def __init__(self, alpha: float = 0.25, choice: str = "sqrt"):
         self._alpha = alpha
@@ -144,11 +145,13 @@ class QuantileFunc:
 
     def __call__(self, size: int) -> int:
         if self._choice == "linear":
-            return self.linear(size)
+            size = self.linear(size)
         elif self._choice == "sqrt":
-            return self.sqrt(size)
+            size = self.sqrt(size)
         else:
             raise ValueError(f"choice must be in {self.choices}, but got {self._choice}")
+
+        return min(size, self._max_lower_size)
 
     def sqrt(self, size: int) -> int:
         return int(np.ceil(self._alpha * np.sqrt(size)))

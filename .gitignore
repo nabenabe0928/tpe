@@ -8,6 +8,7 @@ incumbents/
 .coverage
 figs/
 .ipynb_checkpoints/
+archive/
 
 build/
 dist/
