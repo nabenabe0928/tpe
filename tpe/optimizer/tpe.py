@@ -295,6 +295,7 @@ class TreeStructuredParzenEstimator:
                 default_min_bandwidth_factor_for_discrete=self._min_bandwidth_factor_for_discrete,
                 magic_clip=self._magic_clip,
                 heuristic=self._heuristic,
+                space_dim=len(self._hp_names),
             )
             pe_lower = build_numerical_parzen_estimator(vals=lower_vals, weights=weights_lower, **kwargs)
             pe_upper = build_numerical_parzen_estimator(vals=upper_vals, weights=weights_upper, **kwargs)
