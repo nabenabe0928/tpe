@@ -41,7 +41,7 @@ def collect_data(
         ]
     )
     file_name = f"{func_name}.json"
-    if exist_file(dir_name, file_name):
+    if exist_file(dir_name, file_name, result_dir="results-bandwidth/"):
         return
 
     results = []
@@ -64,7 +64,7 @@ def collect_data(
         opt.optimize()
         results.append(opt.fetch_observations()["loss"].tolist())
 
-    save_observations(dir_name=dir_name, file_name=file_name, data=results)
+    save_observations(dir_name=dir_name, file_name=file_name, data=results, result_dir="results-bandwidth/")
 
 
 if __name__ == "__main__":
