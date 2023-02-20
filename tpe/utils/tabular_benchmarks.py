@@ -78,14 +78,15 @@ class HPOBench(AbstractBench):
             raise ValueError(f"The query must have the identical config as {config}, but got {queried_config}")
 
     def __call__(self, config: Dict[str, int]) -> float:
-        config["seed"] = SEEDS[self._rng.randint(len(SEEDS))]
+        _config = config.copy()
+        _config["seed"] = SEEDS[self._rng.randint(len(SEEDS))]
         KEY_ORDER = ["alpha", "batch_size", "depth", "learning_rate_init", "width", "seed"]
 
-        assert len(config) == len(KEY_ORDER)
+        assert len(_config) == len(KEY_ORDER)
         idx = 0
         eval_config: Dict[str, Union[int, float]] = {}
         for k in KEY_ORDER:
-            true_val = self._value_range[k][config[k]] if k != "seed" else config[k]
+            true_val = self._value_range[k][_config[k]] if k != "seed" else _config[k]
             assert not isinstance(true_val, str)  # mypy redefinition
             eval_config[k] = true_val
             idx = self._db[k].index(true_val, start=idx).as_py()
