@@ -59,6 +59,9 @@ def collect_data(bench: Callable, dim: Optional[int] = None) -> None:
     if os.path.exists(path):
         print(f"{path} exists; skip")
         return
+    else:
+        with open(path, mode="w") as f:
+            pass
 
     results = []
     for seed in range(10):

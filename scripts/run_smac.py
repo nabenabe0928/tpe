@@ -6,6 +6,8 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import ConfigSpace as CS
 
+import numpy as np
+
 from smac.facade.smac_hpo_facade import SMAC4HPO
 from smac.scenario.scenario import Scenario
 
@@ -46,7 +48,7 @@ FUNCS += [HPOLib(dataset_id=i, seed=None) for i in range(4)]
 FUNCS += [JAHSBench201(dataset_id=i) for i in range(3)]
 
 
-def wrapper_func(bench: Callable, config_space: CS.ConfigurationSpace) -> Callable:
+def wrapper_func(bench: Callable) -> Callable:
     def func(config: Dict[str, Any]) -> float:
         target = bench.func if isinstance(bench, ABCMeta) else bench
         return target(config)
@@ -100,6 +102,9 @@ def collect_data(bench: Callable, dim: Optional[int] = None) -> None:
     if os.path.exists(path):
         print(f"{path} exists; skip")
         return
+    else:
+        with open(path, mode="w") as f:
+            pass
 
     results = []
     for seed in range(10):
@@ -110,16 +115,16 @@ def collect_data(bench: Callable, dim: Optional[int] = None) -> None:
         config_space, init_configs = update_config_space_default_and_get_init_config(bench, config_space, seed)
         scenario = Scenario({
             "run_obj": "quality",
-            "runcount-limit": 20,
+            "runcount-limit": 200,
             "cs": config_space,
-            "output_directory": "smac-temp",
         })
         if hasattr(bench, "reseed"):
             # We need to reseed again because SMAC doubly evaluates the init configs
             bench.reseed(seed)
         opt = SMAC4HPO(
             scenario=scenario,
-            tae_runner=wrapper_func(bench, config_space),
+            rng=np.random.RandomState(seed),
+            tae_runner=wrapper_func(bench),
             initial_configurations=init_configs,
             initial_design=None,
         )

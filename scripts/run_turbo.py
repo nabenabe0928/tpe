@@ -1,18 +1,16 @@
-# use HEBO: https://github.com/huawei-noah/HEBO/tree/master/HEBO
-
 import json
 import os
+import shutil
 from abc import ABCMeta
-from typing import Callable, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import ConfigSpace as CS
 
 import numpy as np
 
-import pandas as pd
-
-from hebo.design_space.design_space import DesignSpace
-from hebo.optimizers.hebo import HEBO
+from smac.facade.smac_hpo_facade import SMAC4HPO
+from smac.scenario.scenario import Scenario
+from smac.optimizer.configuration_chooser import TurBOChooser
 
 from tpe.optimizer import TPEOptimizer
 from tpe.utils.benchmarks import (
@@ -52,19 +50,18 @@ FUNCS += [JAHSBench201(dataset_id=i) for i in range(3)]
 
 
 def wrapper_func(bench: Callable) -> Callable:
-    def func(configs: pd.DataFrame) -> np.ndarray:
-        eval_config = {hp_name: configs[hp_name].iloc[0] for hp_name in configs.columns}
+    def func(config: Dict[str, Any]) -> float:
         target = bench.func if isinstance(bench, ABCMeta) else bench
-        return np.asarray([[target(eval_config)]])
+        return target(config)
 
     return func
 
 
-def get_init_configs(
+def update_config_space_default_and_get_init_config(
     bench: Callable,
     config_space: CS.ConfigurationSpace,
     seed: int,
-) -> Tuple[pd.DataFrame, List[float]]:
+) -> Tuple[CS.ConfigurationSpace, List[CS.Configuration]]:
     random_sampler = TPEOptimizer(
         obj_func=bench.func if isinstance(bench, ABCMeta) else bench,
         config_space=config_space,
@@ -73,37 +70,21 @@ def get_init_configs(
         seed=seed,
     )
     random_sampler.optimize()
-    init_data = random_sampler.fetch_observations()
-    vals = init_data["loss"]
-    init_configs = pd.DataFrame([{
-            hp_name: init_data[hp_name][i] for hp_name in config_space
-        } for i in range(vals.size)
-    ])
-    return init_configs, list(vals)
-
-
-def extract_space(config_space: CS.ConfigurationSpace):
-    config_info = []
+    data = random_sampler.fetch_observations()
     for hp in config_space.get_hyperparameters():
-        info = {"name": hp.name}
-        if isinstance(hp, CS.CategoricalHyperparameter):
-            info["type"] = "cat"
-            info["categories"] = hp.choices
-        elif isinstance(hp, CS.UniformFloatHyperparameter):
-            log = hp.log
-            info["type"] = "pow" if log else "num"
-            info["lb"], info["ub"] = hp.lower, hp.upper
-            if log:
-                info["base"] = 10
-        elif isinstance(hp, CS.UniformIntegerHyperparameter):
-            info["type"] = "int"
-            info["lb"], info["ub"] = hp.lower, hp.upper
-        else:
-            raise TypeError(f"{type(type(hp))} is not supported")
+        hp.default_value = data[hp.name][-1]
 
-        config_info.append(info)
-
-    return DesignSpace().parse(config_info)
+    n_init = data["loss"].size
+    assert n_init == 10
+    init_configs = [
+        CS.Configuration(
+            config_space,
+            values={
+                hp_name: data[hp_name][i] for hp_name in config_space
+            })
+        for i in range(n_init - 1)
+    ]
+    return config_space, init_configs
 
 
 def collect_data(bench: Callable, dim: Optional[int] = None) -> None:
@@ -116,8 +97,7 @@ def collect_data(bench: Callable, dim: Optional[int] = None) -> None:
         config_space.add_hyperparameters(
             [CS.UniformFloatHyperparameter(f"x{d}", lower=-1, upper=1) for d in range(dim)]
         )
-
-    dir_name = "results/hebo"
+    dir_name = "results/turbo"
     os.makedirs(dir_name, exist_ok=True)
     path = os.path.join(dir_name, f"{bench_name}.json")
     if os.path.exists(path):
@@ -133,18 +113,31 @@ def collect_data(bench: Callable, dim: Optional[int] = None) -> None:
             bench.reseed(seed)
 
         config_space = config_space if isinstance(bench, ABCMeta) else bench.config_space
-        init_configs, vals = get_init_configs(bench, config_space, seed)
-        obj = wrapper_func(bench)
-
-        opt = HEBO(extract_space(config_space))
-        opt.observe(init_configs, np.asarray(vals).reshape(-1, 1))
-        for i in range(190):
-            config = opt.suggest(n_suggestions=1)
-            y = obj(config)
-            opt.observe(config, y)
-            vals.append(y[0][0])
-
+        config_space, init_configs = update_config_space_default_and_get_init_config(bench, config_space, seed)
+        scenario = Scenario({
+            "run_obj": "quality",
+            "runcount-limit": 200,
+            "cs": config_space,
+        })
+        if hasattr(bench, "reseed"):
+            # We need to reseed again because SMAC doubly evaluates the init configs
+            bench.reseed(seed)
+        opt = SMAC4HPO(
+            scenario=scenario,
+            rng=np.random.RandomState(seed),
+            tae_runner=wrapper_func(bench),
+            model_type="gp",
+            smbo_kwargs={"epm_chooser": TurBOChooser},
+            initial_configurations=init_configs,
+            initial_design=None,
+        )
+        opt.optimize()
+        vals = [v.cost for v in opt.runhistory.data.values()]
         results.append(vals)
+
+        for f in os.listdir():
+            if f.startswith("smac3-output"):
+                shutil.rmtree(f)
     else:
         with open(path, mode="w") as f:
             json.dump(results, f, indent=4)
