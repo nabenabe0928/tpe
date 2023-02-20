@@ -28,7 +28,7 @@ from tpe.utils.benchmarks import (
     Levy,
     XinSheYang,
 )
-# from tpe.utils.tabular_benchmarks import HPOBench, HPOLib, JAHSBench201
+from tpe.utils.tabular_benchmarks import HPOBench, HPOLib, JAHSBench201
 
 
 FUNCS = [
@@ -45,9 +45,9 @@ FUNCS = [
     Levy,
     XinSheYang,
 ]
-# FUNCS += [HPOBench(dataset_id=i, seed=None) for i in range(8)]
-# FUNCS += [HPOLib(dataset_id=i, seed=None) for i in range(4)]
-# FUNCS += [JAHSBench201(dataset_id=i) for i in range(3)]
+FUNCS += [HPOBench(dataset_id=i, seed=None) for i in range(8)]
+FUNCS += [HPOLib(dataset_id=i, seed=None) for i in range(4)]
+FUNCS += [JAHSBench201(dataset_id=i) for i in range(3)]
 
 
 def wrapper_func(bench: Callable) -> Callable:
