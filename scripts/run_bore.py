@@ -106,6 +106,7 @@ def ask(
     model = xgboost.XGBClassifier(use_label_encoder=False, seed=seed, eval_metric="logloss")
     threshold = np.quantile(vals, q=0.25)
     z = np.less(vals, threshold)
+    # TODO; Start from Categorical
     model.fit(configs, z.astype(np.int64))
     candidates = pd.DataFrame({
         hp_name: random_sample(config=config_space.get_hyperparameter(hp_name), rng=rng)

@@ -7,7 +7,10 @@ import ConfigSpace as CS
 
 import h5py
 
-import jahs_bench
+try:
+    import jahs_bench
+except ModuleNotFoundError:  # We cannot use jahs with smac
+    pass
 
 import numpy as np
 

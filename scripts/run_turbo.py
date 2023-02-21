@@ -8,9 +8,9 @@ import ConfigSpace as CS
 
 import numpy as np
 
-from smac.facade.smac_hpo_facade import SMAC4HPO
+from smac.facade.smac_bb_facade import SMAC4BB
 from smac.scenario.scenario import Scenario
-from smac.optimizer.configuration_chooser import TurBOChooser
+from smac.optimizer.configuration_chooser.turbo_chooser import TurBOChooser
 
 from tpe.optimizer import TPEOptimizer
 from tpe.utils.benchmarks import (
@@ -122,7 +122,7 @@ def collect_data(bench: Callable, dim: Optional[int] = None) -> None:
         if hasattr(bench, "reseed"):
             # We need to reseed again because SMAC doubly evaluates the init configs
             bench.reseed(seed)
-        opt = SMAC4HPO(
+        opt = SMAC4BB(
             scenario=scenario,
             rng=np.random.RandomState(seed),
             tae_runner=wrapper_func(bench),

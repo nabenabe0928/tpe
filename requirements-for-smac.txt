@@ -1,24 +1,17 @@
-# HEBO
-HEBO==0.3.2
-pymoo==0.5.0
-
-# Optuna
-optuna==3.1.0
+# SMAC and TurBO
+smac==1.4.0
+botorch==0.6.5
+gpytorch==1.7.0
 
 # Benchmark requirements
 h5py==3.7.0
 pyarrow==10.0.0
 PyQt5==5.15.4
-jahs-bench==1.0.2
 
 # TPE
 scipy==1.9.3
 numpy==1.21.6
 parzen-estimator==0.5.6
-
-# BORE
-xgboost==1.5.2
-scikit-learn==1.0.2
 
 # Utilities
 black==23.1.0
