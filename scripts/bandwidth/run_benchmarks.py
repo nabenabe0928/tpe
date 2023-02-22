@@ -6,6 +6,8 @@ from typing import Dict, List
 
 import ConfigSpace as CS
 
+import numpy as np
+
 from tpe.optimizer import TPEOptimizer
 from tpe.utils.benchmarks import (
     AbstractFunc,
@@ -74,25 +76,24 @@ def exist_file(dir_name: str, file_name: str) -> bool:
 
 def collect_data(
     func_cls: AbstractFunc,
-    multivariate: bool,
     choice: str,
     alpha: float,
     weight_func_choice: str,
-    magic_clip: bool,
+    magic_clip_exponent: float,
     heuristic: bool,
     min_bandwidth_factor: float,
 ) -> None:
 
     func_name = func_cls().__class__.__name__
     heuristic_name = heuristic if heuristic is not None else "scott"
-    print(func_name, multivariate, choice, alpha, weight_func_choice, heuristic_name, min_bandwidth_factor)
+    print(func_name, choice, alpha, weight_func_choice, heuristic_name, min_bandwidth_factor)
+    magic_clip_exponent_str = str(magic_clip_exponent) if magic_clip_exponent != np.inf else "inf"
     dir_name = "_".join(
         [
-            f"multivariate={multivariate}",
             f"quantile={choice}",
             f"alpha={alpha}",
             f"weight={weight_func_choice}",
-            f"magic-clip={magic_clip}",
+            f"magic-clip-exponent={magic_clip_exponent_str}",
             f"heuristic={heuristic_name}",
             f"min_bandwidth_factor={min_bandwidth_factor}",
         ]
@@ -110,10 +111,10 @@ def collect_data(
             n_init=N_INIT,
             weight_func_choice=weight_func_choice,
             quantile_func=QuantileFunc(choice=choice, alpha=alpha),
-            multivariate=multivariate,
             seed=seed,
             resultfile=os.path.join(dir_name, file_name),
-            magic_clip=magic_clip,
+            magic_clip=magic_clip_exponent != np.inf,
+            magic_clip_exponent=magic_clip_exponent,
             heuristic=heuristic,
             min_bandwidth_factor=min_bandwidth_factor,
         )
@@ -126,14 +127,18 @@ def collect_data(
 if __name__ == "__main__":
     for params in itertools.product(
         *(
-            [True, False],  # multivariate
             [
+                (LINEAR, 0.05),
+                (LINEAR, 0.10),
                 (LINEAR, 0.15),
+                (LINEAR, 0.20),
                 (SQRT, 0.25),
+                (SQRT, 0.5),
+                (SQRT, 0.75),
                 (SQRT, 1.0),
             ],  # quantile_func
-            ["uniform", "older-smaller"],  # weight_func_choice
-            [True, False],  # magic_clip
+            ["uniform", "older-smaller", "expected-improvement"],  # weight_func_choice
+            [0.25, 0.5, 1.0, 2.0, 4.0, np.inf],  # magic_clip
             [None, "optuna", "hyperopt"],  # heuristics
             [0.01, 0.03, 0.1, 0.3],  # min bandwidth factor
             FUNCS,
@@ -141,11 +146,10 @@ if __name__ == "__main__":
     ):
         collect_data(
             func_cls=params[-1],
-            multivariate=params[0],
-            choice=params[1][0],
-            alpha=params[1][1],
-            weight_func_choice=params[2],
-            magic_clip=params[3],
-            heuristic=params[4],
-            min_bandwidth_factor=params[5],
+            choice=params[0][0],
+            alpha=params[0][1],
+            weight_func_choice=params[1],
+            magic_clip_exponent=params[2],
+            heuristic=params[3],
+            min_bandwidth_factor=params[4],
         )
