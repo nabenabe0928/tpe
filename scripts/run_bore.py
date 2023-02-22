@@ -115,12 +115,15 @@ def ask(
     rng: np.random.RandomState,
     seed: int,
 ) -> Dict[str, Any]:
-    model = xgboost.XGBClassifier(
-        seed=seed,
-        tree_method="gpu_hist" if torch.cuda.is_available() else "hist",
-        eval_metric="logloss",
-        enable_categorical=True,
-    )
+    if not torch.cuda.is_available():
+        raise SystemError(
+            "Due to the version confliction between JAHS-Bench-201 and tree_method in xgboost, "
+            "we cannot run BORE without CUDA."
+        )
+
+    # valid tree_method --> gpu_hist (from 1.5), approx (from 1.6), hist (from 1.7)
+    # JAHS-Bench-201 works only on xgboost==1.5, so we need to choose gpu_hist.
+    model = xgboost.XGBClassifier(seed=seed, eval_metric="logloss", enable_categorical=True,)
     threshold = np.quantile(vals, q=0.25)
     z = np.less(vals, threshold)
 
