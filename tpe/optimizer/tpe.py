@@ -28,6 +28,7 @@ class TreeStructuredParzenEstimator:
         top: Optional[float],
         multivariate: bool,
         magic_clip: bool,
+        magic_clip_exponent: float,
         prior: bool,
         heuristic: Optional[Literal["optuna", "hyperopt"]] = None,
     ):
@@ -67,6 +68,7 @@ class TreeStructuredParzenEstimator:
         self._min_bandwidth_factor = min_bandwidth_factor
         self._min_bandwidth_factor_for_discrete = min_bandwidth_factor_for_discrete
         self._magic_clip = magic_clip
+        self._magic_clip_exponent = magic_clip_exponent
         self._heuristic = heuristic
         self._prior = prior
         self._top = top
@@ -294,6 +296,7 @@ class TreeStructuredParzenEstimator:
                 # ),
                 default_min_bandwidth_factor_for_discrete=self._min_bandwidth_factor_for_discrete,
                 magic_clip=self._magic_clip,
+                magic_clip_exponent=self._magic_clip_exponent,
                 heuristic=self._heuristic,
                 space_dim=len(self._hp_names),
             )

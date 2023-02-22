@@ -30,6 +30,7 @@ class TPEOptimizer(BaseOptimizer):
         ] = "uniform",
         multivariate: bool = True,
         magic_clip: bool = False,
+        magic_clip_exponent: float = 1.0,
         prior: bool = True,
         heuristic: Optional[Literal["optuna", "hyperopt"]] = None,
     ):
@@ -81,6 +82,7 @@ class TPEOptimizer(BaseOptimizer):
             weight_func=WeightFuncs(choice=weight_func_choice),
             multivariate=multivariate,
             magic_clip=magic_clip,
+            magic_clip_exponent=magic_clip_exponent,
             prior=prior,
             heuristic=heuristic,
         )
