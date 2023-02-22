@@ -3,13 +3,15 @@
 import json
 import os
 from abc import ABCMeta
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import ConfigSpace as CS
 
 import numpy as np
 
 import pandas as pd
+
+import torch
 
 import xgboost
 
@@ -58,6 +60,16 @@ def wrapper_func(bench: Callable) -> Callable:
     return func
 
 
+def get_pandas_value(
+    config_space: CS.ConfigurationSpace, hp_name: str, values: np.ndarray
+) -> Union[pd.Categorical, np.ndarray]:
+    hp = config_space.get_hyperparameter(hp_name)
+    if isinstance(hp, CS.CategoricalHyperparameter):
+        return pd.Categorical(values, categories=hp.choices)
+    else:
+        return values
+
+
 def get_init_configs(
     bench: Callable,
     config_space: CS.ConfigurationSpace,
@@ -73,17 +85,17 @@ def get_init_configs(
     random_sampler.optimize()
     init_data = random_sampler.fetch_observations()
     vals = init_data["loss"]
-    init_configs = pd.DataFrame([{
-            hp_name: init_data[hp_name][i] for hp_name in config_space
-        } for i in range(vals.size)
-    ])
+    init_configs = pd.DataFrame({
+        hp_name: get_pandas_value(config_space, hp_name, init_data[hp_name])
+        for hp_name in config_space
+    })
     return init_configs, list(vals)
 
 
 def random_sample(config: CS.hyperparameters, rng: np.random.RandomState) -> np.ndarray:
     n_samples = 500  # the default from the original paper
     if isinstance(config, CS.CategoricalHyperparameter):
-        return rng.choice(config.choices, size=n_samples)
+        return pd.Categorical(rng.choice(config.choices, size=n_samples), categories=config.choices)
     elif isinstance(config, CS.UniformFloatHyperparameter):
         lb = np.log(config.lower) if config.log else config.lower
         ub = np.log(config.upper) if config.log else config.upper
@@ -103,10 +115,15 @@ def ask(
     rng: np.random.RandomState,
     seed: int,
 ) -> Dict[str, Any]:
-    model = xgboost.XGBClassifier(use_label_encoder=False, seed=seed, eval_metric="logloss")
+    model = xgboost.XGBClassifier(
+        seed=seed,
+        tree_method="gpu_hist" if torch.cuda.is_available() else "hist",
+        eval_metric="logloss",
+        enable_categorical=True,
+    )
     threshold = np.quantile(vals, q=0.25)
     z = np.less(vals, threshold)
-    # TODO; Start from Categorical
+
     model.fit(configs, z.astype(np.int64))
     candidates = pd.DataFrame({
         hp_name: random_sample(config=config_space.get_hyperparameter(hp_name), rng=rng)
@@ -150,7 +167,11 @@ def collect_data(bench: Callable, dim: Optional[int] = None) -> None:
         for i in range(190):
             config = ask(config_space, configs, vals, rng, seed=seed)
             y = obj(config)
-            configs = configs.append(config, ignore_index=True)
+            new_config = pd.DataFrame({
+                hp_name: get_pandas_value(config_space, hp_name, np.asarray([val]))
+                for hp_name, val in config.items()
+            }, index=[len(configs)])
+            configs = pd.concat([configs, new_config])
             vals.append(y)
 
         results.append(vals)
