@@ -1,3 +1,4 @@
+from argparse import ArgumentParser
 import itertools
 import os
 
@@ -10,7 +11,12 @@ from tpe.utils.constants import QuantileFunc
 from experiment_utils import exist_file, save_observations
 
 
-FUNCS = [HPOBench(dataset_id=i, seed=None) for i in range(8)]
+parser = ArgumentParser()
+parser.add_argument("--dataset_id", type=int, choices=list(range(8)))
+args = parser.parse_args()
+
+# FUNCS = [HPOBench(dataset_id=i, seed=None) for i in range(8)]
+FUNCS = [HPOBench(dataset_id=args.dataset_id, seed=None)]
 N_SEEDS = 10
 MAX_EVALS = 200
 N_INIT = 200 * 5 // 100

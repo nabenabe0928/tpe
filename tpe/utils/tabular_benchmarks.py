@@ -71,6 +71,7 @@ class HPOBench(AbstractBench):
         self._db = db.drop([budget_name, "subsample"])
         self._rng = np.random.RandomState(seed)
         self._value_range = VALUE_RANGES["hpo-bench"]
+        self._cache: Dict[int, float] = {}
 
     def _validate_query(self, query: Dict[str, Any], config: Dict[str, Union[int, float]]) -> None:
         if len(query["__index_level_0__"]) != 1:
@@ -94,9 +95,13 @@ class HPOBench(AbstractBench):
             eval_config[k] = true_val
             idx = self._db[k].index(true_val, start=idx).as_py()
 
+        if idx in self._cache:
+            return self._cache[idx]
+
         query = self._db.take([idx]).to_pydict()
         self._validate_query(query, eval_config)
-        return 1.0 - query["result"][0]["info"]["val_scores"]["bal_acc"]
+        self._cache[idx] = 1.0 - query["result"][0]["info"]["val_scores"]["bal_acc"]
+        return self._cache[idx]
 
     @property
     def config_space(self) -> CS.ConfigurationSpace:
