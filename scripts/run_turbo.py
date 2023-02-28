@@ -1,8 +1,9 @@
 import json
 import os
 import shutil
+import time
 from abc import ABCMeta
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Callable, List, Optional, Tuple
 
 import ConfigSpace as CS
 
@@ -50,9 +51,9 @@ FUNCS += [HPOLib(dataset_id=i, seed=None) for i in range(4)]
 
 
 def wrapper_func(bench: Callable) -> Callable:
-    def func(config: Dict[str, Any]) -> float:
+    def func(config: CS.Configuration) -> float:
         target = bench.func if isinstance(bench, ABCMeta) else bench
-        return target(config)
+        return target(config.get_dictionary())
 
     return func
 
@@ -70,11 +71,11 @@ def update_config_space_default_and_get_init_config(
         seed=seed,
     )
     random_sampler.optimize()
-    data = random_sampler.fetch_observations()
+    data = {k: v.tolist() for k, v in random_sampler.fetch_observations().items()}
     for hp in config_space.get_hyperparameters():
         hp.default_value = data[hp.name][-1]
 
-    n_init = data["loss"].size
+    n_init = len(data["loss"])
     assert n_init == 10
     init_configs = [
         CS.Configuration(
@@ -109,6 +110,7 @@ def collect_data(bench: Callable, dim: Optional[int] = None) -> None:
 
     results = []
     for seed in range(10):
+        print(f"Start {bench_name} {dim} with seed {seed} at {time.time()}")
         if hasattr(bench, "reseed"):
             bench.reseed(seed)
 
@@ -132,12 +134,8 @@ def collect_data(bench: Callable, dim: Optional[int] = None) -> None:
             initial_design=None,
         )
         opt.optimize()
-        vals = [v.cost for v in opt.runhistory.data.values()]
+        vals = [float(v.cost) for v in opt.runhistory.data.values()]
         results.append(vals)
-
-        for f in os.listdir():
-            if f.startswith("smac3-output"):
-                shutil.rmtree(f)
     else:
         with open(path, mode="w") as f:
             json.dump(results, f, indent=4)
@@ -150,3 +148,8 @@ if __name__ == "__main__":
                 collect_data(bench, dim=d)
         else:
             collect_data(bench)
+    else:
+        # maybe manually removing output files is better to avoid crush.
+        for f in os.listdir():
+            if f.startswith("smac3-output"):
+                shutil.rmtree(f)

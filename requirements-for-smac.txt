@@ -11,7 +11,7 @@ PyQt5==5.15.4
 # TPE
 scipy==1.9.3
 numpy==1.21.6
-parzen-estimator==0.5.6
+parzen-estimator==0.5.7
 
 # Utilities
 black==23.1.0

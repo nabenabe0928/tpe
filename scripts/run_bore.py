@@ -123,7 +123,7 @@ def ask(
 
     # valid tree_method --> gpu_hist (from 1.5), approx (from 1.6), hist (from 1.7)
     # JAHS-Bench-201 works only on xgboost==1.5, so we need to choose gpu_hist.
-    model = xgboost.XGBClassifier(seed=seed, eval_metric="logloss", enable_categorical=True,)
+    model = xgboost.XGBClassifier(seed=seed, eval_metric="logloss", tree_method="gpu_hist", enable_categorical=True)
     threshold = np.quantile(vals, q=0.25)
     z = np.less(vals, threshold)
 
@@ -169,7 +169,7 @@ def collect_data(bench: Callable, dim: Optional[int] = None) -> None:
 
         for i in range(190):
             config = ask(config_space, configs, vals, rng, seed=seed)
-            y = obj(config)
+            y = float(obj(config))
             new_config = pd.DataFrame({
                 hp_name: get_pandas_value(config_space, hp_name, np.asarray([val]))
                 for hp_name, val in config.items()

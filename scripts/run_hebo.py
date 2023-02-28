@@ -2,6 +2,7 @@
 
 import json
 import os
+import time
 from abc import ABCMeta
 from typing import Callable, List, Optional, Tuple
 
@@ -33,18 +34,18 @@ from tpe.utils.tabular_benchmarks import HPOBench, HPOLib, JAHSBench201
 
 
 FUNCS = [
-    Sphere,
-    Styblinski,
-    Rastrigin,
-    Schwefel,
-    Ackley,
-    Griewank,
-    Perm,
-    KTablet,
-    WeightedSphere,
-    Rosenbrock,
-    Levy,
-    XinSheYang,
+    # Sphere,
+    # Styblinski,
+    # Rastrigin,
+    # Schwefel,
+    # Ackley,
+    # Griewank,
+    # Perm,
+    # KTablet,
+    # WeightedSphere,
+    # Rosenbrock,
+    # Levy,
+    # XinSheYang,
 ]
 FUNCS += [HPOBench(dataset_id=i, seed=None) for i in range(8)]
 FUNCS += [HPOLib(dataset_id=i, seed=None) for i in range(4)]
@@ -129,6 +130,7 @@ def collect_data(bench: Callable, dim: Optional[int] = None) -> None:
 
     results = []
     for seed in range(10):
+        print(f"Start {bench_name} {dim} with seed {seed} at {time.time()}")
         if hasattr(bench, "reseed"):
             bench.reseed(seed)
 
@@ -139,10 +141,13 @@ def collect_data(bench: Callable, dim: Optional[int] = None) -> None:
         opt = HEBO(extract_space(config_space))
         opt.observe(init_configs, np.asarray(vals).reshape(-1, 1))
         for i in range(190):
+            if (i + 1) % 10 == 0:
+                print(f"{i + 11} evaluations at {time.time()}")
+
             config = opt.suggest(n_suggestions=1)
             y = obj(config)
             opt.observe(config, y)
-            vals.append(y[0][0])
+            vals.append(float(y[0][0]))
 
         results.append(vals)
     else:
