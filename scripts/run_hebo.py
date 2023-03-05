@@ -34,18 +34,18 @@ from tpe.utils.tabular_benchmarks import HPOBench, HPOLib, JAHSBench201
 
 
 FUNCS = [
-    # Sphere,
-    # Styblinski,
-    # Rastrigin,
-    # Schwefel,
-    # Ackley,
-    # Griewank,
-    # Perm,
-    # KTablet,
-    # WeightedSphere,
-    # Rosenbrock,
-    # Levy,
-    # XinSheYang,
+    Sphere,
+    Styblinski,
+    Rastrigin,
+    Schwefel,
+    Ackley,
+    Griewank,
+    Perm,
+    KTablet,
+    WeightedSphere,
+    Rosenbrock,
+    Levy,
+    XinSheYang,
 ]
 FUNCS += [HPOBench(dataset_id=i, seed=None) for i in range(8)]
 FUNCS += [HPOLib(dataset_id=i, seed=None) for i in range(4)]
@@ -138,7 +138,7 @@ def collect_data(bench: Callable, dim: Optional[int] = None) -> None:
         init_configs, vals = get_init_configs(bench, config_space, seed)
         obj = wrapper_func(bench)
 
-        opt = HEBO(extract_space(config_space))
+        opt = HEBO(extract_space(config_space), rand_sample=10)
         opt.observe(init_configs, np.asarray(vals).reshape(-1, 1))
         for i in range(190):
             if (i + 1) % 10 == 0:
@@ -149,6 +149,7 @@ def collect_data(bench: Callable, dim: Optional[int] = None) -> None:
             opt.observe(config, y)
             vals.append(float(y[0][0]))
 
+        print(vals)
         results.append(vals)
     else:
         with open(path, mode="w") as f:
