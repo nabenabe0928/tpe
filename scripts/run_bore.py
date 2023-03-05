@@ -2,6 +2,7 @@
 
 import json
 import os
+import time
 from abc import ABCMeta
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
@@ -159,6 +160,7 @@ def collect_data(bench: Callable, dim: Optional[int] = None) -> None:
 
     results = []
     for seed in range(10):
+        print(f"Start {bench_name} {dim} with seed {seed} at {time.time()}")
         if hasattr(bench, "reseed"):
             bench.reseed(seed)
 

@@ -54,6 +54,7 @@ class HPOBench(AbstractBench):
         dataset_id: int,
         seed: Optional[int],
     ):
+        # https://ndownloader.figshare.com/files/30379005
         dataset_info = [
             ("credit_g", 31),
             ("vehicle", 53),
