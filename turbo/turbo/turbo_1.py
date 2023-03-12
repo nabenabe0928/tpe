@@ -11,6 +11,7 @@
 
 import math
 import sys
+import time
 from copy import deepcopy
 
 import gpytorch
@@ -62,6 +63,7 @@ class Turbo1:
         min_cuda=1024,
         device="cpu",
         dtype="float64",
+        seed=None,
     ):
 
         # Very basic input checks
@@ -87,6 +89,8 @@ class Turbo1:
         self.ub = ub
 
         # Settings
+        self.seed = seed
+        self.rng = np.random.RandomState(seed)
         self.n_init = n_init
         self.max_evals = max_evals
         self.batch_size = batch_size
@@ -186,16 +190,16 @@ class Turbo1:
         ub = np.clip(x_center + weights * length / 2.0, 0.0, 1.0)
 
         # Draw a Sobolev sequence in [lb, ub]
-        seed = np.random.randint(int(1e6))
+        seed = self.rng.randint(int(1e6))
         sobol = SobolEngine(self.dim, scramble=True, seed=seed)
         pert = sobol.draw(self.n_cand).to(dtype=dtype, device=device).cpu().detach().numpy()
         pert = lb + (ub - lb) * pert
 
         # Create a perturbation mask
         prob_perturb = min(20.0 / self.dim, 1.0)
-        mask = np.random.rand(self.n_cand, self.dim) <= prob_perturb
+        mask = self.rng.rand(self.n_cand, self.dim) <= prob_perturb
         ind = np.where(np.sum(mask, axis=1) == 0)[0]
-        mask[ind, np.random.randint(0, self.dim - 1, size=len(ind))] = 1
+        mask[ind, self.rng.randint(0, self.dim - 1, size=len(ind))] = 1
 
         # Create candidate points
         X_cand = x_center.copy() * np.ones((self.n_cand, self.dim))
@@ -233,7 +237,7 @@ class Turbo1:
             y_cand[indbest, :] = np.inf
         return X_next
 
-    def optimize(self):
+    def optimize(self, fixed_X_init: np.ndarray, fixed_fX_init: np.ndarray):
         """Run the full optimization process."""
         while self.n_evals < self.max_evals:
             if len(self._fX) > 0 and self.verbose:
@@ -244,13 +248,20 @@ class Turbo1:
             # Initialize parameters
             self._restart()
 
-            # Generate and evalute initial design points
-            X_init = latin_hypercube(self.n_init, self.dim)
-            X_init = from_unit_cube(X_init, self.lb, self.ub)
-            fX_init = np.array([[self.f(x)] for x in X_init])
+            if self.n_evals == 0:  # use the fixed random observations
+                assert fixed_X_init.shape == (self.n_init, self.lb.size)
+                X_init = deepcopy(fixed_X_init)
+                fX_init = fixed_fX_init[:, None]
+            else:
+                # Generate and evalute initial design points
+                X_init = latin_hypercube(self.n_init, self.dim)
+                X_init = from_unit_cube(X_init, self.lb, self.ub)
+                fX_init = np.array([[self.f(x)] for x in X_init])
 
             # Update budget and set as initial data for this TR
             self.n_evals += self.n_init
+            if (self.n_evals + 1) % 10 == 0:
+                print(f"{self.n_evals + 1} evaluations at {time.time()}")
             self._X = deepcopy(X_init)
             self._fX = deepcopy(fX_init)
 
@@ -288,6 +299,9 @@ class Turbo1:
 
                 # Update budget and append data
                 self.n_evals += self.batch_size
+                if (self.n_evals + 1) % 10 == 0:
+                    print(f"{self.n_evals + 1} evaluations at {time.time()}")
+
                 self._X = np.vstack((self._X, X_next))
                 self._fX = np.vstack((self._fX, fX_next))
 
