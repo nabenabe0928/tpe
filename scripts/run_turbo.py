@@ -42,9 +42,9 @@ FUNCS = [
     Levy,
     XinSheYang,
 ]
-FUNCS += [HPOBench(dataset_id=i, seed=None) for i in range(8)]
-FUNCS += [HPOLib(dataset_id=i, seed=None) for i in range(4)]
-FUNCS += [JAHSBench201(dataset_id=i) for i in range(3)]
+# FUNCS += [HPOBench(dataset_id=i, seed=None) for i in range(8)]
+# FUNCS += [HPOLib(dataset_id=i, seed=None) for i in range(4)]
+# FUNCS += [JAHSBench201(dataset_id=i) for i in range(2, 3)]
 
 
 def get_bounds(
@@ -55,13 +55,16 @@ def get_bounds(
     for hp_name in config_space:
         hp_names.append(hp_name)
         hp = config_space.get_hyperparameter(hp_name)
-        if not isinstance(hp, CS.CategoricalHyperparameter):
-            lb.append(np.log(hp.lower) if hp.log else hp.lower)
-            ub.append(np.log(hp.upper) if hp.log else hp.upper)
-        else:
+        if isinstance(hp, CS.CategoricalHyperparameter):
             for i in range(len(hp.choices)):
                 lb.append(0)
                 ub.append(1)
+        elif isinstance(hp, CS.UniformFloatHyperparameter):
+            lb.append(np.log(hp.lower) if hp.log else hp.lower)
+            ub.append(np.log(hp.upper) if hp.log else hp.upper)
+        elif isinstance(hp, CS.UniformIntegerHyperparameter):
+            lb.append(hp.lower - 0.5 + 1e-12)
+            ub.append(hp.upper + 0.5 - 1e-12)
 
     return np.asarray(lb), np.asarray(ub)
 
@@ -91,7 +94,6 @@ def wrapper_func(bench: Callable, config_space: CS.ConfigurationSpace) -> Callab
     def func(X: np.ndarray) -> float:
         target = bench.func if isinstance(bench, ABCMeta) else bench
         eval_config = convert(X, config_space)
-        print(eval_config)
         return target(eval_config)
 
     return func
@@ -176,7 +178,7 @@ def collect_data(bench: Callable, dim: Optional[int] = None) -> None:
 if __name__ == "__main__":
     for bench in FUNCS:
         if isinstance(bench, ABCMeta):
-            for d in [5, 10]:
+            for d in [30]:
                 collect_data(bench, dim=d)
         else:
             collect_data(bench)
