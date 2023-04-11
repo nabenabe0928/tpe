@@ -1,23 +1,23 @@
-# SMAC and TurBO
-smac==1.4.0
-botorch==0.6.5
-gpytorch==1.7.0
+# SMAC
+smac==2.0
 
 # Benchmark requirements
-h5py==3.7.0
-pyarrow==10.0.0
-PyQt5==5.15.4
+h5py
+pyarrow
+PyQt5
+# jahs-bench==1.1.0 <-- not compatible with SMAC
+yahpo-gym==1.0.1
 
 # TPE
 scipy==1.9.3
-numpy==1.21.6
-parzen-estimator==0.5.7
+numpy>=1.21.0
+parzen-estimator>=0.5.7
 
 # Utilities
-black==23.1.0
-flake8==5.0.4
-ipython==8.6.0
+black
+flake8
+ipython
 ujson
-matplotlib==3.7.0
-pandas==1.3.5
-pycodestyle==2.9.1
+matplotlib
+pandas
+pycodestyle

@@ -1,27 +1,23 @@
-# HEBO
-HEBO==0.3.2
-pymoo==0.5.0
+# BOHB
+hpbandster==0.7.4
 
-# hyperopt
-hyperopt==0.2.7
+# DEHB
+dehb==0.0.5
 
-# Optuna
-optuna==3.1.0
+# NEPS
+neural-pipeline-search==0.8.3
 
 # Benchmark requirements
 h5py
 pyarrow
 PyQt5
-jahs-bench==1.0.2
+jahs-bench==1.1.0
+yahpo-gym==1.0.1
 
 # TPE
 scipy==1.9.3
-numpy==1.21.6
+numpy>=1.21.0
 parzen-estimator>=0.5.7
-
-# BORE (we compromised the XGBoost version for JAHS-Bench)
-xgboost==1.5.2
-scikit-learn==1.0.2
 
 # Utilities
 black
