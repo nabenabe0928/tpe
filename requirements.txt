@@ -9,10 +9,8 @@ neural-pipeline-search==0.8.3
 
 # Benchmark requirements
 h5py
-pyarrow
 PyQt5
 jahs-bench==1.1.0
-yahpo-gym==1.0.1
 
 # TPE
 scipy==1.9.3
