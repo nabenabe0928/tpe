@@ -11,6 +11,7 @@ DIR_NAME = "scheduler/"
 TOKEN_PATTERN = "scheduler_*.token"
 PUBLIC_TOKEN_NAME = "scheduler.token"
 SCHEDULER_FILE_NAME = "scheduler.json"
+RESULT_FILE_NAME = "results.json"
 
 
 def generate_time_hash() -> str:
@@ -55,23 +56,39 @@ def init_token(token_pattern: str, public_token: str) -> None:
 
 
 @verify_token
-def init_scheduler(public_token: str, private_token: str, scheduler_path: str) -> None:
-    if not os.path.exists(scheduler_path):
-        with open(scheduler_path, mode="w") as f:
-            json.dump({}, f, indent=4)
+def init_scheduler(public_token: str, private_token: str, scheduler_path: str, result_path: str) -> None:
+    for path in [scheduler_path, result_path]:
+        if not os.path.exists(path):
+            with open(path, mode="w") as f:
+                json.dump({}, f, indent=4)
 
 
 @verify_token
 def record_runtime(public_token: str, private_token: str, proc_id: str, runtime: float, dir_name: str) -> float:
     path = os.path.join(dir_name, SCHEDULER_FILE_NAME)
-    old = json.load(open(path))
-    new = old.copy()
-    cumtime = new.get(proc_id, 0.0) + runtime
-    new[proc_id] = cumtime
+    record = json.load(open(path))
+    cumtime = record.get(proc_id, 0.0) + runtime
+    record[proc_id] = cumtime
     with open(path, mode="w") as f:
-        json.dump(new, f, indent=4)
+        json.dump(record, f, indent=4)
 
     return cumtime
+
+
+@verify_token
+def record_result(
+    public_token: str, private_token: str, proc_id: str, results: Dict[str, float], dir_name: str
+) -> None:
+    path = os.path.join(dir_name, RESULT_FILE_NAME)
+    record = json.load(open(path))
+    for key, val in results.items():
+        if key not in record:
+            record[key] = [val]
+        else:
+            record[key].append(val)
+
+    with open(path, mode="w") as f:
+        json.dump(record, f, indent=4)
 
 
 @verify_token
@@ -116,25 +133,26 @@ def get_wrapper_func(
     os.makedirs(dir_name, exist_ok=True)
     token_pattern = os.path.join(dir_name, TOKEN_PATTERN)
     scheduler_path = os.path.join(dir_name, SCHEDULER_FILE_NAME)
+    result_path = os.path.join(dir_name, RESULT_FILE_NAME)
     init_token(token_pattern=token_pattern, public_token=public_token)
-    init_scheduler(public_token=public_token, private_token=private_token, scheduler_path=scheduler_path)
-    func = wrapper_func(public_token=public_token, private_token=private_token, proc_id=proc_id, dir_name=dir_name)
-    wait_all_procs(public_token=public_token, private_token=private_token, n_procs=n_procs, dir_name=dir_name)
+    kwargs = dict(public_token=public_token, private_token=private_token)
+    init_scheduler(**kwargs, scheduler_path=scheduler_path, result_path=result_path)
+    func = wrapper_func(**kwargs, proc_id=proc_id, dir_name=dir_name)
+    wait_all_procs(**kwargs, n_procs=n_procs, dir_name=dir_name)
     return func
 
 
 def wrapper_func(public_token: str, private_token: str, proc_id: str, dir_name: str) -> Callable:
-    print(proc_id)
     kwargs = dict(public_token=public_token, private_token=private_token, proc_id=proc_id, dir_name=dir_name)
     record_runtime(**kwargs, runtime=0.0)
 
-    def _func(x: float) -> Dict[str, float]:
+    def _func(x: float, sampling_time: float) -> Dict[str, float]:
         start = time.time()
         loss_val = x ** 2
         runtime = time.time() - start
-        cumtime = record_runtime(**kwargs, runtime=runtime)
+        cumtime = record_runtime(**kwargs, runtime=runtime+sampling_time)
         wait_until_next(**kwargs)
-        print(proc_id, runtime, cumtime)
+        record_result(**kwargs, results=dict(loss=loss_val, cumtime=cumtime, proc_id=proc_id))
         return dict(loss=loss_val, runtime=runtime)
 
     return _func
@@ -152,7 +170,7 @@ if __name__ == "__main__":
     func = get_wrapper_func(wrapper_func=wrapper_func, n_procs=4, **kwargs)
 
     for i in range(10):
-        func(0.1 * i)
+        func(0.1 * i, 0)
     else:
         inf_time = 1 << 40
         record_runtime(**kwargs, runtime=inf_time)
