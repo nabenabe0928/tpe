@@ -239,7 +239,7 @@ class WrapperFunc:
     def __call__(self, eval_config: Dict[str, Any], budget: int) -> Dict[str, float]:
         sampling_time = time.time() - self._prev_timestamp
         output = self._proc_output(eval_config, budget)
-        loss, runtime = output["loss"], output["runtime"]
+        loss, runtime = output[self._loss_key], output[self._runtime_key]
         cumtime = record_cumtime(**self._kwargs, proc_id=self._proc_id, runtime=runtime+sampling_time)
         wait_until_next(**self._kwargs, proc_id=self._proc_id)
         self._prev_timestamp = time.time()
@@ -264,16 +264,3 @@ def get_wrapper_func(func: ObjectiveFunc, n_procs: int, subdir_name: str, max_bu
     init_scheduler(**kwargs)
     _func = WrapperFunc(**kwargs, func=func, proc_id=proc_id, n_procs=n_procs, max_budget=max_budget)
     return _func
-
-
-if __name__ == "__main__":
-    func = get_wrapper_func(
-        func=lambda eval_config, budget: dict(loss=eval_config["x"] ** 2, runtime=1.0 * budget / 100),
-        n_procs=4,
-        subdir_name="test",
-        max_budget=100,
-    )
-    for i in range(10):
-        func({"x": 0.1 * i}, budget=(i+1)*(10+func._index))
-    else:
-        func.finish()
