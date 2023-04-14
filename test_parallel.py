@@ -14,6 +14,7 @@ TOKEN_PATTERN = "scheduler_*.token"
 PUBLIC_TOKEN_NAME = "scheduler.token"
 SCHEDULER_FILE_NAME = "scheduler.json"
 RESULT_FILE_NAME = "results.json"
+RUNTIME_CACHE_FILE_NAME = "runtime_cache.json"
 
 
 def generate_time_hash() -> str:
@@ -59,15 +60,16 @@ def init_token(token_pattern: str, public_token: str) -> None:
 
 
 @verify_token
-def init_scheduler(public_token: str, private_token: str, scheduler_path: str, result_path: str) -> None:
-    for path in [scheduler_path, result_path]:
+def init_scheduler(public_token: str, private_token: str, dir_name: str) -> None:
+    for fn in [SCHEDULER_FILE_NAME, RESULT_FILE_NAME, RUNTIME_CACHE_FILE_NAME]:
+        path = os.path.join(dir_name, fn)
         if not os.path.exists(path):
             with open(path, mode="w") as f:
                 json.dump({}, f, indent=4)
 
 
 @verify_token
-def record_runtime(public_token: str, private_token: str, proc_id: str, runtime: float, dir_name: str) -> float:
+def record_cumtime(public_token: str, private_token: str, proc_id: str, runtime: float, dir_name: str) -> float:
     path = os.path.join(dir_name, SCHEDULER_FILE_NAME)
     record = json.load(open(path))
     cumtime = record.get(proc_id, 0.0) + runtime
@@ -76,6 +78,21 @@ def record_runtime(public_token: str, private_token: str, proc_id: str, runtime:
         json.dump(record, f, indent=4)
 
     return cumtime
+
+
+@verify_token
+def cache_runtime(public_token: str, private_token: str, config_key: str, runtime: float, dir_name: str) -> None:
+    path = os.path.join(dir_name, RUNTIME_CACHE_FILE_NAME)
+    cache = json.load(open(path))
+    cache[config_key] = runtime
+    with open(path, mode="w") as f:
+        json.dump(cache, f, indent=4)
+
+
+@verify_token
+def fetch_cache_runtime(public_token: str, private_token: str, dir_name: str) -> None:
+    path = os.path.join(dir_name, RUNTIME_CACHE_FILE_NAME)
+    return json.load(open(path))
 
 
 @verify_token
@@ -101,6 +118,12 @@ def is_scheduler_ready(public_token: str, private_token: str, n_procs: int, dir_
 
 
 @verify_token
+def get_proc_id_to_idx(public_token: str, private_token: str, dir_name: str) -> Dict[str, int]:
+    path = os.path.join(dir_name, SCHEDULER_FILE_NAME)
+    return {k: idx for idx, k in enumerate(json.load(open(path)).keys())}
+
+
+@verify_token
 def is_min_cumtime(public_token: str, private_token: str, proc_id: str, dir_name: str) -> bool:
     path = os.path.join(dir_name, SCHEDULER_FILE_NAME)
     cumtimes = json.load(open(path))
@@ -110,13 +133,13 @@ def is_min_cumtime(public_token: str, private_token: str, proc_id: str, dir_name
 
 def wait_all_procs(
     public_token: str, private_token: str, n_procs: int, dir_name: str, waiting_time: float = 5e-3
-) -> None:
+) -> Dict[str, int]:
     start = time.time()
-    kwargs = dict(public_token=public_token, private_token=private_token, n_procs=n_procs, dir_name=dir_name)
+    kwargs = dict(public_token=public_token, private_token=private_token, dir_name=dir_name)
+    waiting_time *= 1 + np.random.random()
     while True:
-        waiting_time *= 1.02
-        if is_scheduler_ready(**kwargs):
-            return
+        if is_scheduler_ready(**kwargs, n_procs=n_procs):
+            return get_proc_id_to_idx(**kwargs)
         else:
             time.sleep(waiting_time)
             if time.time() - start >= 5:
@@ -141,27 +164,51 @@ class ObjectiveFunc(Protocol):
 
 
 class WrapperFunc:
-    def __init__(self, public_token: str, private_token: str, proc_id: str, dir_name: str, func: ObjectiveFunc):
-        self._kwargs = dict(public_token=public_token, private_token=private_token, proc_id=proc_id, dir_name=dir_name)
-        record_runtime(**self._kwargs, runtime=0.0)
+    def __init__(
+        self,
+        public_token: str,
+        private_token: str,
+        proc_id: str,
+        dir_name: str,
+        n_procs: int,
+        func: ObjectiveFunc,
+    ):
+        self._kwargs = dict(public_token=public_token, private_token=private_token, dir_name=dir_name)
+        record_cumtime(**self._kwargs, proc_id=proc_id, runtime=0.0)
         self._func = func
         self._proc_id = proc_id
+        self._proc_id_to_index = wait_all_procs(
+            public_token=public_token, private_token=private_token, n_procs=n_procs, dir_name=dir_name
+        )
+        self._index = self._proc_id_to_index[self._proc_id]
+        time.sleep(1e-2)  # buffer before the optimization
         self._prev_timestamp = time.time()
 
-    def __call__(self, eval_config: Dict[str, Any]) -> Dict[str, float]:
+    def _proc_output(self, eval_config: Dict[str, Any], budget: int) -> Dict[str, float]:
+        output = self._func(eval_config, budget)
+        config_key = str(eval_config)
+        cached_runtime = fetch_cache_runtime(**self._kwargs).get(config_key, 0)
+        loss, runtime = output["loss"], max(0.0, output["runtime"] - cached_runtime)
+        runtime = max(cached_runtime, output["runtime"])
+        if cached_runtime < output["runtime"]:
+            cache_runtime(**self._kwargs, config_key=config_key, runtime=runtime)
+
+        return dict(loss=loss, runtime=runtime)
+
+    def __call__(self, eval_config: Dict[str, Any], budget: int) -> Dict[str, float]:
         sampling_time = time.time() - self._prev_timestamp
-        output = self._func(eval_config)
+        output = self._proc_output(eval_config, budget)
         loss, runtime = output["loss"], output["runtime"]
-        cumtime = record_runtime(**self._kwargs, runtime=runtime+sampling_time)
-        wait_until_next(**self._kwargs)
+        cumtime = record_cumtime(**self._kwargs, proc_id=self._proc_id, runtime=runtime+sampling_time)
+        wait_until_next(**self._kwargs, proc_id=self._proc_id)
         self._prev_timestamp = time.time()
-        row = dict(loss=loss, cumtime=cumtime, proc_id=self._proc_id, timestamp=self._prev_timestamp)
-        record_result(**self._kwargs, results=row)
+        row = dict(loss=loss, cumtime=cumtime, proc_index=self._index)
+        record_result(**self._kwargs, proc_id=self._proc_id, results=row)
         return output
 
     def finish(self) -> None:
         inf_time = 1 << 40
-        record_runtime(**self._kwargs, runtime=inf_time)
+        record_cumtime(**self._kwargs, proc_id=self._proc_id, runtime=inf_time)
 
 
 def get_wrapper_func(func: ObjectiveFunc, n_procs: int, subdir_name: str) -> WrapperFunc:
@@ -169,26 +216,22 @@ def get_wrapper_func(func: ObjectiveFunc, n_procs: int, subdir_name: str) -> Wra
     dir_name = os.path.join(DIR_NAME, subdir_name)
     public_token = os.path.join(dir_name, PUBLIC_TOKEN_NAME)
     private_token = os.path.join(dir_name, f"scheduler_{proc_id}.token")
-
     os.makedirs(dir_name, exist_ok=True)
     token_pattern = os.path.join(dir_name, TOKEN_PATTERN)
-    scheduler_path = os.path.join(dir_name, SCHEDULER_FILE_NAME)
-    result_path = os.path.join(dir_name, RESULT_FILE_NAME)
     init_token(token_pattern=token_pattern, public_token=public_token)
-    kwargs = dict(public_token=public_token, private_token=private_token)
-    init_scheduler(**kwargs, scheduler_path=scheduler_path, result_path=result_path)
-    _func = WrapperFunc(**kwargs, func=func, proc_id=proc_id, dir_name=dir_name)
-    wait_all_procs(**kwargs, n_procs=n_procs, dir_name=dir_name)
+    kwargs = dict(public_token=public_token, private_token=private_token, dir_name=dir_name)
+    init_scheduler(**kwargs)
+    _func = WrapperFunc(**kwargs, func=func, proc_id=proc_id, n_procs=n_procs)
     return _func
 
 
 if __name__ == "__main__":
     func = get_wrapper_func(
-        func=lambda eval_config: dict(loss=eval_config["x"] ** 2, runtime=1.0),
+        func=lambda eval_config, budget: dict(loss=eval_config["x"] ** 2, runtime=1.0 * budget / 100),
         n_procs=4,
-        subdir_name="test"
+        subdir_name="test",
     )
     for i in range(10):
-        func({"x": 0.1 * i})
+        func({"x": 0.1 * i}, budget=(i+1)*10)
     else:
         func.finish()
