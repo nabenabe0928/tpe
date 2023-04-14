@@ -2,7 +2,7 @@ import glob
 import hashlib
 import os
 import time
-from typing import Any, Callable, Dict, Protocol
+from typing import Any, Callable, Dict, List, Protocol
 
 import numpy as np
 
@@ -81,10 +81,33 @@ def record_cumtime(public_token: str, private_token: str, proc_id: str, runtime:
 
 
 @verify_token
-def cache_runtime(public_token: str, private_token: str, config_key: str, runtime: float, dir_name: str) -> None:
+def cache_runtime(
+    public_token: str, private_token: str, config_key: str, runtime: float, dir_name: str, update: bool = True
+) -> None:
     path = os.path.join(dir_name, RUNTIME_CACHE_FILE_NAME)
     cache = json.load(open(path))
-    cache[config_key] = runtime
+    if config_key not in cache:
+        cache[config_key] = [runtime]
+    elif update:
+        cache[config_key][0] = runtime
+    else:
+        cache[config_key].append(runtime)
+
+    cache[config_key] = np.sort(cache[config_key]).tolist()
+    with open(path, mode="w") as f:
+        json.dump(cache, f, indent=4)
+
+
+@verify_token
+def delete_runtime(public_token: str, private_token: str, config_key: str, index: float, dir_name: str) -> None:
+    path = os.path.join(dir_name, RUNTIME_CACHE_FILE_NAME)
+    cache = json.load(open(path))
+    n_configs = len(cache.get(config_key, [])) > 0
+    if n_configs <= 1:
+        cache[config_key] = [0.0]  # we need to have at least one element.
+    else:
+        cache[config_key].pop(index)
+
     with open(path, mode="w") as f:
         json.dump(cache, f, indent=4)
 
@@ -172,10 +195,16 @@ class WrapperFunc:
         dir_name: str,
         n_procs: int,
         func: ObjectiveFunc,
+        max_budget: int,
+        runtime_key: str = "runtime",
+        loss_key: str = "loss",
     ):
         self._kwargs = dict(public_token=public_token, private_token=private_token, dir_name=dir_name)
         record_cumtime(**self._kwargs, proc_id=proc_id, runtime=0.0)
         self._func = func
+        self._max_budget = max_budget
+        self._runtime_key = runtime_key
+        self._loss_key = loss_key
         self._proc_id = proc_id
         self._proc_id_to_index = wait_all_procs(
             public_token=public_token, private_token=private_token, n_procs=n_procs, dir_name=dir_name
@@ -184,16 +213,28 @@ class WrapperFunc:
         time.sleep(1e-2)  # buffer before the optimization
         self._prev_timestamp = time.time()
 
+    def _get_cached_runtime_index(self, cached_runtimes: List[float], config_key: str, runtime: float) -> int:
+        # a[i-1] < v <= a[i]: np.searchsorted(..., side="left")
+        idx = np.searchsorted(cached_runtimes, runtime, side="left")
+        return max(0, idx - 1)
+
     def _proc_output(self, eval_config: Dict[str, Any], budget: int) -> Dict[str, float]:
         output = self._func(eval_config, budget)
         config_key = str(eval_config)
-        cached_runtime = fetch_cache_runtime(**self._kwargs).get(config_key, 0)
-        loss, runtime = output["loss"], max(0.0, output["runtime"] - cached_runtime)
-        runtime = max(cached_runtime, output["runtime"])
-        if cached_runtime < output["runtime"]:
-            cache_runtime(**self._kwargs, config_key=config_key, runtime=runtime)
+        loss, total_runtime = output[self._loss_key], output[self._runtime_key]
+        cached_runtimes = fetch_cache_runtime(**self._kwargs).get(config_key, [0.0])
+        cached_runtime_index = self._get_cached_runtime_index(cached_runtimes, config_key, total_runtime)
+        cached_runtime = cached_runtimes[cached_runtime_index]
 
-        return dict(loss=loss, runtime=runtime)
+        actual_runtime = max(0.0, total_runtime - cached_runtime)
+        # Start from the intermediate result, and hence we overwrite the cached runtime
+        overwrite_min_runtime = cached_runtime < total_runtime
+        if budget != self._max_budget:  # update the cache data
+            cache_runtime(**self._kwargs, config_key=config_key, runtime=total_runtime, update=overwrite_min_runtime)
+        else:
+            delete_runtime(**self._kwargs, config_key=config_key, index=cached_runtime_index)
+
+        return {self._loss_key: loss, self._runtime_key: actual_runtime}
 
     def __call__(self, eval_config: Dict[str, Any], budget: int) -> Dict[str, float]:
         sampling_time = time.time() - self._prev_timestamp
@@ -211,7 +252,7 @@ class WrapperFunc:
         record_cumtime(**self._kwargs, proc_id=self._proc_id, runtime=inf_time)
 
 
-def get_wrapper_func(func: ObjectiveFunc, n_procs: int, subdir_name: str) -> WrapperFunc:
+def get_wrapper_func(func: ObjectiveFunc, n_procs: int, subdir_name: str, max_budget: int) -> WrapperFunc:
     proc_id = generate_time_hash()
     dir_name = os.path.join(DIR_NAME, subdir_name)
     public_token = os.path.join(dir_name, PUBLIC_TOKEN_NAME)
@@ -221,7 +262,7 @@ def get_wrapper_func(func: ObjectiveFunc, n_procs: int, subdir_name: str) -> Wra
     init_token(token_pattern=token_pattern, public_token=public_token)
     kwargs = dict(public_token=public_token, private_token=private_token, dir_name=dir_name)
     init_scheduler(**kwargs)
-    _func = WrapperFunc(**kwargs, func=func, proc_id=proc_id, n_procs=n_procs)
+    _func = WrapperFunc(**kwargs, func=func, proc_id=proc_id, n_procs=n_procs, max_budget=max_budget)
     return _func
 
 
@@ -230,8 +271,9 @@ if __name__ == "__main__":
         func=lambda eval_config, budget: dict(loss=eval_config["x"] ** 2, runtime=1.0 * budget / 100),
         n_procs=4,
         subdir_name="test",
+        max_budget=100,
     )
     for i in range(10):
-        func({"x": 0.1 * i}, budget=(i+1)*10)
+        func({"x": 0.1 * i}, budget=(i+1)*(10+func._index))
     else:
         func.finish()
