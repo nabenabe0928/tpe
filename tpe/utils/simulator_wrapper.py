@@ -14,6 +14,7 @@ TOKEN_PATTERN = "scheduler_*.token"
 PUBLIC_TOKEN_NAME = "scheduler.token"
 SCHEDULER_FILE_NAME = "scheduler.json"
 RESULT_FILE_NAME = "results.json"
+PROC_ALLOC_NAME = "proc_alloc.json"
 RUNTIME_CACHE_FILE_NAME = "runtime_cache.json"
 
 
@@ -61,11 +62,32 @@ def init_token(token_pattern: str, public_token: str) -> None:
 
 @verify_token
 def init_scheduler(public_token: str, private_token: str, dir_name: str) -> None:
-    for fn in [SCHEDULER_FILE_NAME, RESULT_FILE_NAME, RUNTIME_CACHE_FILE_NAME]:
+    for fn in [SCHEDULER_FILE_NAME, RESULT_FILE_NAME, RUNTIME_CACHE_FILE_NAME, PROC_ALLOC_NAME]:
         path = os.path.join(dir_name, fn)
         if not os.path.exists(path):
             with open(path, mode="w") as f:
                 json.dump({}, f, indent=4)
+
+
+@verify_token
+def allocate_worker(public_token: str, private_token: str, dir_name: str, pid: int) -> None:
+    path = os.path.join(dir_name, PROC_ALLOC_NAME)
+    cur_alloc = json.load(open(path))
+    cur_alloc[pid] = 0
+    with open(path, mode="w") as f:
+        json.dump(cur_alloc, f, indent=4)
+
+
+@verify_token
+def complete_worker_allocation(public_token: str, private_token: str, dir_name: str) -> Dict[int, int]:
+    path = os.path.join(dir_name, PROC_ALLOC_NAME)
+    alloc = json.load(open(path))
+    sorted_pids = np.sort([int(pid) for pid in alloc.keys()])
+    alloc = {pid: idx for idx, pid in enumerate(sorted_pids)}
+    with open(path, mode="w") as f:
+        json.dump(alloc, f, indent=4)
+
+    return alloc
 
 
 @verify_token
@@ -135,8 +157,20 @@ def record_result(
 
 
 @verify_token
+def is_terminated(public_token: str, private_token: str, dir_name: str, max_evals: int) -> bool:
+    path = os.path.join(dir_name, RESULT_FILE_NAME)
+    return len(json.load(open(path))["loss"]) >= max_evals
+
+
+@verify_token
 def is_scheduler_ready(public_token: str, private_token: str, n_procs: int, dir_name: str) -> bool:
     path = os.path.join(dir_name, SCHEDULER_FILE_NAME)
+    return len(json.load(open(path))) == n_procs
+
+
+@verify_token
+def is_allocation_ready(public_token: str, private_token: str, n_procs: int, dir_name: str) -> bool:
+    path = os.path.join(dir_name, PROC_ALLOC_NAME)
     return len(json.load(open(path))) == n_procs
 
 
@@ -154,8 +188,23 @@ def is_min_cumtime(public_token: str, private_token: str, proc_id: str, dir_name
     return min(cumtime for cumtime in cumtimes.values()) == proc_cumtime
 
 
+def wait_worker_allocation(
+    public_token: str, private_token: str, n_procs: int, dir_name: str, waiting_time: float = 1e-2
+) -> Dict[int, int]:
+    start = time.time()
+    kwargs = dict(public_token=public_token, private_token=private_token, dir_name=dir_name)
+    waiting_time *= 1 + np.random.random()
+    while True:
+        if is_allocation_ready(**kwargs, n_procs=n_procs):
+            return complete_worker_allocation(**kwargs)
+        else:
+            time.sleep(waiting_time)
+            if time.time() - start >= 5:
+                raise TimeoutError("Timeout in the allocation of workers. Please make sure n_procs is correct.")
+
+
 def wait_all_procs(
-    public_token: str, private_token: str, n_procs: int, dir_name: str, waiting_time: float = 5e-3
+    public_token: str, private_token: str, n_procs: int, dir_name: str, waiting_time: float = 1e-2
 ) -> Dict[str, int]:
     start = time.time()
     kwargs = dict(public_token=public_token, private_token=private_token, dir_name=dir_name)
@@ -252,7 +301,14 @@ class WrapperFunc:
         record_cumtime(**self._kwargs, proc_id=self._proc_id, runtime=inf_time)
 
 
-def get_wrapper_func(func: ObjectiveFunc, n_procs: int, subdir_name: str, max_budget: int) -> WrapperFunc:
+def get_wrapper_func(
+    func: ObjectiveFunc,
+    n_procs: int,
+    subdir_name: str,
+    max_budget: int,
+    runtime_key: str = "runtime",
+    loss_key: str = "loss",
+) -> WrapperFunc:
     proc_id = generate_time_hash()
     dir_name = os.path.join(DIR_NAME, subdir_name)
     public_token = os.path.join(dir_name, PUBLIC_TOKEN_NAME)
@@ -262,5 +318,13 @@ def get_wrapper_func(func: ObjectiveFunc, n_procs: int, subdir_name: str, max_bu
     init_token(token_pattern=token_pattern, public_token=public_token)
     kwargs = dict(public_token=public_token, private_token=private_token, dir_name=dir_name)
     init_scheduler(**kwargs)
-    _func = WrapperFunc(**kwargs, func=func, proc_id=proc_id, n_procs=n_procs, max_budget=max_budget)
+    _func = WrapperFunc(
+        **kwargs,
+        func=func,
+        proc_id=proc_id,
+        n_procs=n_procs,
+        max_budget=max_budget,
+        runtime_key=runtime_key,
+        loss_key=loss_key,
+    )
     return _func
