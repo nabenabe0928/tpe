@@ -259,7 +259,7 @@ def wait_proc_allocation(
             return complete_proc_allocation(**kwargs)
         else:
             time.sleep(waiting_time)
-            if time.time() - start >= 5:
+            if time.time() - start >= n_workers * 0.5:
                 raise TimeoutError("Timeout in the allocation of procs. Please make sure n_workers is correct.")
 
 
@@ -274,7 +274,7 @@ def wait_all_workers(
             return get_worker_id_to_idx(**kwargs)
         else:
             time.sleep(waiting_time)
-            if time.time() - start >= 5:
+            if time.time() - start >= n_workers * 0.5:
                 raise TimeoutError("Timeout in creating a simulator. Please make sure n_workers is correct.")
 
 
@@ -302,8 +302,8 @@ class WorkerFunc:
         n_workers: int,
         func: ObjectiveFunc,
         max_budget: int,
-        runtime_key: str = "runtime",
         loss_key: str = "loss",
+        runtime_key: str = "runtime",
     ):
         worker_id = generate_time_hash()
         dir_name = os.path.join(DIR_NAME, subdir_name)
@@ -376,8 +376,8 @@ class CentralWorker:
         max_budget: int,
         max_evals: int,
         subdir_name: str,
-        loss_key: str,
-        runtime_key: str,
+        loss_key: str = "loss",
+        runtime_key: str = "runtime",
     ):
         kwargs = dict(
             func=obj_func,
@@ -388,9 +388,15 @@ class CentralWorker:
             runtime_key=runtime_key,
         )
         pool = Pool()
-        results = [pool.apply_async(WorkerFunc, kwds=kwargs) for _ in range(n_workers)]
+        results = []
+        for _ in range(n_workers):
+            time.sleep(5e-3)
+            results.append(pool.apply_async(WorkerFunc, kwds=kwargs))
+
         pool.close()
         pool.join()
+        self._loss_key = loss_key
+        self._runtime_key = runtime_key
         self._max_evals = max_evals
         self._workers = [result.get() for result in results]
         self._dir_name = self._workers[0]._kwargs["dir_name"]
