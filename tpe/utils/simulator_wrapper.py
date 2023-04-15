@@ -61,6 +61,7 @@ import glob
 import hashlib
 import os
 import time
+from multiprocessing import Pool
 from typing import Any, Callable, Dict, List, Protocol
 
 import numpy as np
@@ -387,3 +388,57 @@ def get_worker_func(
         loss_key=loss_key,
     )
     return _func
+
+
+class CentralWorker:
+    def __init__(
+        self,
+        obj_func: ObjectiveFunc,
+        n_workers: int,
+        max_budget: int,
+        max_evals: int,
+        subdir_name: str,
+        loss_key: str,
+        runtime_key: str,
+    ):
+        kwargs = dict(
+            func=obj_func,
+            n_workers=n_workers,
+            subdir_name=subdir_name,
+            max_budget=max_budget,
+            loss_key=loss_key,
+            runtime_key=runtime_key,
+        )
+        pool = Pool()
+        results = [pool.apply_async(get_worker_func, kwds=kwargs) for _ in range(n_workers)]
+        pool.close()
+        pool.join()
+        self._max_evals = max_evals
+        self._workers = [result.get() for result in results]
+        self._dir_name = self._workers[0]._kwargs["dir_name"]
+        self._public_token = self._workers[0]._kwargs["public_token"]
+        self._n_workers = n_workers
+        self._pid_to_index: Dict[int, int] = {}
+
+    def _token_verification_kwawrgs(self, pid: int) -> Dict[str, str]:
+        private_token = f"_{pid}.".join(self._public_token.split("."))
+        kwargs = dict(public_token=self._public_token, private_token=private_token, dir_name=self._dir_name)
+        return kwargs
+
+    def _init_alloc(self, pid: int) -> None:
+        kwargs = self._token_verification_kwawrgs(pid)
+        allocate_proc_to_worker(**kwargs, pid=pid)
+        self._pid_to_index = wait_proc_allocation(**kwargs, n_workers=self._n_workers)
+
+    def __call__(self, config: Dict, budget: float) -> Dict:
+        pid = os.getpid()
+        if len(self._pid_to_index) != self._n_workers:
+            self._init_alloc(pid)
+
+        worker_index = self._pid_to_index[pid]
+        output = self._workers[worker_index](config, budget)
+        kwargs = self._token_verification_kwawrgs(pid)
+        if is_simulator_terminated(**kwargs, max_evals=self._max_evals):
+            self._workers[worker_index].finish()
+
+        return output
