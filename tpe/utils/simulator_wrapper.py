@@ -291,24 +291,31 @@ def wait_until_next(
 
 
 class ObjectiveFunc(Protocol):
-    def __call__(self, eval_config: Dict[str, Any]) -> Dict[str, float]:
+    def __call__(self, eval_config: Dict[str, Any], budget: int) -> Dict[str, float]:
         raise NotImplementedError
 
 
 class WorkerFunc:
     def __init__(
         self,
-        public_token: str,
-        private_token: str,
-        worker_id: str,
-        dir_name: str,
+        subdir_name: str,
         n_workers: int,
         func: ObjectiveFunc,
         max_budget: int,
         runtime_key: str = "runtime",
         loss_key: str = "loss",
     ):
+        worker_id = generate_time_hash()
+        dir_name = os.path.join(DIR_NAME, subdir_name)
+        public_token = os.path.join(dir_name, PUBLIC_TOKEN_NAME)
+        private_token = os.path.join(dir_name, f"simulator_{worker_id}.token")
+        os.makedirs(dir_name, exist_ok=True)
+        token_pattern = os.path.join(dir_name, TOKEN_PATTERN)
+        init_token(token_pattern=token_pattern, public_token=public_token)
+
         self._kwargs = dict(public_token=public_token, private_token=private_token, dir_name=dir_name)
+        init_simulator(**self._kwargs)
+
         record_cumtime(**self._kwargs, worker_id=worker_id, runtime=0.0)
         self._func = func
         self._max_budget = max_budget
@@ -361,35 +368,6 @@ class WorkerFunc:
         record_cumtime(**self._kwargs, worker_id=self._worker_id, runtime=inf_time)
 
 
-def get_worker_func(
-    func: ObjectiveFunc,
-    n_workers: int,
-    subdir_name: str,
-    max_budget: int,
-    runtime_key: str = "runtime",
-    loss_key: str = "loss",
-) -> WorkerFunc:
-    worker_id = generate_time_hash()
-    dir_name = os.path.join(DIR_NAME, subdir_name)
-    public_token = os.path.join(dir_name, PUBLIC_TOKEN_NAME)
-    private_token = os.path.join(dir_name, f"simulator_{worker_id}.token")
-    os.makedirs(dir_name, exist_ok=True)
-    token_pattern = os.path.join(dir_name, TOKEN_PATTERN)
-    init_token(token_pattern=token_pattern, public_token=public_token)
-    kwargs = dict(public_token=public_token, private_token=private_token, dir_name=dir_name)
-    init_simulator(**kwargs)
-    _func = WorkerFunc(
-        **kwargs,
-        func=func,
-        worker_id=worker_id,
-        n_workers=n_workers,
-        max_budget=max_budget,
-        runtime_key=runtime_key,
-        loss_key=loss_key,
-    )
-    return _func
-
-
 class CentralWorker:
     def __init__(
         self,
@@ -410,7 +388,7 @@ class CentralWorker:
             runtime_key=runtime_key,
         )
         pool = Pool()
-        results = [pool.apply_async(get_worker_func, kwds=kwargs) for _ in range(n_workers)]
+        results = [pool.apply_async(WorkerFunc, kwds=kwargs) for _ in range(n_workers)]
         pool.close()
         pool.join()
         self._max_evals = max_evals
@@ -430,13 +408,13 @@ class CentralWorker:
         allocate_proc_to_worker(**kwargs, pid=pid)
         self._pid_to_index = wait_proc_allocation(**kwargs, n_workers=self._n_workers)
 
-    def __call__(self, config: Dict, budget: float) -> Dict:
+    def __call__(self, eval_config: Dict[str, Any], budget: int) -> Dict:
         pid = os.getpid()
         if len(self._pid_to_index) != self._n_workers:
             self._init_alloc(pid)
 
         worker_index = self._pid_to_index[pid]
-        output = self._workers[worker_index](config, budget)
+        output = self._workers[worker_index](eval_config, budget)
         kwargs = self._token_verification_kwawrgs(pid)
         if is_simulator_terminated(**kwargs, max_evals=self._max_evals):
             self._workers[worker_index].finish()
