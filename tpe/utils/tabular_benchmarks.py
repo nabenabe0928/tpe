@@ -1,7 +1,7 @@
 import json
 import os
 from abc import ABCMeta, abstractmethod
-from typing import Dict, Final, List, Optional, Union
+from typing import Dict, List, Optional, Union
 
 import ConfigSpace as CS
 
@@ -18,7 +18,6 @@ from yahpo_gym import benchmark_set, local_config
 
 
 DATA_DIR_NAME = os.path.join(os.environ["HOME"], "tabular_benchmarks")
-SEEDS: Final = [665, 1319, 7222, 7541, 8916]
 VALUE_RANGES = json.load(open("tpe/utils/tabular_benchmarks.json"))
 local_config.init_config()
 local_config.set_data_path(DATA_DIR_NAME)
