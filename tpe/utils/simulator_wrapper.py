@@ -76,6 +76,7 @@ WORKER_CUMTIME_FILE_NAME = "simulated_cumtime.json"
 RESULT_FILE_NAME = "results.json"
 PROC_ALLOC_NAME = "proc_alloc.json"
 RUNTIME_CACHE_FILE_NAME = "runtime_cache.json"
+INF = 1 << 40
 
 
 def generate_time_hash() -> str:
@@ -321,12 +322,13 @@ class WorkerFunc:
         self._max_budget = max_budget
         self._runtime_key = runtime_key
         self._loss_key = loss_key
+        self._terminated = False
         self._worker_id = worker_id
         self._worker_id_to_index = wait_all_workers(
             public_token=public_token, private_token=private_token, n_workers=n_workers, dir_name=dir_name
         )
-        self._index = self._worker_id_to_index[self._worker_id]
         time.sleep(1e-2)  # buffer before the optimization
+        self._index = self._worker_id_to_index[self._worker_id]
         self._prev_timestamp = time.time()
 
     def _get_cached_runtime_index(self, cached_runtimes: List[float], config_key: str, runtime: float) -> int:
@@ -353,6 +355,9 @@ class WorkerFunc:
         return {self._loss_key: loss, self._runtime_key: actual_runtime}
 
     def __call__(self, eval_config: Dict[str, Any], budget: int) -> Dict[str, float]:
+        if self._terminated:
+            return {self._loss_key: INF, self._runtime_key: INF}
+
         sampling_time = time.time() - self._prev_timestamp
         output = self._proc_output(eval_config, budget)
         loss, runtime = output[self._loss_key], output[self._runtime_key]
@@ -364,8 +369,8 @@ class WorkerFunc:
         return output
 
     def finish(self) -> None:
-        inf_time = 1 << 40
-        record_cumtime(**self._kwargs, worker_id=self._worker_id, runtime=inf_time)
+        record_cumtime(**self._kwargs, worker_id=self._worker_id, runtime=INF)
+        self._terminated = True
 
 
 class CentralWorker:
