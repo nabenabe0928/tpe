@@ -64,6 +64,43 @@ class LCBench(AbstractBench):
     # https://syncandshare.lrz.de/getlink/fiCMkzqj1bv1LfCUyvZKmLvd/
     _target_metric = "val_balanced_accuracy"
     _TRUE_MAX_BUDGET = 52
+    _N_DATASETS = 34
+    _DATASET_NAMES = (
+        "kddcup09",
+        "covertype",
+        "amazon-employee-access",
+        "adult",
+        "nomao",
+        "bank-marketing",
+        "shuttle",
+        "australian",
+        "kr-vs-kp",
+        "mfeat-factors",
+        "credit-g",
+        "vehicle",
+        "kc1",
+        "blood-transfusion-service-center",
+        "cnae-9",
+        "phoneme",
+        "higgs",
+        "connect-4",
+        "helena",
+        "jannis",
+        "volkert",
+        "mini-boo-ne",
+        "aps-failure",
+        "christine",
+        "fabert",
+        "airlines",
+        "jasmine",
+        "sylvine",
+        "albert",
+        "dionis",
+        "car",
+        "segment",
+        "fashion-mnist",
+        "jungle-chess-2pcs-raw-endgame-complete",
+    )
 
     def __init__(
         self,
@@ -158,6 +195,8 @@ class HPOLib(AbstractBench):
         $ wget http://ml4aad.org/wp-content/uploads/2019/01/fcnet_tabular_benchmarks.tar.gz
         $ tar xf fcnet_tabular_benchmarks.tar.gz
     """
+    _N_DATASETS = 4
+    _DATASET_NAMES = ("slice-localization", "protein-structure",  "naval-propulsion", "parkinsons-telemonitoring")
 
     def __init__(
         self,
@@ -198,6 +237,8 @@ class HPOLib(AbstractBench):
 
 class JAHSBench201(AbstractBench):
     _target_metric = "valid-acc"
+    _N_DATASETS = 3
+    _DATASET_NAMES = ("cifar10", "fashion-mnist", "colorectal-histology")
 
     def __init__(
         self,

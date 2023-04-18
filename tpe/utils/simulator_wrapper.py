@@ -275,7 +275,7 @@ def wait_all_workers(
             return get_worker_id_to_idx(**kwargs)
         else:
             time.sleep(waiting_time)
-            if time.time() - start >= n_workers * 0.5:
+            if time.time() - start >= n_workers * 5:
                 raise TimeoutError("Timeout in creating a simulator. Please make sure n_workers is correct.")
 
 
@@ -330,6 +330,9 @@ class WorkerFunc:
         time.sleep(1e-2)  # buffer before the optimization
         self._index = self._worker_id_to_index[self._worker_id]
         self._prev_timestamp = time.time()
+
+    def __repr__(self) -> str:
+        return f"Worker-{self._worker_id}"
 
     def _get_cached_runtime_index(self, cached_runtimes: List[float], config_key: str, runtime: float) -> int:
         # a[i-1] < v <= a[i]: np.searchsorted(..., side="left")

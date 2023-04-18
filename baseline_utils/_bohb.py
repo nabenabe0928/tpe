@@ -87,7 +87,7 @@ def run_bohb(
     subdir_name: str,
     ns_host: str = "127.0.0.1",
     max_evals: int = 450,  # eta=3,S=2,100 full evals
-    n_hb_iteration: int = 22,
+    n_brackets: int = 66,  # 22 HB iter --> 33 SH brackets
 ) -> None:
     ns = hpns.NameServer(run_id=run_id, host=ns_host, port=None)
     ns.start()
@@ -106,6 +106,6 @@ def run_bohb(
         min_budget=min_budget,
         max_budget=max_budget,
     )
-    bohb.run(n_iterations=n_hb_iteration, min_n_workers=n_workers)
+    bohb.run(n_iterations=n_brackets, min_n_workers=n_workers)
     bohb.shutdown(shutdown_workers=True)
     ns.shutdown()
