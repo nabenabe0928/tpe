@@ -50,6 +50,12 @@ class AbstractBench(metaclass=ABCMeta):
 
     @property
     @abstractmethod
+    def min_budget(self) -> int:
+        # eta ** S <= R/r < eta ** (S + 1) to have S rungs.
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
     def max_budget(self) -> int:
         raise NotImplementedError
 
@@ -57,6 +63,7 @@ class AbstractBench(metaclass=ABCMeta):
 class LCBench(AbstractBench):
     # https://syncandshare.lrz.de/getlink/fiCMkzqj1bv1LfCUyvZKmLvd/
     _target_metric = "val_balanced_accuracy"
+    _TRUE_MAX_BUDGET = 52
 
     def __init__(
         self,
@@ -104,6 +111,7 @@ class LCBench(AbstractBench):
         self._config_space = self.config_space
 
     def __call__(self, config: Dict[str, Union[int, float]], budget: int = 52) -> Dict[str, float]:
+        budget = int(min(self._TRUE_MAX_BUDGET, budget))
         EPS = 1e-12
         for hp in self._config_space.get_hyperparameters():
             lb, ub, name = hp.lower, hp.upper, hp.name
@@ -135,8 +143,13 @@ class LCBench(AbstractBench):
         return config_space
 
     @property
+    def min_budget(self) -> int:
+        return 6
+
+    @property
     def max_budget(self) -> int:
-        return 52
+        # in reality, the max_budget is 52, but make it 54 only for computational convenience.
+        return 54
 
 
 class HPOLib(AbstractBench):
@@ -163,6 +176,7 @@ class HPOLib(AbstractBench):
         self._value_range = VALUE_RANGES["hpolib"]
 
     def __call__(self, config: Dict[str, Union[int, str]], budget: int = 100) -> Dict[str, float]:
+        budget = int(budget)
         idx = self._rng.randint(4)
         key = json.dumps({k: self._value_range[k][int(v)] for k, v in config.items()}, sort_keys=True)
         loss = self._db[key]["valid_mse"][idx][budget - 1]
@@ -172,6 +186,10 @@ class HPOLib(AbstractBench):
     @property
     def config_space(self) -> CS.ConfigurationSpace:
         return self._fetch_discrete_config_space()
+
+    @property
+    def min_budget(self) -> int:
+        return 11
 
     @property
     def max_budget(self) -> int:
@@ -196,6 +214,7 @@ class JAHSBench201(AbstractBench):
         self._value_range = VALUE_RANGES["jahs-bench"]
 
     def __call__(self, config: Dict[str, Union[int, str, float]], budget: int = 200) -> Dict[str, float]:
+        budget = int(budget)
         EPS = 1e-12
         config = {k: self._value_range[k][int(v)] if k in self._value_range else float(v) for k, v in config.items()}
         assert isinstance(config["LearningRate"], float) and 1e-3 - EPS <= config["LearningRate"] <= 1.0 + EPS
@@ -215,6 +234,10 @@ class JAHSBench201(AbstractBench):
             ]
         )
         return config_space
+
+    @property
+    def min_budget(self) -> int:
+        return 22
 
     @property
     def max_budget(self) -> int:
