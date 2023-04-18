@@ -13,6 +13,19 @@ This package requires python 3.8 or later version and you can install
 pip install tpe
 ```
 
+# Debug memo for comparison methods
+
+As the Hyperband implementations of [DEHB (L135 of dehb.optimizers.dehb.py)](https://github.com/automl/DEHB/issues/27), [BOHB (L92 of hpbandster.optimizers.hyperband.py, L138 of hpbandster.optimizers.bohb.py, L117 of hpbandster.optimizers.lcnet.py, L143 of hpbandster.optimizers.h2bo.py)](https://github.com/automl/HpBandSter/issues/113), and [NePS (L199 of src.neps.optimizers.multi_fidelity.successive_halving.py, L682 of src.neps.optimizers.multi_fidelity_prior.raceband.py)](https://github.com/automl/neps/issues/11) were not consistent with the original paper, we modified the corresponding parts.
+
+Note that the versions of each package are as follows:
+```
+hpbandster==0.7.4
+dehb==0.0.5
+neural-pipeline-search==0.8.3
+```
+and the line numbers for each package depend on these versions.
+
+
 # Running example
 The optimization of 10D sphere function can be executed as follows:
 
