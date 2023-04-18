@@ -3,7 +3,7 @@ import os
 from argparse import ArgumentParser, Namespace
 from enum import Enum
 from logging import DEBUG, FileHandler, Formatter, Logger, basicConfig, getLogger
-from typing import Any, Dict, List, Literal, Optional, Type, TypedDict, Union
+from typing import Any, Dict, List, Literal, Optional, Protocol, Type, TypedDict, Union
 
 import ConfigSpace as CS
 import ConfigSpace.hyperparameters as CSH
@@ -19,6 +19,11 @@ from tpe.utils.constants import (
 
 
 bool_json = Literal["True", "False"]
+
+
+class AbstractObjFunc(Protocol):
+    def __call__(self, eval_configs: Dict[str, Any], budget: int) -> Dict[str, float]:
+        raise NotImplementedError
 
 
 class MetaInformation(TypedDict):
