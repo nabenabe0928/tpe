@@ -2,7 +2,7 @@ import json
 import os
 import pickle
 from abc import ABCMeta, abstractmethod
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, TypedDict, Union
 
 import ConfigSpace as CS
 
@@ -20,6 +20,20 @@ DATA_DIR_NAME = os.path.join(os.environ["HOME"], "tabular_benchmarks")
 VALUE_RANGES = json.load(open("tpe/utils/tabular_benchmarks.json"))
 local_config.init_config()
 local_config.set_data_path(DATA_DIR_NAME)
+
+
+class RowDataType(TypedDict):
+    valid_mse: List[Dict[int, float]]
+    runtime: List[float]
+
+
+class _HPOLibDatabase:
+    def __init__(self, dataset_name: str):
+        data_path = os.path.join(DATA_DIR_NAME, "hpolib", f"{dataset_name}.pkl")
+        self._db = pickle.load(open(data_path, "rb"))
+
+    def __getitem__(self, key: str) -> Dict[str, RowDataType]:
+        return self._db[key]
 
 
 class AbstractBench(metaclass=ABCMeta):
@@ -213,8 +227,7 @@ class HPOLib(AbstractBench):
             "naval_propulsion",
             "parkinsons_telemonitoring",
         ][dataset_id]
-        data_path = os.path.join(DATA_DIR_NAME, "hpolib", f"{self.dataset_name}.pkl")
-        self._db = pickle.load(open(data_path, "rb"))
+        self._db = _HPOLibDatabase(self.dataset_name)
         self._rng = np.random.RandomState(seed)
         self._value_range = VALUE_RANGES["hpolib"]
 
