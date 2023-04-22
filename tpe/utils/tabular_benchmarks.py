@@ -1,11 +1,10 @@
 import json
 import os
+import pickle
 from abc import ABCMeta, abstractmethod
 from typing import Dict, List, Optional, Union
 
 import ConfigSpace as CS
-
-import h5py
 
 try:
     import jahs_bench
@@ -144,7 +143,7 @@ class LCBench(AbstractBench):
             ("jungle_chess_2pcs_raw_endgame_complete", "189909")
         )
         self.dataset_name, self._dataset_id = dataset_info[dataset_id]
-        self._surrogate = benchmark_set.BenchmarkSet("lcbench", instance=self._dataset_id)
+        self._surrogate = benchmark_set.BenchmarkSet("lcbench", instance=self._dataset_id, active_session=False)
         self._config_space = self.config_space
 
     def __call__(self, config: Dict[str, Union[int, float]], budget: int = 52) -> Dict[str, float]:
@@ -157,6 +156,9 @@ class LCBench(AbstractBench):
             else:
                 config[name] = int(config[name])
                 assert isinstance(config[name], int) and lb <= config[name] <= ub
+
+        if isinstance(config, CS.Configuration):
+            config = config.get_dictionary()
 
         config["OpenML_task_id"] = self._dataset_id
         config["epoch"] = budget
@@ -194,6 +196,8 @@ class HPOLib(AbstractBench):
     Download the datasets via:
         $ wget http://ml4aad.org/wp-content/uploads/2019/01/fcnet_tabular_benchmarks.tar.gz
         $ tar xf fcnet_tabular_benchmarks.tar.gz
+
+    Use https://github.com/nabenabe0928/hpolib-extractor to extract the pickle file.
     """
     _N_DATASETS = 4
     _DATASET_NAMES = ("slice-localization", "protein-structure",  "naval-propulsion", "parkinsons-telemonitoring")
@@ -209,8 +213,8 @@ class HPOLib(AbstractBench):
             "naval_propulsion",
             "parkinsons_telemonitoring",
         ][dataset_id]
-        data_path = os.path.join(DATA_DIR_NAME, "hpolib", f"fcnet_{self.dataset_name}_data.hdf5")
-        self._db = h5py.File(data_path, "r")
+        data_path = os.path.join(DATA_DIR_NAME, "hpolib", f"{self.dataset_name}.pkl")
+        self._db = pickle.load(open(data_path, "rb"))
         self._rng = np.random.RandomState(seed)
         self._value_range = VALUE_RANGES["hpolib"]
 
