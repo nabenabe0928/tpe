@@ -57,6 +57,7 @@ Each list gets more than two elements if evaluations of the same configs happen.
 This file tells you how much time each worker virtually spends in the simulation
 and we need this information to manage the order of job allocations to each worker.
 """
+import fcntl
 import glob
 import hashlib
 import os
@@ -121,13 +122,19 @@ def init_token(token_pattern: str, public_token: str) -> None:
         raise FileExistsError
 
 
-@verify_token
-def init_simulator(public_token: str, private_token: str, dir_name: str) -> None:
+def init_simulator(dir_name: str) -> None:
     for fn in [WORKER_CUMTIME_FILE_NAME, RESULT_FILE_NAME, RUNTIME_CACHE_FILE_NAME, PROC_ALLOC_NAME]:
         path = os.path.join(dir_name, fn)
-        if not os.path.exists(path):
-            with open(path, mode="w") as f:
-                json.dump({}, f, indent=4)
+        with open(path, "a+") as f:
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+            f.seek(0)
+            content = f.read()
+            if len(content) < 2:
+                f.seek(0)
+                f.truncate()
+                f.write("{}")
+
+            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
 
 @verify_token
@@ -315,7 +322,7 @@ class WorkerFunc:
         init_token(token_pattern=token_pattern, public_token=public_token)
 
         self._kwargs = dict(public_token=public_token, private_token=private_token, dir_name=dir_name)
-        init_simulator(**self._kwargs)
+        init_simulator(dir_name=dir_name)
 
         record_cumtime(**self._kwargs, worker_id=worker_id, runtime=0.0)
         self._func = func
