@@ -153,14 +153,21 @@ def allocate_proc_to_worker(dir_name: str, pid: int) -> None:
             fcntl.flock(f, fcntl.LOCK_UN)
 
 
-@verify_token
-def complete_proc_allocation(public_token: str, private_token: str, dir_name: str) -> Dict[int, int]:
+def complete_proc_allocation(dir_name: str) -> Dict[int, int]:
     path = os.path.join(dir_name, PROC_ALLOC_NAME)
-    alloc = json.load(open(path))
-    sorted_pids = np.sort([int(pid) for pid in alloc.keys()])
-    alloc = {pid: idx for idx, pid in enumerate(sorted_pids)}
-    with open(path, mode="w") as f:
-        json.dump(alloc, f, indent=4)
+    with open(path, "r+") as f:
+        try:
+            fcntl.flock(f, fcntl.LOCK_EX)
+            alloc = json.load(f)
+            sorted_pids = np.sort([int(pid) for pid in alloc.keys()])
+            alloc = {pid: idx for idx, pid in enumerate(sorted_pids)}
+            f.seek(0)
+            json.dump(alloc, f, indent=4)
+            f.truncate()
+        except IOError:
+            pass
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
 
     return alloc
 
@@ -271,7 +278,7 @@ def wait_proc_allocation(
     waiting_time *= 1 + np.random.random()
     while True:
         if is_allocation_ready(**kwargs, n_workers=n_workers):
-            return complete_proc_allocation(**kwargs)
+            return complete_proc_allocation(dir_name)
         else:
             time.sleep(waiting_time)
             if time.time() - start >= n_workers * 0.5:
