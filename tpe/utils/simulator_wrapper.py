@@ -4,7 +4,6 @@ In multi-fidelity optimizations, as we often evaluate configs in parallel,
 it is essential to manage the order of config allocations to each worker.
 We allow such appropriate allocations with the utilities in this file.
 To guarantee the safety, we share variables with each process using the file system.
-Each file is protected by a token and it strictly prohibits more than one processes access to each file simaltaneously.
 
 We first define some terminologies:
 * simulator: A system that manages simulated runtimes to allow optimizations of a tabular/surrogate benchmark
@@ -14,8 +13,6 @@ We first define some terminologies:
 * worker_id: The time hash generated for each worker.
 * pid or proc_id: The process ID for each proc obtained by `os.getpid()`, which is an integer.
 * index: The index of each worker. (it will be one of the integers in [0, N - 1] where N is the # of workers.)
-* token: Each process has a unique token and each process can access to each file
-         only if the token exists in the file system.
 
 Now we describe each file shared with each process.
 Note that each file takes the json-dict format and we write down as follows:
@@ -58,7 +55,6 @@ This file tells you how much time each worker virtually spends in the simulation
 and we need this information to manage the order of job allocations to each worker.
 """
 import fcntl
-import glob
 import hashlib
 import os
 import time
@@ -72,8 +68,6 @@ import ujson as json
 
 
 DIR_NAME = "simulator_info/"
-TOKEN_PATTERN = "simulator_*.token"
-PUBLIC_TOKEN_NAME = "simulator.token"
 WORKER_CUMTIME_FILE_NAME = "simulated_cumtime.json"
 RESULT_FILE_NAME = "results.json"
 PROC_ALLOC_NAME = "proc_alloc.json"
@@ -85,33 +79,6 @@ def generate_time_hash() -> str:
     hash = hashlib.sha1()
     hash.update(str(time.time()).encode("utf-8"))
     return hash.hexdigest()
-
-
-def publish_token(public_token: str, private_token: str, waiting_time: float = 1e-4) -> None:
-    start = time.time()
-    waiting_time *= 1 + np.random.random()
-    while True:
-        try:
-            os.rename(public_token, private_token)
-            return
-        except FileNotFoundError:
-            time.sleep(waiting_time)
-            if time.time() - start >= 10:
-                raise TimeoutError("Timeout during token publication. Please remove token files and try again.")
-
-
-def remove_token(public_token: str, private_token: str) -> None:
-    os.rename(private_token, public_token)
-
-
-def verify_token(func: Callable) -> Callable:
-    def _inner(public_token: str, private_token: str, **kwargs):
-        publish_token(public_token=public_token, private_token=private_token)
-        output = func(public_token=public_token, private_token=private_token, **kwargs)
-        remove_token(public_token=public_token, private_token=private_token)
-        return output
-
-    return _inner
 
 
 def secure_read(func: Callable) -> Callable:
@@ -161,15 +128,6 @@ def secure_edit(func: Callable) -> Callable:
     return _inner
 
 
-def init_token(token_pattern: str, public_token: str) -> None:
-    n_tokens = len(glob.glob(token_pattern))
-    if n_tokens == 0:
-        with open(public_token, mode="w"):
-            pass
-    elif n_tokens > 1:  # Token from another process could exist!
-        raise FileExistsError
-
-
 def init_simulator(dir_name: str) -> None:
     for fn in [WORKER_CUMTIME_FILE_NAME, RESULT_FILE_NAME, RUNTIME_CACHE_FILE_NAME, PROC_ALLOC_NAME]:
         path = os.path.join(dir_name, fn)
@@ -215,7 +173,6 @@ def record_cumtime(f: TextIOWrapper, worker_id: str, runtime: float) -> float:
 
 @secure_edit
 def cache_runtime(f: TextIOWrapper, config_key: str, runtime: float, update: bool = True) -> None:
-    # path = os.path.join(dir_name, RUNTIME_CACHE_FILE_NAME)
     cache = json.load(f)
     if config_key not in cache:
         cache[config_key] = [runtime]
@@ -249,7 +206,6 @@ def fetch_cache_runtime(f: TextIOWrapper) -> None:
 
 @secure_edit
 def record_result(f: TextIOWrapper, results: Dict[str, float]) -> None:
-    # path = os.path.join(dir_name, RESULT_FILE_NAME)
     record = json.load(f)
     for key, val in results.items():
         if key not in record:
@@ -288,40 +244,34 @@ def is_min_cumtime(f: TextIOWrapper, worker_id: str) -> bool:
     return min(cumtime for cumtime in cumtimes.values()) == proc_cumtime
 
 
-def wait_proc_allocation(
-    public_token: str, private_token: str, n_workers: int, dir_name: str, waiting_time: float = 1e-2
-) -> Dict[int, int]:
+def wait_proc_allocation(path: str, n_workers: int, waiting_time: float = 1e-2) -> Dict[int, int]:
     start = time.time()
     waiting_time *= 1 + np.random.random()
     while True:
-        if is_allocation_ready(os.path.join(dir_name, PROC_ALLOC_NAME), n_workers=n_workers):
-            return complete_proc_allocation(os.path.join(dir_name, PROC_ALLOC_NAME))
+        if is_allocation_ready(path, n_workers=n_workers):
+            return complete_proc_allocation(path)
         else:
             time.sleep(waiting_time)
             if time.time() - start >= n_workers * 0.5:
                 raise TimeoutError("Timeout in the allocation of procs. Please make sure n_workers is correct.")
 
 
-def wait_all_workers(
-    public_token: str, private_token: str, n_workers: int, dir_name: str, waiting_time: float = 1e-2
-) -> Dict[str, int]:
+def wait_all_workers(path: str, n_workers: int, waiting_time: float = 1e-2) -> Dict[str, int]:
     start = time.time()
     waiting_time *= 1 + np.random.random()
     while True:
-        if is_simulator_ready(os.path.join(dir_name, WORKER_CUMTIME_FILE_NAME), n_workers=n_workers):
-            return get_worker_id_to_idx(os.path.join(dir_name, WORKER_CUMTIME_FILE_NAME))
+        if is_simulator_ready(path, n_workers=n_workers):
+            return get_worker_id_to_idx(path)
         else:
             time.sleep(waiting_time)
             if time.time() - start >= n_workers * 5:
                 raise TimeoutError("Timeout in creating a simulator. Please make sure n_workers is correct.")
 
 
-def wait_until_next(
-    public_token: str, private_token: str, worker_id: str, dir_name: str, waiting_time: float = 1e-4
-) -> None:
+def wait_until_next(path: str, worker_id: str, waiting_time: float = 1e-4) -> None:
     waiting_time *= 1 + np.random.random()
     while True:
-        if is_min_cumtime(os.path.join(dir_name, WORKER_CUMTIME_FILE_NAME), worker_id=worker_id):
+        if is_min_cumtime(path, worker_id=worker_id):
             return
         else:
             time.sleep(waiting_time)
@@ -343,33 +293,29 @@ class WorkerFunc:
         runtime_key: str = "runtime",
     ):
         worker_id = generate_time_hash()
-        dir_name = os.path.join(DIR_NAME, subdir_name)
-        public_token = os.path.join(dir_name, PUBLIC_TOKEN_NAME)
-        private_token = os.path.join(dir_name, f"simulator_{worker_id}.token")
-        os.makedirs(dir_name, exist_ok=True)
-        token_pattern = os.path.join(dir_name, TOKEN_PATTERN)
-        init_token(token_pattern=token_pattern, public_token=public_token)
+        self._dir_name = os.path.join(DIR_NAME, subdir_name)
+        os.makedirs(self.dir_name, exist_ok=True)
+        init_simulator(dir_name=self.dir_name)
+        self._cumtime_path = os.path.join(self.dir_name, WORKER_CUMTIME_FILE_NAME)
+        record_cumtime(path=self._cumtime_path, worker_id=worker_id, runtime=0.0)
 
-        self._kwargs = dict(public_token=public_token, private_token=private_token, dir_name=dir_name)
-        init_simulator(dir_name=dir_name)
-
-        record_cumtime(path=os.path.join(dir_name, WORKER_CUMTIME_FILE_NAME), worker_id=worker_id, runtime=0.0)
-        self._dir_name = dir_name
         self._func = func
         self._max_budget = max_budget
         self._runtime_key = runtime_key
         self._loss_key = loss_key
         self._terminated = False
         self._worker_id = worker_id
-        self._worker_id_to_index = wait_all_workers(
-            public_token=public_token, private_token=private_token, n_workers=n_workers, dir_name=dir_name
-        )
+        self._worker_id_to_index = wait_all_workers(path=self._cumtime_path, n_workers=n_workers)
         time.sleep(1e-2)  # buffer before the optimization
         self._index = self._worker_id_to_index[self._worker_id]
         self._prev_timestamp = time.time()
 
     def __repr__(self) -> str:
         return f"Worker-{self._worker_id}"
+
+    @property
+    def dir_name(self) -> str:
+        return self._dir_name
 
     def _get_cached_runtime_index(self, cached_runtimes: List[float], config_key: str, runtime: float) -> int:
         # a[i-1] < v <= a[i]: np.searchsorted(..., side="left")
@@ -380,7 +326,7 @@ class WorkerFunc:
         output = self._func(eval_config, budget)
         config_key = str(eval_config)
         loss, total_runtime = output[self._loss_key], output[self._runtime_key]
-        _path = os.path.join(self._dir_name, RUNTIME_CACHE_FILE_NAME)
+        _path = os.path.join(self.dir_name, RUNTIME_CACHE_FILE_NAME)
         cached_runtimes = fetch_cache_runtime(_path).get(config_key, [0.0])
         cached_runtime_index = self._get_cached_runtime_index(cached_runtimes, config_key, total_runtime)
         cached_runtime = cached_runtimes[cached_runtime_index]
@@ -402,18 +348,15 @@ class WorkerFunc:
         sampling_time = time.time() - self._prev_timestamp
         output = self._proc_output(eval_config, budget)
         loss, runtime = output[self._loss_key], output[self._runtime_key]
-        _path = os.path.join(self._dir_name, WORKER_CUMTIME_FILE_NAME)
-        cumtime = record_cumtime(path=_path, worker_id=self._worker_id, runtime=runtime+sampling_time)
-        wait_until_next(**self._kwargs, worker_id=self._worker_id)
+        cumtime = record_cumtime(path=self._cumtime_path, worker_id=self._worker_id, runtime=runtime+sampling_time)
+        wait_until_next(path=self._cumtime_path, worker_id=self._worker_id)
         self._prev_timestamp = time.time()
         row = dict(loss=loss, cumtime=cumtime, index=self._index)
-        record_result(os.path.join(self._dir_name, RESULT_FILE_NAME), results=row)
+        record_result(os.path.join(self.dir_name, RESULT_FILE_NAME), results=row)
         return output
 
     def finish(self) -> None:
-        record_cumtime(
-            path=os.path.join(self._dir_name, WORKER_CUMTIME_FILE_NAME), worker_id=self._worker_id, runtime=INF
-        )
+        record_cumtime(path=self._cumtime_path, worker_id=self._worker_id, runtime=INF)
         self._terminated = True
 
 
@@ -448,20 +391,14 @@ class CentralWorker:
         self._runtime_key = runtime_key
         self._max_evals = max_evals
         self._workers = [result.get() for result in results]
-        self._dir_name = self._workers[0]._kwargs["dir_name"]
-        self._public_token = self._workers[0]._kwargs["public_token"]
+        self._dir_name = self._workers[0].dir_name
         self._n_workers = n_workers
         self._pid_to_index: Dict[int, int] = {}
 
-    def _token_verification_kwawrgs(self, pid: int) -> Dict[str, str]:
-        private_token = f"_{pid}.".join(self._public_token.split("."))
-        kwargs = dict(public_token=self._public_token, private_token=private_token, dir_name=self._dir_name)
-        return kwargs
-
     def _init_alloc(self, pid: int) -> None:
-        kwargs = self._token_verification_kwawrgs(pid)
-        allocate_proc_to_worker(os.path.join(self._dir_name, PROC_ALLOC_NAME), pid=pid)
-        self._pid_to_index = wait_proc_allocation(**kwargs, n_workers=self._n_workers)
+        _path = os.path.join(self._dir_name, PROC_ALLOC_NAME)
+        allocate_proc_to_worker(path=_path, pid=pid)
+        self._pid_to_index = wait_proc_allocation(path=_path, n_workers=self._n_workers)
 
     def __call__(self, eval_config: Dict[str, Any], budget: int) -> Dict:
         pid = os.getpid()
@@ -470,8 +407,8 @@ class CentralWorker:
 
         worker_index = self._pid_to_index[pid]
         output = self._workers[worker_index](eval_config, budget)
-        # kwargs = self._token_verification_kwawrgs(pid)
-        if is_simulator_terminated(os.path.join(self._dir_name, RESULT_FILE_NAME), max_evals=self._max_evals):
+        _path = os.path.join(self._dir_name, RESULT_FILE_NAME)
+        if is_simulator_terminated(_path, max_evals=self._max_evals):
             self._workers[worker_index].finish()
 
         return output
