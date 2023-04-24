@@ -62,6 +62,7 @@ import glob
 import hashlib
 import os
 import time
+from _io import TextIOWrapper
 from multiprocessing import Pool
 from typing import Any, Callable, Dict, List, Protocol
 
@@ -109,6 +110,28 @@ def verify_token(func: Callable) -> Callable:
         output = func(public_token=public_token, private_token=private_token, **kwargs)
         remove_token(public_token=public_token, private_token=private_token)
         return output
+
+    return _inner
+
+
+def secure_read(func: Callable) -> Callable:
+    def _inner(path: str, waiting_time: float = 1e-4, **kwargs):
+        start = time.time()
+        waiting_time *= 1 + np.random.random()
+        fetched = False
+        while True:
+            with open(path, "r") as f:
+                try:
+                    fcntl.flock(f, fcntl.LOCK_SH | fcntl.LOCK_NB)
+                    output = func(f, **kwargs)
+                    fetched = True
+                except IOError:
+                    time.sleep(waiting_time)
+                    if time.time() - start >= 10:
+                        raise TimeoutError("Timeout during secure read. Try again.")
+
+            if fetched:
+                return output
 
     return _inner
 
@@ -224,10 +247,9 @@ def delete_runtime(public_token: str, private_token: str, config_key: str, index
         json.dump(cache, f, indent=4)
 
 
-@verify_token
-def fetch_cache_runtime(public_token: str, private_token: str, dir_name: str) -> None:
-    path = os.path.join(dir_name, RUNTIME_CACHE_FILE_NAME)
-    return json.load(open(path))
+@secure_read
+def fetch_cache_runtime(f: TextIOWrapper) -> None:
+    return json.load(f)
 
 
 @verify_token
@@ -246,34 +268,29 @@ def record_result(
         json.dump(record, f, indent=4)
 
 
-@verify_token
-def is_simulator_terminated(public_token: str, private_token: str, dir_name: str, max_evals: int) -> bool:
-    path = os.path.join(dir_name, RESULT_FILE_NAME)
-    return len(json.load(open(path))["loss"]) >= max_evals
+@secure_read
+def is_simulator_terminated(f: TextIOWrapper, max_evals: int) -> bool:
+    return len(json.load(f)["loss"]) >= max_evals
 
 
-@verify_token
-def is_simulator_ready(public_token: str, private_token: str, n_workers: int, dir_name: str) -> bool:
-    path = os.path.join(dir_name, WORKER_CUMTIME_FILE_NAME)
-    return len(json.load(open(path))) == n_workers
+@secure_read
+def is_simulator_ready(f: TextIOWrapper, n_workers: int) -> bool:
+    return len(json.load(f)) == n_workers
 
 
-@verify_token
-def is_allocation_ready(public_token: str, private_token: str, n_workers: int, dir_name: str) -> bool:
-    path = os.path.join(dir_name, PROC_ALLOC_NAME)
-    return len(json.load(open(path))) == n_workers
+@secure_read
+def is_allocation_ready(f: TextIOWrapper, n_workers: int) -> bool:
+    return len(json.load(f)) == n_workers
 
 
-@verify_token
-def get_worker_id_to_idx(public_token: str, private_token: str, dir_name: str) -> Dict[str, int]:
-    path = os.path.join(dir_name, WORKER_CUMTIME_FILE_NAME)
-    return {worker_id: idx for idx, worker_id in enumerate(json.load(open(path)).keys())}
+@secure_read
+def get_worker_id_to_idx(f: TextIOWrapper) -> Dict[str, int]:
+    return {worker_id: idx for idx, worker_id in enumerate(json.load(f).keys())}
 
 
-@verify_token
-def is_min_cumtime(public_token: str, private_token: str, worker_id: str, dir_name: str) -> bool:
-    path = os.path.join(dir_name, WORKER_CUMTIME_FILE_NAME)
-    cumtimes = json.load(open(path))
+@secure_read
+def is_min_cumtime(f: TextIOWrapper, worker_id: str) -> bool:
+    cumtimes = json.load(f)
     proc_cumtime = cumtimes[worker_id]
     return min(cumtime for cumtime in cumtimes.values()) == proc_cumtime
 
@@ -282,10 +299,9 @@ def wait_proc_allocation(
     public_token: str, private_token: str, n_workers: int, dir_name: str, waiting_time: float = 1e-2
 ) -> Dict[int, int]:
     start = time.time()
-    kwargs = dict(public_token=public_token, private_token=private_token, dir_name=dir_name)
     waiting_time *= 1 + np.random.random()
     while True:
-        if is_allocation_ready(**kwargs, n_workers=n_workers):
+        if is_allocation_ready(os.path.join(dir_name, PROC_ALLOC_NAME), n_workers=n_workers):
             return complete_proc_allocation(dir_name)
         else:
             time.sleep(waiting_time)
@@ -297,11 +313,10 @@ def wait_all_workers(
     public_token: str, private_token: str, n_workers: int, dir_name: str, waiting_time: float = 1e-2
 ) -> Dict[str, int]:
     start = time.time()
-    kwargs = dict(public_token=public_token, private_token=private_token, dir_name=dir_name)
     waiting_time *= 1 + np.random.random()
     while True:
-        if is_simulator_ready(**kwargs, n_workers=n_workers):
-            return get_worker_id_to_idx(**kwargs)
+        if is_simulator_ready(os.path.join(dir_name, WORKER_CUMTIME_FILE_NAME), n_workers=n_workers):
+            return get_worker_id_to_idx(os.path.join(dir_name, WORKER_CUMTIME_FILE_NAME))
         else:
             time.sleep(waiting_time)
             if time.time() - start >= n_workers * 5:
@@ -312,9 +327,8 @@ def wait_until_next(
     public_token: str, private_token: str, worker_id: str, dir_name: str, waiting_time: float = 1e-4
 ) -> None:
     waiting_time *= 1 + np.random.random()
-    kwargs = dict(public_token=public_token, private_token=private_token, worker_id=worker_id, dir_name=dir_name)
     while True:
-        if is_min_cumtime(**kwargs):
+        if is_min_cumtime(os.path.join(dir_name, WORKER_CUMTIME_FILE_NAME), worker_id=worker_id):
             return
         else:
             time.sleep(waiting_time)
@@ -373,7 +387,9 @@ class WorkerFunc:
         output = self._func(eval_config, budget)
         config_key = str(eval_config)
         loss, total_runtime = output[self._loss_key], output[self._runtime_key]
-        cached_runtimes = fetch_cache_runtime(**self._kwargs).get(config_key, [0.0])
+        cached_runtimes = fetch_cache_runtime(
+            os.path.join(self._dir_name, RUNTIME_CACHE_FILE_NAME)
+        ).get(config_key, [0.0])
         cached_runtime_index = self._get_cached_runtime_index(cached_runtimes, config_key, total_runtime)
         cached_runtime = cached_runtimes[cached_runtime_index]
 
@@ -459,8 +475,8 @@ class CentralWorker:
 
         worker_index = self._pid_to_index[pid]
         output = self._workers[worker_index](eval_config, budget)
-        kwargs = self._token_verification_kwawrgs(pid)
-        if is_simulator_terminated(**kwargs, max_evals=self._max_evals):
+        # kwargs = self._token_verification_kwawrgs(pid)
+        if is_simulator_terminated(os.path.join(self._dir_name, RESULT_FILE_NAME), max_evals=self._max_evals):
             self._workers[worker_index].finish()
 
         return output
