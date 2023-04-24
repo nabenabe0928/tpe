@@ -172,14 +172,22 @@ def complete_proc_allocation(dir_name: str) -> Dict[int, int]:
     return alloc
 
 
-@verify_token
-def record_cumtime(public_token: str, private_token: str, worker_id: str, runtime: float, dir_name: str) -> float:
+def record_cumtime(worker_id: str, runtime: float, dir_name: str) -> float:
     path = os.path.join(dir_name, WORKER_CUMTIME_FILE_NAME)
-    record = json.load(open(path))
-    cumtime = record.get(worker_id, 0.0) + runtime
-    record[worker_id] = cumtime
-    with open(path, mode="w") as f:
-        json.dump(record, f, indent=4)
+
+    with open(path, "r+") as f:
+        try:
+            fcntl.flock(f, fcntl.LOCK_EX)
+            record = json.load(f)
+            cumtime = record.get(worker_id, 0.0) + runtime
+            record[worker_id] = cumtime
+            f.seek(0)
+            json.dump(record, f, indent=4)
+            f.truncate()
+        except IOError:
+            pass
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
 
     return cumtime
 
@@ -338,7 +346,8 @@ class WorkerFunc:
         self._kwargs = dict(public_token=public_token, private_token=private_token, dir_name=dir_name)
         init_simulator(dir_name=dir_name)
 
-        record_cumtime(**self._kwargs, worker_id=worker_id, runtime=0.0)
+        record_cumtime(dir_name=dir_name, worker_id=worker_id, runtime=0.0)
+        self._dir_name = dir_name
         self._func = func
         self._max_budget = max_budget
         self._runtime_key = runtime_key
@@ -385,7 +394,7 @@ class WorkerFunc:
         sampling_time = time.time() - self._prev_timestamp
         output = self._proc_output(eval_config, budget)
         loss, runtime = output[self._loss_key], output[self._runtime_key]
-        cumtime = record_cumtime(**self._kwargs, worker_id=self._worker_id, runtime=runtime+sampling_time)
+        cumtime = record_cumtime(dir_name=self._dir_name, worker_id=self._worker_id, runtime=runtime+sampling_time)
         wait_until_next(**self._kwargs, worker_id=self._worker_id)
         self._prev_timestamp = time.time()
         row = dict(loss=loss, cumtime=cumtime, index=self._index)
@@ -393,7 +402,7 @@ class WorkerFunc:
         return output
 
     def finish(self) -> None:
-        record_cumtime(**self._kwargs, worker_id=self._worker_id, runtime=INF)
+        record_cumtime(dir_name=self._dir_name, worker_id=self._worker_id, runtime=INF)
         self._terminated = True
 
 

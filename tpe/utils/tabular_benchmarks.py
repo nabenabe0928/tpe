@@ -18,8 +18,11 @@ from yahpo_gym import benchmark_set, local_config
 
 DATA_DIR_NAME = os.path.join(os.environ["HOME"], "tabular_benchmarks")
 VALUE_RANGES = json.load(open("tpe/utils/tabular_benchmarks.json"))
-local_config.init_config()
-local_config.set_data_path(DATA_DIR_NAME)
+
+
+if __name__ == "__main__":
+    local_config.init_config()
+    local_config.set_data_path(DATA_DIR_NAME)
 
 
 class RowDataType(TypedDict):
