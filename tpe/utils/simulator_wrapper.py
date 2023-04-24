@@ -136,6 +136,31 @@ def secure_read(func: Callable) -> Callable:
     return _inner
 
 
+def secure_edit(func: Callable) -> Callable:
+    def _inner(path: str, waiting_time: float = 1e-4, **kwargs):
+        start = time.time()
+        waiting_time *= 1 + np.random.random()
+        fetched = False
+        while True:
+            with open(path, "r+") as f:
+                try:
+                    fcntl.flock(f, fcntl.LOCK_EX)
+                    output = func(f, **kwargs)
+                    f.truncate()
+                    fetched = True
+                except IOError:
+                    time.sleep(waiting_time)
+                    if time.time() - start >= 10:
+                        raise TimeoutError("Timeout during secure read. Try again.")
+                finally:
+                    fcntl.flock(f, fcntl.LOCK_UN)
+
+            if fetched:
+                return output
+
+    return _inner
+
+
 def init_token(token_pattern: str, public_token: str) -> None:
     n_tokens = len(glob.glob(token_pattern))
     if n_tokens == 0:
@@ -160,67 +185,38 @@ def init_simulator(dir_name: str) -> None:
             fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
 
-def allocate_proc_to_worker(dir_name: str, pid: int) -> None:
-    path = os.path.join(dir_name, PROC_ALLOC_NAME)
-    with open(path, "r+") as f:
-        try:
-            fcntl.flock(f, fcntl.LOCK_EX)
-            cur_alloc = json.load(f)
-            cur_alloc[pid] = 0
-            f.seek(0)
-            json.dump(cur_alloc, f, indent=4)
-            f.truncate()
-        except IOError:
-            pass
-        finally:
-            fcntl.flock(f, fcntl.LOCK_UN)
+@secure_edit
+def allocate_proc_to_worker(f: TextIOWrapper, pid: int) -> None:
+    cur_alloc = json.load(f)
+    cur_alloc[pid] = 0
+    f.seek(0)
+    json.dump(cur_alloc, f, indent=4)
 
 
-def complete_proc_allocation(dir_name: str) -> Dict[int, int]:
-    path = os.path.join(dir_name, PROC_ALLOC_NAME)
-    with open(path, "r+") as f:
-        try:
-            fcntl.flock(f, fcntl.LOCK_EX)
-            alloc = json.load(f)
-            sorted_pids = np.sort([int(pid) for pid in alloc.keys()])
-            alloc = {pid: idx for idx, pid in enumerate(sorted_pids)}
-            f.seek(0)
-            json.dump(alloc, f, indent=4)
-            f.truncate()
-        except IOError:
-            pass
-        finally:
-            fcntl.flock(f, fcntl.LOCK_UN)
-
+@secure_edit
+def complete_proc_allocation(f: TextIOWrapper) -> Dict[int, int]:
+    alloc = json.load(f)
+    sorted_pids = np.sort([int(pid) for pid in alloc.keys()])
+    alloc = {pid: idx for idx, pid in enumerate(sorted_pids)}
+    f.seek(0)
+    json.dump(alloc, f, indent=4)
     return alloc
 
 
-def record_cumtime(worker_id: str, runtime: float, dir_name: str) -> float:
-    path = os.path.join(dir_name, WORKER_CUMTIME_FILE_NAME)
-
-    with open(path, "r+") as f:
-        try:
-            fcntl.flock(f, fcntl.LOCK_EX)
-            record = json.load(f)
-            cumtime = record.get(worker_id, 0.0) + runtime
-            record[worker_id] = cumtime
-            f.seek(0)
-            json.dump(record, f, indent=4)
-            f.truncate()
-        except IOError:
-            pass
-        finally:
-            fcntl.flock(f, fcntl.LOCK_UN)
-
+@secure_edit
+def record_cumtime(f: TextIOWrapper, worker_id: str, runtime: float) -> float:
+    record = json.load(f)
+    cumtime = record.get(worker_id, 0.0) + runtime
+    record[worker_id] = cumtime
+    f.seek(0)
+    json.dump(record, f, indent=4)
     return cumtime
 
 
-@verify_token
-def cache_runtime(
-    public_token: str, private_token: str, config_key: str, runtime: float, dir_name: str, update: bool = True
-) -> None:
-    path = os.path.join(dir_name, RUNTIME_CACHE_FILE_NAME)
-    cache = json.load(open(path))
+@secure_edit
+def cache_runtime(f: TextIOWrapper, config_key: str, runtime: float, update: bool = True) -> None:
+    # path = os.path.join(dir_name, RUNTIME_CACHE_FILE_NAME)
+    cache = json.load(f)
     if config_key not in cache:
         cache[config_key] = [runtime]
     elif update:
@@ -229,22 +225,21 @@ def cache_runtime(
         cache[config_key].append(runtime)
 
     cache[config_key] = np.sort(cache[config_key]).tolist()
-    with open(path, mode="w") as f:
-        json.dump(cache, f, indent=4)
+    f.seek(0)
+    json.dump(cache, f, indent=4)
 
 
-@verify_token
-def delete_runtime(public_token: str, private_token: str, config_key: str, index: float, dir_name: str) -> None:
-    path = os.path.join(dir_name, RUNTIME_CACHE_FILE_NAME)
-    cache = json.load(open(path))
+@secure_edit
+def delete_runtime(f: TextIOWrapper, config_key: str, index: float) -> None:
+    cache = json.load(f)
     n_configs = len(cache.get(config_key, [])) > 0
     if n_configs <= 1:
         cache[config_key] = [0.0]  # we need to have at least one element.
     else:
         cache[config_key].pop(index)
 
-    with open(path, mode="w") as f:
-        json.dump(cache, f, indent=4)
+    f.seek(0)
+    json.dump(cache, f, indent=4)
 
 
 @secure_read
@@ -252,20 +247,18 @@ def fetch_cache_runtime(f: TextIOWrapper) -> None:
     return json.load(f)
 
 
-@verify_token
-def record_result(
-    public_token: str, private_token: str, results: Dict[str, float], dir_name: str
-) -> None:
-    path = os.path.join(dir_name, RESULT_FILE_NAME)
-    record = json.load(open(path))
+@secure_edit
+def record_result(f: TextIOWrapper, results: Dict[str, float]) -> None:
+    # path = os.path.join(dir_name, RESULT_FILE_NAME)
+    record = json.load(f)
     for key, val in results.items():
         if key not in record:
             record[key] = [val]
         else:
             record[key].append(val)
 
-    with open(path, mode="w") as f:
-        json.dump(record, f, indent=4)
+    f.seek(0)
+    json.dump(record, f, indent=4)
 
 
 @secure_read
@@ -302,7 +295,7 @@ def wait_proc_allocation(
     waiting_time *= 1 + np.random.random()
     while True:
         if is_allocation_ready(os.path.join(dir_name, PROC_ALLOC_NAME), n_workers=n_workers):
-            return complete_proc_allocation(dir_name)
+            return complete_proc_allocation(os.path.join(dir_name, PROC_ALLOC_NAME))
         else:
             time.sleep(waiting_time)
             if time.time() - start >= n_workers * 0.5:
@@ -360,7 +353,7 @@ class WorkerFunc:
         self._kwargs = dict(public_token=public_token, private_token=private_token, dir_name=dir_name)
         init_simulator(dir_name=dir_name)
 
-        record_cumtime(dir_name=dir_name, worker_id=worker_id, runtime=0.0)
+        record_cumtime(path=os.path.join(dir_name, WORKER_CUMTIME_FILE_NAME), worker_id=worker_id, runtime=0.0)
         self._dir_name = dir_name
         self._func = func
         self._max_budget = max_budget
@@ -387,9 +380,8 @@ class WorkerFunc:
         output = self._func(eval_config, budget)
         config_key = str(eval_config)
         loss, total_runtime = output[self._loss_key], output[self._runtime_key]
-        cached_runtimes = fetch_cache_runtime(
-            os.path.join(self._dir_name, RUNTIME_CACHE_FILE_NAME)
-        ).get(config_key, [0.0])
+        _path = os.path.join(self._dir_name, RUNTIME_CACHE_FILE_NAME)
+        cached_runtimes = fetch_cache_runtime(_path).get(config_key, [0.0])
         cached_runtime_index = self._get_cached_runtime_index(cached_runtimes, config_key, total_runtime)
         cached_runtime = cached_runtimes[cached_runtime_index]
 
@@ -397,9 +389,9 @@ class WorkerFunc:
         # Start from the intermediate result, and hence we overwrite the cached runtime
         overwrite_min_runtime = cached_runtime < total_runtime
         if budget != self._max_budget:  # update the cache data
-            cache_runtime(**self._kwargs, config_key=config_key, runtime=total_runtime, update=overwrite_min_runtime)
+            cache_runtime(_path, config_key=config_key, runtime=total_runtime, update=overwrite_min_runtime)
         else:
-            delete_runtime(**self._kwargs, config_key=config_key, index=cached_runtime_index)
+            delete_runtime(_path, config_key=config_key, index=cached_runtime_index)
 
         return {self._loss_key: loss, self._runtime_key: actual_runtime}
 
@@ -410,15 +402,18 @@ class WorkerFunc:
         sampling_time = time.time() - self._prev_timestamp
         output = self._proc_output(eval_config, budget)
         loss, runtime = output[self._loss_key], output[self._runtime_key]
-        cumtime = record_cumtime(dir_name=self._dir_name, worker_id=self._worker_id, runtime=runtime+sampling_time)
+        _path = os.path.join(self._dir_name, WORKER_CUMTIME_FILE_NAME)
+        cumtime = record_cumtime(path=_path, worker_id=self._worker_id, runtime=runtime+sampling_time)
         wait_until_next(**self._kwargs, worker_id=self._worker_id)
         self._prev_timestamp = time.time()
         row = dict(loss=loss, cumtime=cumtime, index=self._index)
-        record_result(**self._kwargs, results=row)
+        record_result(os.path.join(self._dir_name, RESULT_FILE_NAME), results=row)
         return output
 
     def finish(self) -> None:
-        record_cumtime(dir_name=self._dir_name, worker_id=self._worker_id, runtime=INF)
+        record_cumtime(
+            path=os.path.join(self._dir_name, WORKER_CUMTIME_FILE_NAME), worker_id=self._worker_id, runtime=INF
+        )
         self._terminated = True
 
 
@@ -465,7 +460,7 @@ class CentralWorker:
 
     def _init_alloc(self, pid: int) -> None:
         kwargs = self._token_verification_kwawrgs(pid)
-        allocate_proc_to_worker(self._dir_name, pid=pid)
+        allocate_proc_to_worker(os.path.join(self._dir_name, PROC_ALLOC_NAME), pid=pid)
         self._pid_to_index = wait_proc_allocation(**kwargs, n_workers=self._n_workers)
 
     def __call__(self, eval_config: Dict[str, Any], budget: int) -> Dict:
