@@ -137,13 +137,20 @@ def init_simulator(dir_name: str) -> None:
             fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
 
-@verify_token
-def allocate_proc_to_worker(public_token: str, private_token: str, dir_name: str, pid: int) -> None:
+def allocate_proc_to_worker(dir_name: str, pid: int) -> None:
     path = os.path.join(dir_name, PROC_ALLOC_NAME)
-    cur_alloc = json.load(open(path))
-    cur_alloc[pid] = 0
-    with open(path, mode="w") as f:
-        json.dump(cur_alloc, f, indent=4)
+    with open(path, "r+") as f:
+        try:
+            fcntl.flock(f, fcntl.LOCK_EX)
+            cur_alloc = json.load(f)
+            cur_alloc[pid] = 0
+            f.seek(0)
+            json.dump(cur_alloc, f, indent=4)
+            f.truncate()
+        except IOError:
+            pass
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
 
 
 @verify_token
@@ -426,7 +433,7 @@ class CentralWorker:
 
     def _init_alloc(self, pid: int) -> None:
         kwargs = self._token_verification_kwawrgs(pid)
-        allocate_proc_to_worker(**kwargs, pid=pid)
+        allocate_proc_to_worker(self._dir_name, pid=pid)
         self._pid_to_index = wait_proc_allocation(**kwargs, n_workers=self._n_workers)
 
     def __call__(self, eval_config: Dict[str, Any], budget: int) -> Dict:
