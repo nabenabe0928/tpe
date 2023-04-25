@@ -1,9 +1,30 @@
 from argparse import ArgumentParser, Namespace
 
+import ConfigSpace as CS
+
 from tpe.utils.tabular_benchmarks import HPOLib, JAHSBench201, LCBench
 
 
 BENCH_CHOICES = dict(lc=LCBench, hpolib=HPOLib, jahs=JAHSBench201)
+
+
+class TestFunc:
+    def __call__(self, eval_config, budget):
+        return dict(loss=eval_config["x"]**2, runtime=budget / 1.0)
+
+    @property
+    def config_space(self):
+        cs = CS.ConfigurationSpace()
+        cs.add_hyperparameter(CS.UniformFloatHyperparameter("x", -5.0, 5.0))
+        return cs
+
+    @property
+    def min_budget(self):
+        return 1
+
+    @property
+    def max_budget(self):
+        return 9
 
 
 def parse_args() -> Namespace:

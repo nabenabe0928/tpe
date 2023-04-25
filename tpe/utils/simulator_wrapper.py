@@ -85,8 +85,8 @@ def secure_read(func: Callable) -> Callable:
     def _inner(path: str, waiting_time: float = 1e-4, **kwargs):
         start = time.time()
         waiting_time *= 1 + np.random.random()
-        fetched = False
-        while True:
+        fetched, output = False, None
+        while not fetched:
             with open(path, "r") as f:
                 try:
                     fcntl.flock(f, fcntl.LOCK_SH | fcntl.LOCK_NB)
@@ -97,8 +97,7 @@ def secure_read(func: Callable) -> Callable:
                     if time.time() - start >= 10:
                         raise TimeoutError("Timeout during secure read. Try again.")
 
-            if fetched:
-                return output
+        return output
 
     return _inner
 
@@ -107,8 +106,8 @@ def secure_edit(func: Callable) -> Callable:
     def _inner(path: str, waiting_time: float = 1e-4, **kwargs):
         start = time.time()
         waiting_time *= 1 + np.random.random()
-        fetched = False
-        while True:
+        fetched, output = False, None
+        while not fetched:
             with open(path, "r+") as f:
                 try:
                     fcntl.flock(f, fcntl.LOCK_EX)
@@ -122,8 +121,7 @@ def secure_edit(func: Callable) -> Callable:
                 finally:
                     fcntl.flock(f, fcntl.LOCK_UN)
 
-            if fetched:
-                return output
+        return output
 
     return _inner
 
@@ -247,34 +245,29 @@ def is_min_cumtime(f: TextIOWrapper, worker_id: str) -> bool:
 def wait_proc_allocation(path: str, n_workers: int, waiting_time: float = 1e-2) -> Dict[int, int]:
     start = time.time()
     waiting_time *= 1 + np.random.random()
-    while True:
-        if is_allocation_ready(path, n_workers=n_workers):
-            return complete_proc_allocation(path)
-        else:
-            time.sleep(waiting_time)
-            if time.time() - start >= n_workers * 0.5:
-                raise TimeoutError("Timeout in the allocation of procs. Please make sure n_workers is correct.")
+    while not is_allocation_ready(path, n_workers=n_workers):
+        time.sleep(waiting_time)
+        if time.time() - start >= n_workers * 5:
+            raise TimeoutError("Timeout in the allocation of procs. Please make sure n_workers is correct.")
+
+    return complete_proc_allocation(path)
 
 
 def wait_all_workers(path: str, n_workers: int, waiting_time: float = 1e-2) -> Dict[str, int]:
     start = time.time()
     waiting_time *= 1 + np.random.random()
-    while True:
-        if is_simulator_ready(path, n_workers=n_workers):
-            return get_worker_id_to_idx(path)
-        else:
-            time.sleep(waiting_time)
-            if time.time() - start >= n_workers * 5:
-                raise TimeoutError("Timeout in creating a simulator. Please make sure n_workers is correct.")
+    while not is_simulator_ready(path, n_workers=n_workers):
+        time.sleep(waiting_time)
+        if time.time() - start >= n_workers * 5:
+            raise TimeoutError("Timeout in creating a simulator. Please make sure n_workers is correct.")
+
+    return get_worker_id_to_idx(path)
 
 
 def wait_until_next(path: str, worker_id: str, waiting_time: float = 1e-4) -> None:
     waiting_time *= 1 + np.random.random()
-    while True:
-        if is_min_cumtime(path, worker_id=worker_id):
-            return
-        else:
-            time.sleep(waiting_time)
+    while not is_min_cumtime(path, worker_id=worker_id):
+        time.sleep(waiting_time)
 
 
 class ObjectiveFunc(Protocol):
@@ -300,6 +293,7 @@ class WorkerFunc:
         record_cumtime(path=self._cumtime_path, worker_id=worker_id, runtime=0.0)
 
         self._func = func
+        self._result_path = os.path.join(self._dir_name, RESULT_FILE_NAME)
         self._max_budget = max_budget
         self._runtime_key = runtime_key
         self._loss_key = loss_key
@@ -352,7 +346,7 @@ class WorkerFunc:
         wait_until_next(path=self._cumtime_path, worker_id=self._worker_id)
         self._prev_timestamp = time.time()
         row = dict(loss=loss, cumtime=cumtime, index=self._index)
-        record_result(os.path.join(self.dir_name, RESULT_FILE_NAME), results=row)
+        record_result(self._result_path, results=row)
         return output
 
     def finish(self) -> None:
@@ -382,7 +376,6 @@ class CentralWorker:
         pool = Pool()
         results = []
         for _ in range(n_workers):
-            time.sleep(5e-3)
             results.append(pool.apply_async(WorkerFunc, kwds=kwargs))
 
         pool.close()
@@ -392,6 +385,7 @@ class CentralWorker:
         self._max_evals = max_evals
         self._workers = [result.get() for result in results]
         self._dir_name = self._workers[0].dir_name
+        self._result_path = os.path.join(self._dir_name, RESULT_FILE_NAME)
         self._n_workers = n_workers
         self._pid_to_index: Dict[int, int] = {}
 
@@ -407,8 +401,7 @@ class CentralWorker:
 
         worker_index = self._pid_to_index[pid]
         output = self._workers[worker_index](eval_config, budget)
-        _path = os.path.join(self._dir_name, RESULT_FILE_NAME)
-        if is_simulator_terminated(_path, max_evals=self._max_evals):
+        if is_simulator_terminated(self._result_path, max_evals=self._max_evals):
             self._workers[worker_index].finish()
 
         return output

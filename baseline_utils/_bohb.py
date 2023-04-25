@@ -31,7 +31,7 @@ class BOHBWorker(Worker):
 
     def compute(self, config: Dict, budget: float, **kwargs):
         output = self._worker(config, budget)
-        if is_simulator_terminated(**self._worker._kwargs, max_evals=self._max_evals):
+        if is_simulator_terminated(self._worker._result_path, max_evals=self._max_evals):
             self._worker.finish()  # after the termination, no record will happen
 
         return dict(loss=output["loss"])
@@ -87,7 +87,7 @@ def run_bohb(
     subdir_name: str,
     ns_host: str = "127.0.0.1",
     max_evals: int = 450,  # eta=3,S=2,100 full evals
-    n_brackets: int = 66,  # 22 HB iter --> 33 SH brackets
+    n_brackets: int = 70,  # 22 HB iter --> 33 SH brackets
 ) -> None:
     ns = hpns.NameServer(run_id=run_id, host=ns_host, port=None)
     ns.start()
