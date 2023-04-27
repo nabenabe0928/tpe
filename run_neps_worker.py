@@ -60,5 +60,4 @@ if __name__ == "__main__":
         n_workers=args.n_workers,
         subdir_name=os.path.join("neps", subdir_name),
         budget_key=BUDGET_KEY,
-        max_evals=22,
     )

@@ -20,23 +20,55 @@ DATA_DIR_NAME = os.path.join(os.environ["HOME"], "tabular_benchmarks")
 VALUE_RANGES = json.load(open("tpe/utils/tabular_benchmarks.json"))
 
 
-if __name__ == "__main__":
-    local_config.init_config()
-    local_config.set_data_path(DATA_DIR_NAME)
-
-
 class RowDataType(TypedDict):
     valid_mse: List[Dict[int, float]]
     runtime: List[float]
 
 
-class _HPOLibDatabase:
+class BaseBenchData:
+    NotImplemented
+
+
+class HPOLibDatabase(BaseBenchData):
+    """ Workaround to prevent dask from serializing the objective func """
     def __init__(self, dataset_name: str):
         data_path = os.path.join(DATA_DIR_NAME, "hpolib", f"{dataset_name}.pkl")
         self._db = pickle.load(open(data_path, "rb"))
 
     def __getitem__(self, key: str) -> Dict[str, RowDataType]:
         return self._db[key]
+
+
+class LCBenchSurrogate(BaseBenchData):
+    """ Workaround to prevent dask from serializing the objective func """
+    def __init__(self, dataset_id: str, target_metric: str):
+        self._target_metric = target_metric
+        self._dataset_id = dataset_id
+        self._surrogate = benchmark_set.BenchmarkSet("lcbench", instance=dataset_id, active_session=False)
+
+    def __call__(self, config: Dict[str, Union[int, float]], budget: int) -> Dict[str, float]:
+        if isinstance(config, CS.Configuration):
+            config = config.get_dictionary()
+
+        config["OpenML_task_id"] = self._dataset_id
+        config["epoch"] = budget
+        output = self._surrogate.objective_function(config)[0]
+        return dict(loss=1.0 - output[self._target_metric], runtime=output["time"])
+
+
+class JAHSBenchSurrogate(BaseBenchData):
+    """ Workaround to prevent dask from serializing the objective func """
+    def __init__(self, data_dir: str, dataset_name: str, target_metric):
+        self._target_metric = target_metric
+        self._surrogate = jahs_bench.Benchmark(
+            task=dataset_name, download=False, save_dir=data_dir, metrics=[self._target_metric, "runtime"]
+        )
+
+    def __call__(self, config: Dict[str, Union[int, str, float]], budget: int = 200) -> Dict[str, float]:
+        config.update(Optimizer="SGD", Resolution=1.0)
+        config = {k: int(v) if k[:-1] == "Op" else v for k, v in config.items()}
+        output = self._surrogate(config, nepochs=budget)[budget]
+        return dict(loss=100 - output[self._target_metric], runtime=output["runtime"])
 
 
 class AbstractBench(metaclass=ABCMeta):
@@ -58,6 +90,10 @@ class AbstractBench(metaclass=ABCMeta):
             ]
         )
         return config_space
+
+    @abstractmethod
+    def get_data(self) -> BaseBenchData:
+        raise NotImplementedError
 
     @property
     @abstractmethod
@@ -122,6 +158,7 @@ class LCBench(AbstractBench):
         self,
         dataset_id: int,
         seed: Optional[int] = None,  # surrogate is not stochastic
+        keep_benchdata: bool = True,
     ):
         dataset_info = (
             ("kddcup09_appetency", "3945"),
@@ -160,11 +197,13 @@ class LCBench(AbstractBench):
             ("jungle_chess_2pcs_raw_endgame_complete", "189909")
         )
         self.dataset_name, self._dataset_id = dataset_info[dataset_id]
-        self._surrogate = benchmark_set.BenchmarkSet("lcbench", instance=self._dataset_id, active_session=False)
+        self._surrogate = self.get_data() if keep_benchdata else None
         self._config_space = self.config_space
 
-    def __call__(self, config: Dict[str, Union[int, float]], budget: int = 52) -> Dict[str, float]:
-        budget = int(min(self._TRUE_MAX_BUDGET, budget))
+    def get_data(self) -> LCBenchSurrogate:
+        return LCBenchSurrogate(dataset_id=self._dataset_id, target_metric=self._target_metric)
+
+    def _validate_config(self, config: Dict[str, Union[int, float]]) -> None:
         EPS = 1e-12
         for hp in self._config_space.get_hyperparameters():
             lb, ub, name = hp.lower, hp.upper, hp.name
@@ -174,13 +213,16 @@ class LCBench(AbstractBench):
                 config[name] = int(config[name])
                 assert isinstance(config[name], int) and lb <= config[name] <= ub
 
-        if isinstance(config, CS.Configuration):
-            config = config.get_dictionary()
+    def __call__(
+        self, config: Dict[str, Union[int, float]], budget: int = 52, bench_data: Optional[LCBenchSurrogate] = None
+    ) -> Dict[str, float]:
+        if bench_data is None and self._surrogate is None:
+            raise ValueError("data must be provided when `keep_benchdata` is False")
 
-        config["OpenML_task_id"] = self._dataset_id
-        config["epoch"] = budget
-        output = self._surrogate.objective_function(config)[0]
-        return dict(loss=1.0 - output[self._target_metric], runtime=output["time"])
+        surrogate = bench_data if self._surrogate is None else self._surrogate
+        budget = int(min(self._TRUE_MAX_BUDGET, budget))
+        self._validate_config(config)
+        return surrogate(config, budget)
 
     @property
     def config_space(self) -> CS.ConfigurationSpace:
@@ -223,6 +265,7 @@ class HPOLib(AbstractBench):
         self,
         dataset_id: int,
         seed: Optional[int],
+        keep_benchdata: bool = True,
     ):
         self.dataset_name = [
             "slice_localization",
@@ -230,16 +273,25 @@ class HPOLib(AbstractBench):
             "naval_propulsion",
             "parkinsons_telemonitoring",
         ][dataset_id]
-        self._db = _HPOLibDatabase(self.dataset_name)
+        self._db = self.get_data() if keep_benchdata else None
         self._rng = np.random.RandomState(seed)
         self._value_range = VALUE_RANGES["hpolib"]
 
-    def __call__(self, config: Dict[str, Union[int, str]], budget: int = 100) -> Dict[str, float]:
+    def get_data(self) -> HPOLibDatabase:
+        return HPOLibDatabase(self.dataset_name)
+
+    def __call__(
+        self, config: Dict[str, Union[int, str]], budget: int = 100, bench_data: Optional[HPOLibDatabase] = None
+    ) -> Dict[str, float]:
+        if bench_data is None and self._db is None:
+            raise ValueError("data must be provided when `keep_benchdata` is False")
+
+        db = bench_data if self._db is None else self._db
         budget = int(budget)
         idx = self._rng.randint(4)
         key = json.dumps({k: self._value_range[k][int(v)] for k, v in config.items()}, sort_keys=True)
-        loss = self._db[key]["valid_mse"][idx][budget - 1]
-        runtime = self._db[key]["runtime"][idx] * budget / self.max_budget
+        loss = db[key]["valid_mse"][idx][budget - 1]
+        runtime = db[key]["runtime"][idx] * budget / self.max_budget
         return dict(loss=np.log(loss), runtime=runtime)
 
     @property
@@ -264,26 +316,36 @@ class JAHSBench201(AbstractBench):
         self,
         dataset_id: int,
         seed: Optional[int] = None,  # surrogate is not stochastic
+        keep_benchdata: bool = True,
     ):
         # https://ml.informatik.uni-freiburg.de/research-artifacts/jahs_bench_201/v1.1.0/assembled_surrogates.tar
         # "colorectal_histology" caused memory error, so we do not use it
         self.dataset_name = ["cifar10", "fashion_mnist", "colorectal_histology"][dataset_id]
-        data_dir = os.path.join(DATA_DIR_NAME, "jahs_bench_data")
-        self._surrogate = jahs_bench.Benchmark(
-            task=self.dataset_name, download=False, save_dir=data_dir, metrics=[self._target_metric, "runtime"]
-        )
+        self._data_dir = os.path.join(DATA_DIR_NAME, "jahs_bench_data")
+        self._surrogate = self.get_data() if keep_benchdata else None
         self._value_range = VALUE_RANGES["jahs-bench"]
 
-    def __call__(self, config: Dict[str, Union[int, str, float]], budget: int = 200) -> Dict[str, float]:
+    def get_data(self) -> JAHSBenchSurrogate:
+        return JAHSBenchSurrogate(
+            data_dir=self._data_dir, dataset_name=self.dataset_name, target_metric=self._target_metric
+        )
+
+    def __call__(
+        self,
+        config: Dict[str, Union[int, str, float]],
+        budget: int = 200,
+        bench_data: Optional[JAHSBenchSurrogate] = None
+    ) -> Dict[str, float]:
+        if bench_data is None and self._surrogate is None:
+            raise ValueError("data must be provided when `keep_benchdata` is False")
+
+        surrogate = bench_data if self._surrogate is None else self._surrogate
         budget = int(budget)
         EPS = 1e-12
         config = {k: self._value_range[k][int(v)] if k in self._value_range else float(v) for k, v in config.items()}
         assert isinstance(config["LearningRate"], float) and 1e-3 - EPS <= config["LearningRate"] <= 1.0 + EPS
         assert isinstance(config["WeightDecay"], float) and 1e-5 - EPS <= config["WeightDecay"] <= 1e-2 + EPS
-        config.update(Optimizer="SGD", Resolution=1.0)
-        config = {k: int(v) if k[:-1] == "Op" else v for k, v in config.items()}
-        output = self._surrogate(config, nepochs=budget)[budget]
-        return dict(loss=100 - output[self._target_metric], runtime=output["runtime"])
+        return surrogate(config, budget)
 
     @property
     def config_space(self) -> CS.ConfigurationSpace:
@@ -303,3 +365,8 @@ class JAHSBench201(AbstractBench):
     @property
     def max_budget(self) -> int:
         return 200
+
+
+if __name__ == "__main__":
+    local_config.init_config()
+    local_config.set_data_path(DATA_DIR_NAME)

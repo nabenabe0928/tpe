@@ -36,4 +36,5 @@ def run_dehb(
         n_workers=n_workers,
         output_path="dehb-log/"
     )
-    dehb.run(fevals=max_evals)
+    kwargs = obj_func.get_shared_data()
+    dehb.run(fevals=max_evals, **kwargs)

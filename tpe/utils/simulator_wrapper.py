@@ -60,11 +60,13 @@ import os
 import time
 from _io import TextIOWrapper
 from multiprocessing import Pool
-from typing import Any, Callable, Dict, List, Protocol
+from typing import Any, Callable, Dict, List, Optional, Protocol
 
 import numpy as np
 
 import ujson as json
+
+from tpe.utils.tabular_benchmarks import BaseBenchData
 
 
 DIR_NAME = "simulator_info/"
@@ -316,8 +318,10 @@ class WorkerFunc:
         idx = np.searchsorted(cached_runtimes, runtime, side="left")
         return max(0, idx - 1)
 
-    def _proc_output(self, eval_config: Dict[str, Any], budget: int) -> Dict[str, float]:
-        output = self._func(eval_config, budget)
+    def _proc_output(
+        self, eval_config: Dict[str, Any], budget: int, bench_data: Optional[BaseBenchData]
+    ) -> Dict[str, float]:
+        output = self._func(eval_config, budget, **({} if bench_data is None else dict(bench_data=bench_data)))
         config_key = str(eval_config)
         loss, total_runtime = output[self._loss_key], output[self._runtime_key]
         _path = os.path.join(self.dir_name, RUNTIME_CACHE_FILE_NAME)
@@ -335,12 +339,14 @@ class WorkerFunc:
 
         return {self._loss_key: loss, self._runtime_key: actual_runtime}
 
-    def __call__(self, eval_config: Dict[str, Any], budget: int) -> Dict[str, float]:
+    def __call__(
+        self, eval_config: Dict[str, Any], budget: int, bench_data: Optional[BaseBenchData] = None
+    ) -> Dict[str, float]:
         if self._terminated:
             return {self._loss_key: INF, self._runtime_key: INF}
 
         sampling_time = time.time() - self._prev_timestamp
-        output = self._proc_output(eval_config, budget)
+        output = self._proc_output(eval_config, budget, bench_data)
         loss, runtime = output[self._loss_key], output[self._runtime_key]
         cumtime = record_cumtime(path=self._cumtime_path, worker_id=self._worker_id, runtime=runtime+sampling_time)
         wait_until_next(path=self._cumtime_path, worker_id=self._worker_id)
@@ -394,13 +400,13 @@ class CentralWorker:
         allocate_proc_to_worker(path=_path, pid=pid)
         self._pid_to_index = wait_proc_allocation(path=_path, n_workers=self._n_workers)
 
-    def __call__(self, eval_config: Dict[str, Any], budget: int) -> Dict:
+    def __call__(self, eval_config: Dict[str, Any], budget: int, bench_data: Optional[BaseBenchData] = None) -> Dict:
         pid = os.getpid()
         if len(self._pid_to_index) != self._n_workers:
             self._init_alloc(pid)
 
         worker_index = self._pid_to_index[pid]
-        output = self._workers[worker_index](eval_config, budget)
+        output = self._workers[worker_index](eval_config, budget, bench_data=bench_data)
         if is_simulator_terminated(self._result_path, max_evals=self._max_evals):
             self._workers[worker_index].finish()
 
