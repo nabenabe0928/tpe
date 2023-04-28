@@ -11,8 +11,10 @@ from tpe.utils.utils import AbstractObjFunc
 
 
 class CentralWorkerForSMAC(CentralWorker):
-    def __call__(self, eval_config: Dict[str, Any], budget: int, seed: Optional[int] = None) -> float:
-        output = super().__call__(eval_config, budget)
+    def __call__(
+        self, eval_config: Dict[str, Any], budget: int, seed: Optional[int] = None, shared_data=None,
+    ) -> float:
+        output = super().__call__(eval_config, budget, bench_data=shared_data)
         return output[self._loss_key]
 
 
@@ -49,4 +51,5 @@ def run_smac(
         intensifier=Hyperband(scenario, incumbent_selection="highest_budget"),
         overwrite=True,
     )
-    smac.optimize()
+    kwargs = obj_func.get_shared_data()
+    smac.optimize(**kwargs)
