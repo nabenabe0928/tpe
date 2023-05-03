@@ -12,9 +12,9 @@ from tpe.utils.utils import AbstractObjFunc
 
 class CentralWorkerForSMAC(CentralWorker):
     def __call__(
-        self, eval_config: Dict[str, Any], budget: int, seed: Optional[int] = None, shared_data=None,
+        self, eval_config: Dict[str, Any], budget: int, seed: Optional[int] = None, data_to_scatter=None,
     ) -> float:
-        output = super().__call__(eval_config, budget, bench_data=shared_data)
+        output = super().__call__(eval_config, budget, bench_data=data_to_scatter)
         return output[self._loss_key]
 
 

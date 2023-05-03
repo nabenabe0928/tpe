@@ -15,7 +15,7 @@ class Wrapper:
         self._bench = bench
 
     def get_shared_data(self):
-        kwargs = dict(shared_data=self._bench.get_data()) if hasattr(self._bench, "get_data") else {}
+        kwargs = dict(data_to_scatter=self._bench.get_data()) if hasattr(self._bench, "get_data") else {}
         return kwargs
 
     def __call__(self, eval_config, budget, bench_data=None):
