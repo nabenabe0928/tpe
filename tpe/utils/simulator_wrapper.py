@@ -173,28 +173,28 @@ def _record_cumtime(f: TextIOWrapper, worker_id: str, runtime: float) -> float:
 
 
 @secure_edit
-def _cache_state(f: TextIOWrapper, config_key: str, runtime: float, update: bool = True) -> None:
-    cache = json.load(f)
-    if config_key not in cache:
-        cache[config_key] = [runtime]
+def _cache_state(f: TextIOWrapper, config_hash: int, runtime: float, update: bool = True) -> None:
+    cache = {int(k): v for k, v in json.load(f).items()}
+    if config_hash not in cache:
+        cache[config_hash] = [runtime]
     elif update:
-        cache[config_key][0] = runtime
+        cache[config_hash][0] = runtime
     else:
-        cache[config_key].append(runtime)
+        cache[config_hash].append(runtime)
 
-    cache[config_key] = np.sort(cache[config_key]).tolist()
+    cache[config_hash] = np.sort(cache[config_hash]).tolist()
     f.seek(0)
     json.dump(cache, f, indent=4)
 
 
 @secure_edit
-def _delete_state(f: TextIOWrapper, config_key: str, index: float) -> None:
-    cache = json.load(f)
-    n_configs = len(cache.get(config_key, [])) > 0
+def _delete_state(f: TextIOWrapper, config_hash: int, index: float) -> None:
+    cache = {int(k): v for k, v in json.load(f).items()}
+    n_configs = len(cache.get(config_hash, [])) > 0
     if n_configs <= 1:
-        cache[config_key] = [0.0]  # we need to have at least one element.
+        cache[config_hash] = [0.0]  # we need to have at least one element.
     else:
-        cache[config_key].pop(index)
+        cache[config_hash].pop(index)
 
     f.seek(0)
     json.dump(cache, f, indent=4)
@@ -202,7 +202,7 @@ def _delete_state(f: TextIOWrapper, config_key: str, index: float) -> None:
 
 @secure_read
 def _fetch_cache_state(f: TextIOWrapper) -> None:
-    return json.load(f)
+    return {int(k): v for k, v in json.load(f).items()}
 
 
 @secure_edit
@@ -314,7 +314,7 @@ class WorkerFunc:
     def dir_name(self) -> str:
         return self._dir_name
 
-    def _get_cached_runtime_index(self, cached_runtimes: List[float], config_key: str, runtime: float) -> int:
+    def _get_cached_runtime_index(self, cached_runtimes: List[float], runtime: float) -> int:
         # a[i-1] < v <= a[i]: np.searchsorted(..., side="left")
         idx = np.searchsorted(cached_runtimes, runtime, side="left")
         return max(0, idx - 1)
@@ -323,20 +323,20 @@ class WorkerFunc:
         self, eval_config: Dict[str, Any], budget: int, bench_data: Optional[BaseBenchData]
     ) -> Dict[str, float]:
         output = self._func(eval_config, budget, **({} if bench_data is None else dict(bench_data=bench_data)))
-        config_key = str(eval_config)
+        config_hash = hash(str(eval_config))
         loss, total_runtime = output[self._loss_key], output[self._runtime_key]
         _path = os.path.join(self.dir_name, STATE_CACHE_FILE_NAME)
-        cached_runtimes = _fetch_cache_state(_path).get(config_key, [0.0])
-        cached_runtime_index = self._get_cached_runtime_index(cached_runtimes, config_key, total_runtime)
+        cached_runtimes = _fetch_cache_state(_path).get(config_hash, [0.0])
+        cached_runtime_index = self._get_cached_runtime_index(cached_runtimes, total_runtime)
         cached_runtime = cached_runtimes[cached_runtime_index]
 
         actual_runtime = max(0.0, total_runtime - cached_runtime)
         # Start from the intermediate result, and hence we overwrite the cached runtime
         overwrite_min_runtime = cached_runtime < total_runtime
         if budget != self._max_budget:  # update the cache data
-            _cache_state(_path, config_key=config_key, runtime=total_runtime, update=overwrite_min_runtime)
+            _cache_state(_path, config_hash=config_hash, runtime=total_runtime, update=overwrite_min_runtime)
         else:
-            _delete_state(_path, config_key=config_key, index=cached_runtime_index)
+            _delete_state(_path, config_hash=config_hash, index=cached_runtime_index)
 
         return {self._loss_key: loss, self._runtime_key: actual_runtime}
 
