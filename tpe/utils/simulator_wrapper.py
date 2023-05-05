@@ -119,7 +119,7 @@ def secure_edit(func: Callable) -> Callable:
                 except IOError:
                     time.sleep(waiting_time)
                     if time.time() - start >= 10:
-                        raise TimeoutError("Timeout during secure read. Try again.")
+                        raise TimeoutError("Timeout during secure edit. Try again.")
                 finally:
                     fcntl.flock(f, fcntl.LOCK_UN)
 
@@ -371,7 +371,7 @@ class CentralWorker:
         loss_key: str = "loss",
         runtime_key: str = "runtime",
     ):
-        kwargs = dict(
+        worker_kwargs = dict(
             func=obj_func,
             n_workers=n_workers,
             subdir_name=subdir_name,
@@ -379,21 +379,24 @@ class CentralWorker:
             loss_key=loss_key,
             runtime_key=runtime_key,
         )
+        self._n_workers = n_workers
+        self._workers: List[WorkerFunc]
+        self._init_workers(worker_kwargs)
+
+        self._max_evals = max_evals
+        self._dir_name = self._workers[0].dir_name
+        self._result_path = os.path.join(self._dir_name, RESULT_FILE_NAME)
+        self._pid_to_index: Dict[int, int] = {}
+
+    def _init_workers(self, worker_kwargs: Dict[str, Any]) -> None:
         pool = Pool()
         results = []
-        for _ in range(n_workers):
-            results.append(pool.apply_async(WorkerFunc, kwds=kwargs))
+        for _ in range(self._n_workers):
+            results.append(pool.apply_async(WorkerFunc, kwds=worker_kwargs))
 
         pool.close()
         pool.join()
-        self._loss_key = loss_key
-        self._runtime_key = runtime_key
-        self._max_evals = max_evals
         self._workers = [result.get() for result in results]
-        self._dir_name = self._workers[0].dir_name
-        self._result_path = os.path.join(self._dir_name, RESULT_FILE_NAME)
-        self._n_workers = n_workers
-        self._pid_to_index: Dict[int, int] = {}
 
     def _init_alloc(self, pid: int) -> None:
         _path = os.path.join(self._dir_name, PROC_ALLOC_NAME)
