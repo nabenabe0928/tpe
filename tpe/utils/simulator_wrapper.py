@@ -36,12 +36,13 @@ For example, when we use multiprocessing, we might need it.
     * index -- List[the index of the worker of the n-th evaluation]
 This file is necessary for post-hoc analysis.
 
-3. simulator_info/*/runtime_cache.json
-    * config1 -- List[runtimes]
-    * config2 -- List[runtimes]
+3. simulator_info/*/state_cache.json
+    * config1 -- List[Tuple[runtime, budget, seed]]
+    * config2 -- List[Tuple[runtime, budget, seed]]
     :
-    * configN -- List[runtimes]
-This file tells you how long it took to evaluate configX up to the intermediate result.
+    * configN -- List[Tuple[runtime, budget, seed]]
+This file tells you the states of each config.
+Runtime tells how long it took to evaluate configX up to the intermediate result.
 Since we would like to use this information only for the restart of trainings,
 we discard the information after each config reaches the full-budget training.
 Each list gets more than two elements if evaluations of the same configs happen.
@@ -73,7 +74,7 @@ DIR_NAME = "simulator_info/"
 WORKER_CUMTIME_FILE_NAME = "simulated_cumtime.json"
 RESULT_FILE_NAME = "results.json"
 PROC_ALLOC_NAME = "proc_alloc.json"
-RUNTIME_CACHE_FILE_NAME = "runtime_cache.json"
+STATE_CACHE_FILE_NAME = "state_cache.json"
 INF = 1 << 40
 
 
@@ -129,7 +130,7 @@ def secure_edit(func: Callable) -> Callable:
 
 
 def _init_simulator(dir_name: str) -> None:
-    for fn in [WORKER_CUMTIME_FILE_NAME, RESULT_FILE_NAME, RUNTIME_CACHE_FILE_NAME, PROC_ALLOC_NAME]:
+    for fn in [WORKER_CUMTIME_FILE_NAME, RESULT_FILE_NAME, STATE_CACHE_FILE_NAME, PROC_ALLOC_NAME]:
         path = os.path.join(dir_name, fn)
         with open(path, "a+") as f:
             fcntl.flock(f.fileno(), fcntl.LOCK_EX)
@@ -172,7 +173,7 @@ def _record_cumtime(f: TextIOWrapper, worker_id: str, runtime: float) -> float:
 
 
 @secure_edit
-def _cache_runtime(f: TextIOWrapper, config_key: str, runtime: float, update: bool = True) -> None:
+def _cache_state(f: TextIOWrapper, config_key: str, runtime: float, update: bool = True) -> None:
     cache = json.load(f)
     if config_key not in cache:
         cache[config_key] = [runtime]
@@ -187,7 +188,7 @@ def _cache_runtime(f: TextIOWrapper, config_key: str, runtime: float, update: bo
 
 
 @secure_edit
-def _delete_runtime(f: TextIOWrapper, config_key: str, index: float) -> None:
+def _delete_state(f: TextIOWrapper, config_key: str, index: float) -> None:
     cache = json.load(f)
     n_configs = len(cache.get(config_key, [])) > 0
     if n_configs <= 1:
@@ -200,7 +201,7 @@ def _delete_runtime(f: TextIOWrapper, config_key: str, index: float) -> None:
 
 
 @secure_read
-def _fetch_cache_runtime(f: TextIOWrapper) -> None:
+def _fetch_cache_state(f: TextIOWrapper) -> None:
     return json.load(f)
 
 
@@ -324,8 +325,8 @@ class WorkerFunc:
         output = self._func(eval_config, budget, **({} if bench_data is None else dict(bench_data=bench_data)))
         config_key = str(eval_config)
         loss, total_runtime = output[self._loss_key], output[self._runtime_key]
-        _path = os.path.join(self.dir_name, RUNTIME_CACHE_FILE_NAME)
-        cached_runtimes = _fetch_cache_runtime(_path).get(config_key, [0.0])
+        _path = os.path.join(self.dir_name, STATE_CACHE_FILE_NAME)
+        cached_runtimes = _fetch_cache_state(_path).get(config_key, [0.0])
         cached_runtime_index = self._get_cached_runtime_index(cached_runtimes, config_key, total_runtime)
         cached_runtime = cached_runtimes[cached_runtime_index]
 
@@ -333,9 +334,9 @@ class WorkerFunc:
         # Start from the intermediate result, and hence we overwrite the cached runtime
         overwrite_min_runtime = cached_runtime < total_runtime
         if budget != self._max_budget:  # update the cache data
-            _cache_runtime(_path, config_key=config_key, runtime=total_runtime, update=overwrite_min_runtime)
+            _cache_state(_path, config_key=config_key, runtime=total_runtime, update=overwrite_min_runtime)
         else:
-            _delete_runtime(_path, config_key=config_key, index=cached_runtime_index)
+            _delete_state(_path, config_key=config_key, index=cached_runtime_index)
 
         return {self._loss_key: loss, self._runtime_key: actual_runtime}
 
