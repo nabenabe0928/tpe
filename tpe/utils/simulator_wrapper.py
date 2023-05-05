@@ -77,7 +77,7 @@ RUNTIME_CACHE_FILE_NAME = "runtime_cache.json"
 INF = 1 << 40
 
 
-def generate_time_hash() -> str:
+def _generate_time_hash() -> str:
     hash = hashlib.sha1()
     hash.update(str(time.time()).encode("utf-8"))
     return hash.hexdigest()
@@ -128,7 +128,7 @@ def secure_edit(func: Callable) -> Callable:
     return _inner
 
 
-def init_simulator(dir_name: str) -> None:
+def _init_simulator(dir_name: str) -> None:
     for fn in [WORKER_CUMTIME_FILE_NAME, RESULT_FILE_NAME, RUNTIME_CACHE_FILE_NAME, PROC_ALLOC_NAME]:
         path = os.path.join(dir_name, fn)
         with open(path, "a+") as f:
@@ -144,7 +144,7 @@ def init_simulator(dir_name: str) -> None:
 
 
 @secure_edit
-def allocate_proc_to_worker(f: TextIOWrapper, pid: int) -> None:
+def _allocate_proc_to_worker(f: TextIOWrapper, pid: int) -> None:
     cur_alloc = json.load(f)
     cur_alloc[pid] = 0
     f.seek(0)
@@ -152,7 +152,7 @@ def allocate_proc_to_worker(f: TextIOWrapper, pid: int) -> None:
 
 
 @secure_edit
-def complete_proc_allocation(f: TextIOWrapper) -> Dict[int, int]:
+def _complete_proc_allocation(f: TextIOWrapper) -> Dict[int, int]:
     alloc = json.load(f)
     sorted_pids = np.sort([int(pid) for pid in alloc.keys()])
     alloc = {pid: idx for idx, pid in enumerate(sorted_pids)}
@@ -162,7 +162,7 @@ def complete_proc_allocation(f: TextIOWrapper) -> Dict[int, int]:
 
 
 @secure_edit
-def record_cumtime(f: TextIOWrapper, worker_id: str, runtime: float) -> float:
+def _record_cumtime(f: TextIOWrapper, worker_id: str, runtime: float) -> float:
     record = json.load(f)
     cumtime = record.get(worker_id, 0.0) + runtime
     record[worker_id] = cumtime
@@ -172,7 +172,7 @@ def record_cumtime(f: TextIOWrapper, worker_id: str, runtime: float) -> float:
 
 
 @secure_edit
-def cache_runtime(f: TextIOWrapper, config_key: str, runtime: float, update: bool = True) -> None:
+def _cache_runtime(f: TextIOWrapper, config_key: str, runtime: float, update: bool = True) -> None:
     cache = json.load(f)
     if config_key not in cache:
         cache[config_key] = [runtime]
@@ -187,7 +187,7 @@ def cache_runtime(f: TextIOWrapper, config_key: str, runtime: float, update: boo
 
 
 @secure_edit
-def delete_runtime(f: TextIOWrapper, config_key: str, index: float) -> None:
+def _delete_runtime(f: TextIOWrapper, config_key: str, index: float) -> None:
     cache = json.load(f)
     n_configs = len(cache.get(config_key, [])) > 0
     if n_configs <= 1:
@@ -200,12 +200,12 @@ def delete_runtime(f: TextIOWrapper, config_key: str, index: float) -> None:
 
 
 @secure_read
-def fetch_cache_runtime(f: TextIOWrapper) -> None:
+def _fetch_cache_runtime(f: TextIOWrapper) -> None:
     return json.load(f)
 
 
 @secure_edit
-def record_result(f: TextIOWrapper, results: Dict[str, float]) -> None:
+def _record_result(f: TextIOWrapper, results: Dict[str, float]) -> None:
     record = json.load(f)
     for key, val in results.items():
         if key not in record:
@@ -218,57 +218,57 @@ def record_result(f: TextIOWrapper, results: Dict[str, float]) -> None:
 
 
 @secure_read
-def is_simulator_terminated(f: TextIOWrapper, max_evals: int) -> bool:
+def _is_simulator_terminated(f: TextIOWrapper, max_evals: int) -> bool:
     return len(json.load(f)["loss"]) >= max_evals
 
 
 @secure_read
-def is_simulator_ready(f: TextIOWrapper, n_workers: int) -> bool:
+def _is_simulator_ready(f: TextIOWrapper, n_workers: int) -> bool:
     return len(json.load(f)) == n_workers
 
 
 @secure_read
-def is_allocation_ready(f: TextIOWrapper, n_workers: int) -> bool:
+def _is_allocation_ready(f: TextIOWrapper, n_workers: int) -> bool:
     return len(json.load(f)) == n_workers
 
 
 @secure_read
-def get_worker_id_to_idx(f: TextIOWrapper) -> Dict[str, int]:
+def _get_worker_id_to_idx(f: TextIOWrapper) -> Dict[str, int]:
     return {worker_id: idx for idx, worker_id in enumerate(json.load(f).keys())}
 
 
 @secure_read
-def is_min_cumtime(f: TextIOWrapper, worker_id: str) -> bool:
+def _is_min_cumtime(f: TextIOWrapper, worker_id: str) -> bool:
     cumtimes = json.load(f)
     proc_cumtime = cumtimes[worker_id]
     return min(cumtime for cumtime in cumtimes.values()) == proc_cumtime
 
 
-def wait_proc_allocation(path: str, n_workers: int, waiting_time: float = 1e-2) -> Dict[int, int]:
+def _wait_proc_allocation(path: str, n_workers: int, waiting_time: float = 1e-2) -> Dict[int, int]:
     start = time.time()
     waiting_time *= 1 + np.random.random()
-    while not is_allocation_ready(path, n_workers=n_workers):
+    while not _is_allocation_ready(path, n_workers=n_workers):
         time.sleep(waiting_time)
         if time.time() - start >= n_workers * 5:
             raise TimeoutError("Timeout in the allocation of procs. Please make sure n_workers is correct.")
 
-    return complete_proc_allocation(path)
+    return _complete_proc_allocation(path)
 
 
-def wait_all_workers(path: str, n_workers: int, waiting_time: float = 1e-2) -> Dict[str, int]:
+def _wait_all_workers(path: str, n_workers: int, waiting_time: float = 1e-2) -> Dict[str, int]:
     start = time.time()
     waiting_time *= 1 + np.random.random()
-    while not is_simulator_ready(path, n_workers=n_workers):
+    while not _is_simulator_ready(path, n_workers=n_workers):
         time.sleep(waiting_time)
         if time.time() - start >= n_workers * 5:
             raise TimeoutError("Timeout in creating a simulator. Please make sure n_workers is correct.")
 
-    return get_worker_id_to_idx(path)
+    return _get_worker_id_to_idx(path)
 
 
-def wait_until_next(path: str, worker_id: str, waiting_time: float = 1e-4) -> None:
+def _wait_until_next(path: str, worker_id: str, waiting_time: float = 1e-4) -> None:
     waiting_time *= 1 + np.random.random()
-    while not is_min_cumtime(path, worker_id=worker_id):
+    while not _is_min_cumtime(path, worker_id=worker_id):
         time.sleep(waiting_time)
 
 
@@ -287,12 +287,12 @@ class WorkerFunc:
         loss_key: str = "loss",
         runtime_key: str = "runtime",
     ):
-        worker_id = generate_time_hash()
+        worker_id = _generate_time_hash()
         self._dir_name = os.path.join(DIR_NAME, subdir_name)
         os.makedirs(self.dir_name, exist_ok=True)
-        init_simulator(dir_name=self.dir_name)
+        _init_simulator(dir_name=self.dir_name)
         self._cumtime_path = os.path.join(self.dir_name, WORKER_CUMTIME_FILE_NAME)
-        record_cumtime(path=self._cumtime_path, worker_id=worker_id, runtime=0.0)
+        _record_cumtime(path=self._cumtime_path, worker_id=worker_id, runtime=0.0)
 
         self._func = func
         self._result_path = os.path.join(self._dir_name, RESULT_FILE_NAME)
@@ -301,7 +301,7 @@ class WorkerFunc:
         self._loss_key = loss_key
         self._terminated = False
         self._worker_id = worker_id
-        self._worker_id_to_index = wait_all_workers(path=self._cumtime_path, n_workers=n_workers)
+        self._worker_id_to_index = _wait_all_workers(path=self._cumtime_path, n_workers=n_workers)
         time.sleep(1e-2)  # buffer before the optimization
         self._index = self._worker_id_to_index[self._worker_id]
         self._prev_timestamp = time.time()
@@ -325,7 +325,7 @@ class WorkerFunc:
         config_key = str(eval_config)
         loss, total_runtime = output[self._loss_key], output[self._runtime_key]
         _path = os.path.join(self.dir_name, RUNTIME_CACHE_FILE_NAME)
-        cached_runtimes = fetch_cache_runtime(_path).get(config_key, [0.0])
+        cached_runtimes = _fetch_cache_runtime(_path).get(config_key, [0.0])
         cached_runtime_index = self._get_cached_runtime_index(cached_runtimes, config_key, total_runtime)
         cached_runtime = cached_runtimes[cached_runtime_index]
 
@@ -333,9 +333,9 @@ class WorkerFunc:
         # Start from the intermediate result, and hence we overwrite the cached runtime
         overwrite_min_runtime = cached_runtime < total_runtime
         if budget != self._max_budget:  # update the cache data
-            cache_runtime(_path, config_key=config_key, runtime=total_runtime, update=overwrite_min_runtime)
+            _cache_runtime(_path, config_key=config_key, runtime=total_runtime, update=overwrite_min_runtime)
         else:
-            delete_runtime(_path, config_key=config_key, index=cached_runtime_index)
+            _delete_runtime(_path, config_key=config_key, index=cached_runtime_index)
 
         return {self._loss_key: loss, self._runtime_key: actual_runtime}
 
@@ -348,15 +348,15 @@ class WorkerFunc:
         sampling_time = time.time() - self._prev_timestamp
         output = self._proc_output(eval_config, budget, bench_data)
         loss, runtime = output[self._loss_key], output[self._runtime_key]
-        cumtime = record_cumtime(path=self._cumtime_path, worker_id=self._worker_id, runtime=runtime+sampling_time)
-        wait_until_next(path=self._cumtime_path, worker_id=self._worker_id)
+        cumtime = _record_cumtime(path=self._cumtime_path, worker_id=self._worker_id, runtime=runtime+sampling_time)
+        _wait_until_next(path=self._cumtime_path, worker_id=self._worker_id)
         self._prev_timestamp = time.time()
         row = dict(loss=loss, cumtime=cumtime, index=self._index)
-        record_result(self._result_path, results=row)
+        _record_result(self._result_path, results=row)
         return output
 
     def finish(self) -> None:
-        record_cumtime(path=self._cumtime_path, worker_id=self._worker_id, runtime=INF)
+        _record_cumtime(path=self._cumtime_path, worker_id=self._worker_id, runtime=INF)
         self._terminated = True
 
 
@@ -400,8 +400,8 @@ class CentralWorker:
 
     def _init_alloc(self, pid: int) -> None:
         _path = os.path.join(self._dir_name, PROC_ALLOC_NAME)
-        allocate_proc_to_worker(path=_path, pid=pid)
-        self._pid_to_index = wait_proc_allocation(path=_path, n_workers=self._n_workers)
+        _allocate_proc_to_worker(path=_path, pid=pid)
+        self._pid_to_index = _wait_proc_allocation(path=_path, n_workers=self._n_workers)
 
     def __call__(self, eval_config: Dict[str, Any], budget: int, bench_data: Optional[BaseBenchData] = None) -> Dict:
         pid = os.getpid()
@@ -410,7 +410,7 @@ class CentralWorker:
 
         worker_index = self._pid_to_index[pid]
         output = self._workers[worker_index](eval_config, budget, bench_data=bench_data)
-        if is_simulator_terminated(self._result_path, max_evals=self._max_evals):
+        if _is_simulator_terminated(self._result_path, max_evals=self._max_evals):
             self._workers[worker_index].finish()
 
         return output

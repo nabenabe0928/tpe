@@ -8,7 +8,7 @@ from hpbandster.core import nameserver as hpns
 from hpbandster.core.worker import Worker
 from hpbandster.optimizers import BOHB
 
-from tpe.utils.simulator_wrapper import WorkerFunc, is_simulator_terminated
+from tpe.utils.simulator_wrapper import WorkerFunc, _is_simulator_terminated
 from tpe.utils.utils import AbstractObjFunc
 
 
@@ -31,7 +31,7 @@ class BOHBWorker(Worker):
 
     def compute(self, config: Dict, budget: float, **kwargs):
         output = self._worker(config, budget)
-        if is_simulator_terminated(self._worker._result_path, max_evals=self._max_evals):
+        if _is_simulator_terminated(self._worker._result_path, max_evals=self._max_evals):
             self._worker.finish()  # after the termination, no record will happen
 
         return dict(loss=output["loss"])
