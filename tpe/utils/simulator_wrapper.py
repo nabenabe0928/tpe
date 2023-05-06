@@ -280,7 +280,7 @@ def _wait_until_next(path: str, worker_id: str, waiting_time: float = 1e-4) -> N
 
 
 class ObjectiveFunc(Protocol):
-    def __call__(self, eval_config: Dict[str, Any], budget: int, seed: Optional[int] = None) -> Dict[str, float]:
+    def __call__(self, config: Dict[str, Any], budget: int, seed: Optional[int] = None) -> Dict[str, float]:
         raise NotImplementedError
 
 
@@ -329,9 +329,12 @@ class WorkerFunc:
         intermediate_avail = [state[1] <= self._cumtime and state[2] < budget for state in cached_states]
         cached_state_index = intermediate_avail.index(True) if any(intermediate_avail) else None
         if cached_state_index is None:
-            return INIT_STATE[:], None
+            init_state = INIT_STATE[:]
+            # initial seed, note: 1 << 30 is a huge number that fits 32bit.
+            init_state[-1] = self._rng.randint(1 << 30)
+            return init_state, None
         else:
-            return cached_states[cached_state_index], cached_state_index
+            return cached_states[cached_state_index][:], cached_state_index
 
     def _update_state(
         self,
@@ -343,7 +346,6 @@ class WorkerFunc:
     ) -> None:
         kwargs = dict(path=self._state_path, config_hash=config_hash)
         if budget != self._max_budget:  # update the cache data
-            seed = self._rng.randint(1000000) if seed is None else seed
             new_state = [total_runtime, self._cumtime, budget, seed]
             _cache_state(new_state=new_state, update_index=cached_state_index, **kwargs)
         elif cached_state_index is not None:  # if None, newly start and train till the end, so no need to delete.
@@ -356,8 +358,8 @@ class WorkerFunc:
         kwargs = dict(config_hash=config_hash, budget=budget)
         cached_state, cached_state_index = self._get_cached_state_and_index(**kwargs)
         cached_runtime, _, _, seed = cached_state
-        # TODO: Add seed argument
-        output = self._func(eval_config, budget, **({} if bench_data is None else dict(bench_data=bench_data)))
+        bench_data_kwargs = ({} if bench_data is None else dict(bench_data=bench_data))
+        output = self._func(config=eval_config, budget=budget, seed=seed, **bench_data_kwargs)
         loss, total_runtime = output[self._loss_key], output[self._runtime_key]
         actual_runtime = max(0.0, total_runtime - cached_runtime)
         self._cumtime += actual_runtime
@@ -433,7 +435,7 @@ class CentralWorker:
             self._init_alloc(pid)
 
         worker_index = self._pid_to_index[pid]
-        output = self._workers[worker_index](eval_config, budget, bench_data=bench_data)
+        output = self._workers[worker_index](eval_config=eval_config, budget=budget, bench_data=bench_data)
         if _is_simulator_terminated(self._result_path, max_evals=self._max_evals):
             self._workers[worker_index].finish()
 

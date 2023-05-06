@@ -214,7 +214,11 @@ class LCBench(AbstractBench):
                 assert isinstance(config[name], int) and lb <= config[name] <= ub
 
     def __call__(
-        self, config: Dict[str, Union[int, float]], budget: int = 52, bench_data: Optional[LCBenchSurrogate] = None
+        self,
+        config: Dict[str, Union[int, float]],
+        budget: int = 52,
+        seed: Optional[int] = None,
+        bench_data: Optional[LCBenchSurrogate] = None
     ) -> Dict[str, float]:
         if bench_data is None and self._surrogate is None:
             raise ValueError("data must be provided when `keep_benchdata` is False")
@@ -281,14 +285,18 @@ class HPOLib(AbstractBench):
         return HPOLibDatabase(self.dataset_name)
 
     def __call__(
-        self, config: Dict[str, Union[int, str]], budget: int = 100, bench_data: Optional[HPOLibDatabase] = None
+        self,
+        config: Dict[str, Union[int, str]],
+        budget: int = 100,
+        seed: Optional[int] = None,
+        bench_data: Optional[HPOLibDatabase] = None
     ) -> Dict[str, float]:
         if bench_data is None and self._db is None:
             raise ValueError("data must be provided when `keep_benchdata` is False")
 
         db = bench_data if self._db is None else self._db
         budget = int(budget)
-        idx = self._rng.randint(4)
+        idx = seed % 4 if seed is not None else self._rng.randint(4)
         key = json.dumps({k: self._value_range[k][int(v)] for k, v in config.items()}, sort_keys=True)
         loss = db[key]["valid_mse"][idx][budget - 1]
         runtime = db[key]["runtime"][idx] * budget / self.max_budget
@@ -334,6 +342,7 @@ class JAHSBench201(AbstractBench):
         self,
         config: Dict[str, Union[int, str, float]],
         budget: int = 200,
+        seed: Optional[int] = None,
         bench_data: Optional[JAHSBenchSurrogate] = None
     ) -> Dict[str, float]:
         if bench_data is None and self._surrogate is None:
