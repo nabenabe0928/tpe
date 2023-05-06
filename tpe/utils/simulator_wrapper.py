@@ -37,10 +37,10 @@ For example, when we use multiprocessing, we might need it.
 This file is necessary for post-hoc analysis.
 
 3. simulator_info/*/state_cache.json
-    * config1 -- List[Tuple[runtime, budget, seed]]
-    * config2 -- List[Tuple[runtime, budget, seed]]
+    * config1 -- List[Tuple[runtime, cumtime, budget, seed]]
+    * config2 -- List[Tuple[runtime, cumtime, budget, seed]]
     :
-    * configN -- List[Tuple[runtime, budget, seed]]
+    * configN -- List[Tuple[runtime, cumtime, budget, seed]]
 This file tells you the states of each config.
 Runtime tells how long it took to evaluate configX up to the intermediate result.
 Since we would like to use this information only for the restart of trainings,
@@ -61,7 +61,7 @@ import os
 import time
 from _io import TextIOWrapper
 from multiprocessing import Pool
-from typing import Any, Callable, Dict, List, Optional, Protocol
+from typing import Any, Callable, Dict, List, NewType, Optional, Protocol, Tuple
 
 import numpy as np
 
@@ -76,6 +76,12 @@ RESULT_FILE_NAME = "results.json"
 PROC_ALLOC_NAME = "proc_alloc.json"
 STATE_CACHE_FILE_NAME = "state_cache.json"
 INF = 1 << 40
+_RuntimeType = NewType("_RuntimeType", float)
+_CumtimeType = NewType("_CumtimeType", float)
+_BudgetType = NewType("_BudgetType", int)
+_SeedType = NewType("_SeedType", Optional[int])
+_StateType = Tuple[_RuntimeType, _CumtimeType, _BudgetType, _SeedType]
+INIT_STATE: _StateType = [0.0, 0.0, 0, None]
 
 
 def _generate_time_hash() -> str:
@@ -85,7 +91,7 @@ def _generate_time_hash() -> str:
 
 
 def secure_read(func: Callable) -> Callable:
-    def _inner(path: str, waiting_time: float = 1e-4, **kwargs):
+    def _inner(path: str, waiting_time: float = 1e-4, **kwargs) -> Any:
         start = time.time()
         waiting_time *= 1 + np.random.random()
         fetched, output = False, None
@@ -106,7 +112,7 @@ def secure_read(func: Callable) -> Callable:
 
 
 def secure_edit(func: Callable) -> Callable:
-    def _inner(path: str, waiting_time: float = 1e-4, **kwargs):
+    def _inner(path: str, waiting_time: float = 1e-4, **kwargs) -> Any:
         start = time.time()
         waiting_time *= 1 + np.random.random()
         fetched, output = False, None
@@ -163,46 +169,47 @@ def _complete_proc_allocation(f: TextIOWrapper) -> Dict[int, int]:
 
 
 @secure_edit
-def _record_cumtime(f: TextIOWrapper, worker_id: str, runtime: float) -> float:
+def _record_cumtime(f: TextIOWrapper, worker_id: str, cumtime: float) -> None:
     record = json.load(f)
-    cumtime = record.get(worker_id, 0.0) + runtime
     record[worker_id] = cumtime
     f.seek(0)
     json.dump(record, f, indent=4)
-    return cumtime
 
 
 @secure_edit
-def _cache_state(f: TextIOWrapper, config_hash: int, runtime: float, update: bool = True) -> None:
+def _cache_state(f: TextIOWrapper, config_hash: int, new_state: _StateType, update_index: Optional[int] = None) -> None:
     cache = {int(k): v for k, v in json.load(f).items()}
     if config_hash not in cache:
-        cache[config_hash] = [runtime]
-    elif update:
-        cache[config_hash][0] = runtime
+        cache[config_hash] = [new_state]
+    elif update_index is not None:
+        cache[config_hash][update_index] = new_state
     else:
-        cache[config_hash].append(runtime)
+        cache[config_hash].append(new_state)
 
-    cache[config_hash] = np.sort(cache[config_hash]).tolist()
     f.seek(0)
     json.dump(cache, f, indent=4)
 
 
 @secure_edit
-def _delete_state(f: TextIOWrapper, config_hash: int, index: float) -> None:
+def _delete_state(f: TextIOWrapper, config_hash: int, index: int) -> None:
     cache = {int(k): v for k, v in json.load(f).items()}
-    n_configs = len(cache.get(config_hash, [])) > 0
-    if n_configs <= 1:
-        cache[config_hash] = [0.0]  # we need to have at least one element.
-    else:
-        cache[config_hash].pop(index)
+    cache[config_hash].pop(index)
+    if len(cache[config_hash]) == 0:
+        cache.pop(config_hash)
 
     f.seek(0)
     json.dump(cache, f, indent=4)
 
 
 @secure_read
-def _fetch_cache_state(f: TextIOWrapper) -> None:
+def _fetch_cache_states(f: TextIOWrapper) -> Dict[int, List[_StateType]]:
     return {int(k): v for k, v in json.load(f).items()}
+
+
+@secure_read
+def _fetch_cumtimes(f: TextIOWrapper) -> Dict[str, float]:
+    cumtimes = json.load(f)
+    return cumtimes
 
 
 @secure_edit
@@ -238,9 +245,8 @@ def _get_worker_id_to_idx(f: TextIOWrapper) -> Dict[str, int]:
     return {worker_id: idx for idx, worker_id in enumerate(json.load(f).keys())}
 
 
-@secure_read
-def _is_min_cumtime(f: TextIOWrapper, worker_id: str) -> bool:
-    cumtimes = json.load(f)
+def _is_min_cumtime(path: str, worker_id: str) -> bool:
+    cumtimes = _fetch_cumtimes(path=path)
     proc_cumtime = cumtimes[worker_id]
     return min(cumtime for cumtime in cumtimes.values()) == proc_cumtime
 
@@ -274,7 +280,7 @@ def _wait_until_next(path: str, worker_id: str, waiting_time: float = 1e-4) -> N
 
 
 class ObjectiveFunc(Protocol):
-    def __call__(self, eval_config: Dict[str, Any], budget: int) -> Dict[str, float]:
+    def __call__(self, eval_config: Dict[str, Any], budget: int, seed: Optional[int] = None) -> Dict[str, float]:
         raise NotImplementedError
 
 
@@ -293,10 +299,12 @@ class WorkerFunc:
         os.makedirs(self.dir_name, exist_ok=True)
         _init_simulator(dir_name=self.dir_name)
         self._cumtime_path = os.path.join(self.dir_name, WORKER_CUMTIME_FILE_NAME)
-        _record_cumtime(path=self._cumtime_path, worker_id=worker_id, runtime=0.0)
+        _record_cumtime(path=self._cumtime_path, worker_id=worker_id, cumtime=0.0)
 
+        self._rng = np.random.RandomState(42)
         self._func = func
         self._result_path = os.path.join(self._dir_name, RESULT_FILE_NAME)
+        self._state_path = os.path.join(self.dir_name, STATE_CACHE_FILE_NAME)
         self._max_budget = max_budget
         self._runtime_key = runtime_key
         self._loss_key = loss_key
@@ -306,6 +314,7 @@ class WorkerFunc:
         time.sleep(1e-2)  # buffer before the optimization
         self._index = self._worker_id_to_index[self._worker_id]
         self._prev_timestamp = time.time()
+        self._cumtime = 0.0
 
     def __repr__(self) -> str:
         return f"Worker-{self._worker_id}"
@@ -314,30 +323,45 @@ class WorkerFunc:
     def dir_name(self) -> str:
         return self._dir_name
 
-    def _get_cached_runtime_index(self, cached_runtimes: List[float], runtime: float) -> int:
-        # a[i-1] < v <= a[i]: np.searchsorted(..., side="left")
-        idx = np.searchsorted(cached_runtimes, runtime, side="left")
-        return max(0, idx - 1)
+    def _get_cached_state_and_index(self, config_hash: int, budget: int) -> Tuple[_StateType, Optional[int]]:
+        # _StateType = List[_RuntimeType, _CumtimeType, _BudgetType, _SeedType]
+        cached_states = _fetch_cache_states(self._state_path).get(config_hash, [])[:]
+        intermediate_avail = [state[1] <= self._cumtime and state[2] < budget for state in cached_states]
+        cached_state_index = intermediate_avail.index(True) if any(intermediate_avail) else None
+        if cached_state_index is None:
+            return INIT_STATE[:], None
+        else:
+            return cached_states[cached_state_index], cached_state_index
+
+    def _update_state(
+        self,
+        config_hash: int,
+        budget: int,
+        total_runtime: float,
+        seed: Optional[int],
+        cached_state_index: Optional[int]
+    ) -> None:
+        kwargs = dict(path=self._state_path, config_hash=config_hash)
+        if budget != self._max_budget:  # update the cache data
+            seed = self._rng.randint(1000000) if seed is None else seed
+            new_state = [total_runtime, self._cumtime, budget, seed]
+            _cache_state(new_state=new_state, update_index=cached_state_index, **kwargs)
+        elif cached_state_index is not None:  # if None, newly start and train till the end, so no need to delete.
+            _delete_state(index=cached_state_index, **kwargs)
 
     def _proc_output(
         self, eval_config: Dict[str, Any], budget: int, bench_data: Optional[BaseBenchData]
     ) -> Dict[str, float]:
-        output = self._func(eval_config, budget, **({} if bench_data is None else dict(bench_data=bench_data)))
         config_hash = hash(str(eval_config))
+        kwargs = dict(config_hash=config_hash, budget=budget)
+        cached_state, cached_state_index = self._get_cached_state_and_index(**kwargs)
+        cached_runtime, _, _, seed = cached_state
+        # TODO: Add seed argument
+        output = self._func(eval_config, budget, **({} if bench_data is None else dict(bench_data=bench_data)))
         loss, total_runtime = output[self._loss_key], output[self._runtime_key]
-        _path = os.path.join(self.dir_name, STATE_CACHE_FILE_NAME)
-        cached_runtimes = _fetch_cache_state(_path).get(config_hash, [0.0])
-        cached_runtime_index = self._get_cached_runtime_index(cached_runtimes, total_runtime)
-        cached_runtime = cached_runtimes[cached_runtime_index]
-
         actual_runtime = max(0.0, total_runtime - cached_runtime)
-        # Start from the intermediate result, and hence we overwrite the cached runtime
-        overwrite_min_runtime = cached_runtime < total_runtime
-        if budget != self._max_budget:  # update the cache data
-            _cache_state(_path, config_hash=config_hash, runtime=total_runtime, update=overwrite_min_runtime)
-        else:
-            _delete_state(_path, config_hash=config_hash, index=cached_runtime_index)
-
+        self._cumtime += actual_runtime
+        self._update_state(total_runtime=total_runtime, cached_state_index=cached_state_index, seed=seed, **kwargs)
         return {self._loss_key: loss, self._runtime_key: actual_runtime}
 
     def __call__(
@@ -346,18 +370,17 @@ class WorkerFunc:
         if self._terminated:
             return {self._loss_key: INF, self._runtime_key: INF}
 
-        sampling_time = time.time() - self._prev_timestamp
+        self._cumtime += time.time() - self._prev_timestamp  # sampling time
         output = self._proc_output(eval_config, budget, bench_data)
-        loss, runtime = output[self._loss_key], output[self._runtime_key]
-        cumtime = _record_cumtime(path=self._cumtime_path, worker_id=self._worker_id, runtime=runtime+sampling_time)
+        _record_cumtime(path=self._cumtime_path, worker_id=self._worker_id, cumtime=self._cumtime)
         _wait_until_next(path=self._cumtime_path, worker_id=self._worker_id)
         self._prev_timestamp = time.time()
-        row = dict(loss=loss, cumtime=cumtime, index=self._index)
+        row = dict(loss=output[self._loss_key], cumtime=self._cumtime, index=self._index)
         _record_result(self._result_path, results=row)
         return output
 
     def finish(self) -> None:
-        _record_cumtime(path=self._cumtime_path, worker_id=self._worker_id, runtime=INF)
+        _record_cumtime(path=self._cumtime_path, worker_id=self._worker_id, cumtime=INF)
         self._terminated = True
 
 
