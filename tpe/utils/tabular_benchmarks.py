@@ -3,6 +3,8 @@ import os
 from abc import ABCMeta, abstractmethod
 from typing import Any, Dict, Final, List, Optional, Union
 
+from benchmark_apis import LCBench as MFLCBench
+
 import ConfigSpace as CS
 
 import h5py
@@ -12,12 +14,14 @@ try:
 except ModuleNotFoundError:  # We cannot use jahs with smac
     pass
 
+from nashpobench2api import NASHPOBench2API
+
 import numpy as np
 
 import pyarrow.parquet as pq  # type: ignore
 
 
-DATA_DIR_NAME = os.path.join(os.environ["HOME"], "tabular_benchmarks")
+DATA_DIR_NAME = os.path.join(os.environ["HOME"], "hpo_benchmarks")
 SEEDS: Final = [665, 1319, 7222, 7541, 8916]
 VALUE_RANGES = json.load(open("tpe/utils/tabular_benchmarks.json"))
 
@@ -178,3 +182,65 @@ class JAHSBench201(AbstractBench):
             ]
         )
         return config_space
+
+
+class NASHPOBench2(AbstractBench):
+    """
+    Download the datasets from:
+        https://drive.google.com/drive/folders/1sxnBo5A6WXxt44WQG8f8WlYYicKd9g-h
+    """
+
+    def __init__(
+        self,
+        dataset_id: int,
+        seed: Optional[int],
+    ):
+        self.dataset_name = ["cifar10_nashpobench2"][dataset_id]
+        data_path = os.path.join(DATA_DIR_NAME, "nashpobench2")
+        self._db = NASHPOBench2API(data_path)
+        self._rng = np.random.RandomState(seed)
+        self._value_range = VALUE_RANGES["nashpobench2"]
+
+    def __call__(self, config: Dict[str, Union[int, str]]) -> float:
+        idx = [222, 555, 888][self._rng.randint(3)]
+        ops = [config[f"Op{i}"] for i in range(1, 7)]
+        cellcode = f"{ops[0]}|{ops[1]}{ops[2]}|{ops[3]}{ops[4]}{ops[5]}"
+        results = self._db.query_by_key(
+            cellcode=cellcode,
+            batch_size=self._value_range["batch_size"][config["batch_size"]],
+            lr=self._value_range["lr"][config["lr"]],
+            seed=idx,
+            epoch=200,
+        )
+        return float(100.0 - results[0])
+
+    @property
+    def config_space(self) -> CS.ConfigurationSpace:
+        return self._fetch_discrete_config_space()
+
+
+class LCBench(AbstractBench):
+    def __init__(
+        self,
+        dataset_id: int,
+        seed: Optional[int],
+    ):
+        self.dataset_name, bench_id = [
+            ("australian", 7),
+            ("credit_g", 10),
+            ("vehicle", 11),
+            ("kc1", 12),
+            ("blood_transfusion_service_center", 13),
+            ("phoneme", 15),
+            ("car", 30),
+            ("segment", 31),
+        ][dataset_id]
+        self.dataset_name += "-lcbench"
+        self._db = MFLCBench(dataset_id=bench_id, seed=seed)
+
+    def __call__(self, config: Dict[str, Union[int, float]]) -> float:
+        return float(self._db(eval_config=config)["loss"])
+
+    @property
+    def config_space(self) -> CS.ConfigurationSpace:
+        return self._db.config_space

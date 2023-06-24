@@ -18,39 +18,53 @@ import xgboost
 
 from tpe.optimizer import TPEOptimizer
 from tpe.utils.benchmarks import (
+    Ackley,
+    DifferentPower,
+    DixonPrice,
+    Griewank,
+    KTablet,
+    Langermann,
+    Levy,
+    Michalewicz,
+    Perm,
+    Powell,
+    Rastrigin,
+    Rosenbrock,
+    Schwefel,
     Sphere,
     Styblinski,
-    Rastrigin,
-    Schwefel,
-    Ackley,
-    Griewank,
-    Perm,
-    KTablet,
+    Trid,
     WeightedSphere,
-    Rosenbrock,
-    Levy,
     XinSheYang,
 )
-from tpe.utils.tabular_benchmarks import HPOBench, HPOLib, JAHSBench201
+from tpe.utils.tabular_benchmarks import HPOBench, HPOLib, JAHSBench201, LCBench, NASHPOBench2
 
 
 FUNCS = [
+    Ackley,
+    DifferentPower,
+    DixonPrice,
+    Griewank,
+    KTablet,
+    Langermann,
+    Levy,
+    Michalewicz,
+    Perm,
+    Powell,
+    Rastrigin,
+    Rosenbrock,
+    Schwefel,
     Sphere,
     Styblinski,
-    Rastrigin,
-    Schwefel,
-    Ackley,
-    Griewank,
-    Perm,
-    KTablet,
+    Trid,
     WeightedSphere,
-    Rosenbrock,
-    Levy,
     XinSheYang,
 ]
 FUNCS += [HPOBench(dataset_id=i, seed=None) for i in range(8)]
 FUNCS += [HPOLib(dataset_id=i, seed=None) for i in range(4)]
 FUNCS += [JAHSBench201(dataset_id=i) for i in range(3)]
+FUNCS += [LCBench(dataset_id=i) for i in range(8)]
+FUNCS += [NASHPOBench2(dataset_id=0)]
 
 
 def wrapper_func(bench: Callable) -> Callable:
