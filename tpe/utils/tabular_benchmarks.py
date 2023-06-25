@@ -18,6 +18,8 @@ from nashpobench2api import NASHPOBench2API
 
 import numpy as np
 
+from olympus_surrogate_bench import OlympusSurrogateAPI
+
 import pyarrow.parquet as pq  # type: ignore
 
 
@@ -244,3 +246,20 @@ class LCBench(AbstractBench):
     @property
     def config_space(self) -> CS.ConfigurationSpace:
         return self._db.config_space
+
+
+class OlympusBench(AbstractBench):
+    def __init__(
+        self,
+        dataset_id: int,
+        seed: Optional[int],
+    ):
+        self._bench = OlympusSurrogateAPI(dataset_id=dataset_id)
+        self.dataset_name = self._bench.dataset_name
+
+    def __call__(self, config: Dict[str, Union[int, float]]) -> float:
+        return float(self._bench(config))
+
+    @property
+    def config_space(self) -> CS.ConfigurationSpace:
+        return self._bench.config_space

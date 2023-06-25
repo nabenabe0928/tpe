@@ -7,6 +7,9 @@ gpytorch==1.7.0
 h5py==3.7.0
 pyarrow==10.0.0
 PyQt5==5.15.4
+nashpobench2api
+mfhpo-benchmark-api[lcbench]>=2.0.0
+olympus-surrogate-bench
 
 # TPE
 scipy==1.9.3

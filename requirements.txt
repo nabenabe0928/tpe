@@ -15,6 +15,7 @@ PyQt5
 jahs-bench==1.0.2
 nashpobench2api
 mfhpo-benchmark-api[lcbench]>=2.0.0
+olympus-surrogate-bench
 
 # TPE
 scipy==1.9.3

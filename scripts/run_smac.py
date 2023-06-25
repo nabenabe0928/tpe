@@ -33,7 +33,7 @@ from tpe.utils.benchmarks import (
     WeightedSphere,
     XinSheYang,
 )
-from tpe.utils.tabular_benchmarks import HPOBench, HPOLib, LCBench, NASHPOBench2
+from tpe.utils.tabular_benchmarks import HPOBench, HPOLib, LCBench, NASHPOBench2, OlympusBench
 
 
 FUNCS = [
@@ -61,6 +61,7 @@ FUNCS += [HPOLib(dataset_id=i, seed=None) for i in range(4)]
 # No JAHS-Bench because of some errors
 FUNCS += [LCBench(dataset_id=i) for i in range(8)]
 FUNCS += [NASHPOBench2(dataset_id=0)]
+FUNCS += [OlympusBench(dataset_id=i) for i in range(10)]
 
 
 def wrapper_func(bench: Callable) -> Callable:

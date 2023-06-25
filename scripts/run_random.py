@@ -26,7 +26,7 @@ from tpe.utils.benchmarks import (
     WeightedSphere,
     XinSheYang,
 )
-from tpe.utils.tabular_benchmarks import HPOBench, HPOLib, JAHSBench201, LCBench, NASHPOBench2
+from tpe.utils.tabular_benchmarks import HPOBench, HPOLib, JAHSBench201, LCBench, NASHPOBench2, OlympusBench
 
 
 FUNCS = [
@@ -54,6 +54,7 @@ FUNCS += [HPOLib(dataset_id=i, seed=None) for i in range(4)]
 FUNCS += [JAHSBench201(dataset_id=i) for i in range(3)]
 FUNCS += [LCBench(dataset_id=i) for i in range(8)]
 FUNCS += [NASHPOBench2(dataset_id=0)]
+FUNCS += [OlympusBench(dataset_id=i) for i in range(10)]
 
 
 def collect_data(bench: Callable, dim: Optional[int] = None) -> None:
