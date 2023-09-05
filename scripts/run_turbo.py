@@ -57,9 +57,9 @@ FUNCS = [
 FUNCS += [HPOBench(dataset_id=i, seed=None) for i in range(8)]
 FUNCS += [HPOLib(dataset_id=i, seed=None) for i in range(4)]
 FUNCS += [JAHSBench201(dataset_id=i) for i in range(2, 3)]
-FUNCS += [LCBench(dataset_id=i) for i in range(8)]
-FUNCS += [NASHPOBench2(dataset_id=0)]
-FUNCS += [OlympusBench(dataset_id=i) for i in range(10)]
+FUNCS += [LCBench(dataset_id=i, seed=None) for i in range(34)]
+FUNCS += [NASHPOBench2(dataset_id=0, seed=None)]
+FUNCS += [OlympusBench(dataset_id=i, seed=None) for i in range(10)]
 
 
 def get_bounds(
@@ -78,8 +78,8 @@ def get_bounds(
             lb.append(np.log(hp.lower) if hp.log else hp.lower)
             ub.append(np.log(hp.upper) if hp.log else hp.upper)
         elif isinstance(hp, CS.UniformIntegerHyperparameter):
-            lb.append(hp.lower - 0.5 + 1e-12)
-            ub.append(hp.upper + 0.5 - 1e-12)
+            lb.append(np.log(hp.lower) if hp.log else hp.lower - 0.5 + 1e-12)
+            ub.append(np.log(hp.upper) if hp.log else hp.upper + 0.5 - 1e-12)
 
     return np.asarray(lb), np.asarray(ub)
 
@@ -96,7 +96,7 @@ def convert(
             config[hp_name] = np.exp(X[cur]) if hp.log else X[cur]
             cur += 1
         elif isinstance(hp, CS.UniformIntegerHyperparameter):
-            config[hp_name] = int(np.round(X[cur]))
+            config[hp_name] = int(np.round(np.exp(X[cur])) if hp.log else np.round(X[cur]))
             cur += 1
         elif isinstance(hp, CS.CategoricalHyperparameter):
             config[hp_name] = int(np.argmax([X[cur + i] for i in range(len(hp.choices))]))
@@ -192,8 +192,11 @@ def collect_data(bench: Callable, dim: Optional[int] = None) -> None:
 
 if __name__ == "__main__":
     for bench in FUNCS:
-        if isinstance(bench, ABCMeta):
-            for d in [30]:
-                collect_data(bench, dim=d)
-        else:
-            collect_data(bench)
+        try:
+            if isinstance(bench, ABCMeta):
+                for d in [5, 10, 30]:
+                    collect_data(bench, dim=d)
+            else:
+                collect_data(bench)
+        except Exception as e:
+            print(f"Failed with error {e}")

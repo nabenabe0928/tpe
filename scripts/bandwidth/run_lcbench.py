@@ -1,4 +1,3 @@
-from argparse import ArgumentParser
 import itertools
 import os
 
@@ -11,12 +10,7 @@ from tpe.utils.constants import QuantileFunc
 from experiment_utils import exist_file, save_observations
 
 
-parser = ArgumentParser()
-parser.add_argument("--dataset_id", type=int, choices=list(range(8)))
-args = parser.parse_args()
-
-# FUNCS = [LCBench(dataset_id=i, seed=None) for i in range(8)]
-FUNCS = [LCBench(dataset_id=args.dataset_id, seed=None)]
+FUNCS = [LCBench(dataset_id=i, seed=None) for i in range(34)]
 N_SEEDS = 10
 MAX_EVALS = 200
 N_INIT = 200 * 5 // 100
@@ -78,24 +72,20 @@ if __name__ == "__main__":
     for params in itertools.product(
         *(
             [
-                # (LINEAR, 0.05),
-                # (LINEAR, 0.10),
+                (LINEAR, 0.05),
+                (LINEAR, 0.10),
                 (LINEAR, 0.15),
-                # (LINEAR, 0.20),
-                # (SQRT, 0.25),
-                # (SQRT, 0.5),
-                # (SQRT, 0.75),
-                # (SQRT, 1.0),
+                (LINEAR, 0.20),
+                (SQRT, 0.25),
+                (SQRT, 0.5),
+                (SQRT, 0.75),
+                (SQRT, 1.0),
             ],  # quantile_func
-            # ["uniform", "older-smaller", "expected-improvement"],  # weight_func_choice
-            ["expected-improvement", ],  # weight_func_choice
-            # [0.25, 0.5, 1.0, 2.0, 4.0, np.inf],  # magic_clip
-            [2.0, ],  # magic_clip
-            # [None, "optuna", "hyperopt"],  # heuristics
-            ["hyperopt", ],  # heuristics
-            # [0.01, 0.03, 0.1, 0.3],  # min bandwidth factor
-            [0.03, ],  # min bandwidth factor
-            FUNCS[-1:],
+            ["uniform", "older-smaller", "expected-improvement"],  # weight_func_choice
+            [0.25, 0.5, 1.0, 2.0, 4.0, np.inf],  # magic_clip
+            [None, "optuna", "hyperopt"],  # heuristics
+            [0.01, 0.03, 0.1, 0.3],  # min bandwidth factor
+            FUNCS,
         )
     ):
         try:

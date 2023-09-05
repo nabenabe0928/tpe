@@ -62,9 +62,9 @@ FUNCS = [
 FUNCS += [HPOBench(dataset_id=i, seed=None) for i in range(8)]
 FUNCS += [HPOLib(dataset_id=i, seed=None) for i in range(4)]
 FUNCS += [JAHSBench201(dataset_id=i) for i in range(3)]
-FUNCS += [LCBench(dataset_id=i) for i in range(8)]
-FUNCS += [NASHPOBench2(dataset_id=0)]
-FUNCS += [OlympusBench(dataset_id=i) for i in range(10)]
+FUNCS += [LCBench(dataset_id=i, seed=None) for i in range(34)]
+FUNCS += [NASHPOBench2(dataset_id=0, seed=None)]
+FUNCS += [OlympusBench(dataset_id=i, seed=None) for i in range(10)]
 
 
 def wrapper_func(bench: Callable) -> Callable:
@@ -173,8 +173,11 @@ def collect_data(bench: Callable, dim: Optional[int] = None) -> None:
 
 if __name__ == "__main__":
     for bench in FUNCS:
-        if isinstance(bench, ABCMeta):
-            for d in [5, 10, 30]:
-                collect_data(bench, dim=d)
-        else:
-            collect_data(bench)
+        try:
+            if isinstance(bench, ABCMeta):
+                for d in [5, 10, 30]:
+                    collect_data(bench, dim=d)
+            else:
+                collect_data(bench)
+        except Exception as e:
+            print(f"Failed with error {e}")

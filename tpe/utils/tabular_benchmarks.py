@@ -227,18 +227,8 @@ class LCBench(AbstractBench):
         dataset_id: int,
         seed: Optional[int],
     ):
-        self.dataset_name, bench_id = [
-            ("australian", 7),
-            ("credit_g", 10),
-            ("vehicle", 11),
-            ("kc1", 12),
-            ("blood_transfusion_service_center", 13),
-            ("phoneme", 15),
-            ("car", 30),
-            ("segment", 31),
-        ][dataset_id]
-        self.dataset_name += "-lcbench"
-        self._db = MFLCBench(dataset_id=bench_id, seed=seed)
+        self._db = MFLCBench(dataset_id=dataset_id, seed=seed)
+        self.dataset_name = self._db.dataset_name + "_lcbench"
 
     def __call__(self, config: Dict[str, Union[int, float]]) -> float:
         return float(self._db(eval_config=config)["loss"])
@@ -255,10 +245,12 @@ class OlympusBench(AbstractBench):
         seed: Optional[int],
     ):
         self._bench = OlympusSurrogateAPI(dataset_id=dataset_id)
+        self._minimize = self._bench._minimize
         self.dataset_name = self._bench.dataset_name
 
     def __call__(self, config: Dict[str, Union[int, float]]) -> float:
-        return float(self._bench(config))
+        loss = float(self._bench(config))
+        return loss if self._minimize else -loss
 
     @property
     def config_space(self) -> CS.ConfigurationSpace:
