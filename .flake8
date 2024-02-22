@@ -4,3 +4,4 @@
  exclude =
      venv
      build
+ ignore=E203

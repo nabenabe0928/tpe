@@ -333,15 +333,15 @@ class Michalewicz(AbstractFunc):
     def func(cls, eval_config: Dict[str, float]) -> float:
         vals = config2array(eval_config, R=cls._R) + cls._R
         t1 = np.sin(vals)
-        t2 = np.sin((np.arange(len(eval_config)) + 1) * (vals ** 2) / np.pi) ** 20
-        return - t1 @ t2
+        t2 = np.sin((np.arange(len(eval_config)) + 1) * (vals**2) / np.pi) ** 20
+        return -t1 @ t2
 
     @classmethod
     def func2d(cls, X: np.ndarray, Y: np.ndarray) -> np.ndarray:
         x = cls._R * X + cls._R
         y = cls._R * Y + cls._R
-        t1 = - np.sin(x) * np.sin(x ** 2 / np.pi) ** 20
-        t2 = - np.sin(y) * np.sin(2 * y ** 2 / np.pi) ** 20
+        t1 = -np.sin(x) * np.sin(x**2 / np.pi) ** 20
+        t2 = -np.sin(y) * np.sin(2 * y**2 / np.pi) ** 20
         return t1 + t2
 
 
@@ -383,7 +383,7 @@ class DixonPrice(AbstractFunc):
         x = cls._R * X
         y = cls._R * Y
         t1 = (x - 1) ** 2
-        t2 = 2 * (2 * x ** 2 - y) ** 2
+        t2 = 2 * (2 * x**2 - y) ** 2
         return t1 + t2
 
 
@@ -425,7 +425,7 @@ class Langermann(AbstractFunc):
         C = rng.randint(low=1, high=5, size=m).astype(np.float64)
         A = rng.randint(low=1, high=10, size=(m, dim)).astype(np.float64)
         exps = np.sum((vals - A) ** 2, axis=-1)
-        return (C * np.exp(- 1 / np.pi * exps)) @ np.cos(np.pi * exps)
+        return (C * np.exp(-1 / np.pi * exps)) @ np.cos(np.pi * exps)
 
     @classmethod
     def func2d(cls, X: np.ndarray, Y: np.ndarray) -> np.ndarray:

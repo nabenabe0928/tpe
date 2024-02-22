@@ -1,4 +1,7 @@
-from typing import Any, Callable, Dict, Literal, Optional
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import Any, Literal
 
 import ConfigSpace as CS
 
@@ -17,13 +20,13 @@ class TPEOptimizer(BaseOptimizer):
         resultfile: str = "temp",
         n_init: int = 10,
         max_evals: int = 100,
-        seed: Optional[int] = None,
+        seed: int | None = None,
         metric_name: str = "loss",
         only_requirements: bool = True,
         n_ei_candidates: int = 24,
         min_bandwidth_factor: float = 1e-2,
-        min_bandwidth_factor_for_discrete: Optional[float] = None,
-        top: Optional[float] = 1.0,
+        min_bandwidth_factor_for_discrete: float | None = None,
+        top: float | None = 1.0,
         quantile_func: Callable[[int], int] = QuantileFunc(),
         weight_func_choice: Literal[
             "uniform", "older-smaller", "older-drop", "weaker-smaller", "expected-improvement"
@@ -32,7 +35,7 @@ class TPEOptimizer(BaseOptimizer):
         magic_clip: bool = False,
         magic_clip_exponent: float = 1.0,
         prior: bool = True,
-        heuristic: Optional[Literal["optuna", "hyperopt"]] = None,
+        heuristic: Literal["optuna", "hyperopt"] | None = None,
     ):
         """
         Args:
@@ -47,10 +50,10 @@ class TPEOptimizer(BaseOptimizer):
             only_requirements (bool): If True, we only save runtime and loss.
             n_ei_candidates (int): The number of samplings to optimize the EI value
             min_bandwidth_factor (float): The minimum bandwidth for numerical parameters
-            min_bandwidth_factor_for_discrete (Optional[float]):
+            min_bandwidth_factor_for_discrete (float | None):
                 The minimum bandwidth factor for discrete.
                 If None, it adapts so that the factor gives 0.1 after the discrete modifications.
-            top (Optional[float]):
+            top (float | None):
                 The hyperparam of the cateogircal kernel. It defines the prob of the top category.
                 If None, it adapts the parameter in a way that Optuna does.
                 top := (1 + 1/N) / (1 + c/N) where
@@ -87,29 +90,29 @@ class TPEOptimizer(BaseOptimizer):
             heuristic=heuristic,
         )
 
-    def update(self, eval_config: Dict[str, Any], loss: float) -> None:
+    def update(self, eval_config: dict[str, Any], loss: float) -> None:
         self._tpe_sampler.update_observations(eval_config=eval_config, loss=loss)
 
-    def fetch_observations(self) -> Dict[str, np.ndarray]:
+    def fetch_observations(self) -> dict[str, np.ndarray]:
         return self._tpe_sampler.observations
 
-    def _get_config_cands(self) -> Dict[str, np.ndarray]:
+    def _get_config_cands(self) -> dict[str, np.ndarray]:
         return self._tpe_sampler.get_config_candidates()
 
-    def _compute_probability_improvement(self, config_cands: Dict[str, np.ndarray]) -> np.ndarray:
+    def _compute_probability_improvement(self, config_cands: dict[str, np.ndarray]) -> np.ndarray:
         return self._tpe_sampler.compute_probability_improvement(config_cands=config_cands)
 
-    def sample(self) -> Dict[str, Any]:
+    def sample(self) -> dict[str, Any]:
         """
         Sample a configuration using tree-structured parzen estimator (TPE)
 
         Returns:
-            eval_config (Dict[str, Any]): A sampled configuration from TPE
+            eval_config (dict[str, Any]): A sampled configuration from TPE
         """
         config_cands = self._get_config_cands()
         pi_config = self._compute_probability_improvement(config_cands)
 
-        eval_config: Dict[str, Any] = {}
+        eval_config: dict[str, Any] = {}
         if self._tpe_sampler._multivariate:
             best_idx = int(np.argmax(pi_config))
             eval_config = {hp_name: config_cands[hp_name][best_idx] for dim, hp_name in enumerate(self._hp_names)}

@@ -108,7 +108,7 @@ class WeightFuncs:
 
         ages = rankdata(order, method="ordinal") - 1
         weights = np.zeros(order.size, dtype=np.float32)
-        weights[-self._decay_start_from:] = 1
+        weights[-self._decay_start_from :] = 1
         weights /= np.sum(weights)
         return weights[ages]
 

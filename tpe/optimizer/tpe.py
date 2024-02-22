@@ -1,4 +1,7 @@
-from typing import Any, Callable, Dict, Literal, Optional, Tuple, Type
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import Any, Literal
 
 import ConfigSpace as CS
 
@@ -22,15 +25,15 @@ class TreeStructuredParzenEstimator:
         weight_func: WeightFuncType,
         n_ei_candidates: int,
         metric_name: str,
-        seed: Optional[int],
+        seed: int | None,
         min_bandwidth_factor: float,
-        min_bandwidth_factor_for_discrete: Optional[float],
-        top: Optional[float],
+        min_bandwidth_factor_for_discrete: float | None,
+        top: float | None,
         multivariate: bool,
         magic_clip: bool,
         magic_clip_exponent: float,
         prior: bool,
-        heuristic: Optional[Literal["optuna", "hyperopt"]] = None,
+        heuristic: Literal["optuna", "hyperopt"] | None = None,
     ):
         """
         Attributes:
@@ -39,19 +42,19 @@ class TreeStructuredParzenEstimator:
             config_space (CS.ConfigurationSpace): The searching space of the task
             hp_names (List[str]): The list of hyperparameter names
             metric_name (str): The name of the metric (or objective function value)
-            observations (Dict[str, Any]): The storage of the observations
-            sorted_observations (Dict[str, Any]): The storage of the observations sorted based on loss
+            observations (dict[str, Any]): The storage of the observations
+            sorted_observations (dict[str, Any]): The storage of the observations sorted based on loss
             min_bandwidth_factor (float): The minimum bandwidth for continuous.
-            min_bandwidth_factor_for_discrete (Optional[float]):
+            min_bandwidth_factor_for_discrete (float | None):
                 The minimum bandwidth factor for discrete.
                 If None, it adapts so that the factor gives 0.1 after the discrete modifications.
-            top (Optional[float]):
+            top (float | None):
                 The hyperparam of the cateogircal kernel. It defines the prob of the top category.
                 If None, it adapts the parameter in a way that Optuna does.
                 top := (1 + 1/N) / (1 + c/N) where
                 c is the number of choices and N is the number of observations.
-            is_categoricals (Dict[str, bool]): Whether the given hyperparameter is categorical
-            is_ordinals (Dict[str, bool]): Whether the given hyperparameter is ordinal
+            is_categoricals (dict[str, bool]): Whether the given hyperparameter is categorical
+            is_ordinals (dict[str, bool]): Whether the given hyperparameter is ordinal
             quantile_func (Callable[[np.ndarray], int]):
                 The function that returns the number of a better group based on the total number of evaluations.
             magic_clip (bool):
@@ -96,7 +99,7 @@ class TreeStructuredParzenEstimator:
         self._mvpe_upper: MultiVariateParzenEstimator
 
     def _insert_observations(
-        self, key: str, insert_loc: int, val: Any, is_categorical: bool, dtype: Optional[Type[np.number]] = None
+        self, key: str, insert_loc: int, val: Any, is_categorical: bool, dtype: type[np.number] | None = None
     ) -> None:
         data, sorted_data = self._observations, self._sorted_observations
 
@@ -113,12 +116,12 @@ class TreeStructuredParzenEstimator:
             data[key] = np.append(data[key], val).astype(dtype)
             sorted_data[key] = np.insert(sorted_data[key], insert_loc, val).astype(dtype)
 
-    def update_observations(self, eval_config: Dict[str, NumericType], loss: float) -> None:
+    def update_observations(self, eval_config: dict[str, NumericType], loss: float) -> None:
         """
         Update the observations for the TPE construction
 
         Args:
-            eval_config (Dict[str, NumericType]): The configuration to evaluate (after conversion)
+            eval_config (dict[str, NumericType]): The configuration to evaluate (after conversion)
             loss (float): The loss value as a result of the evaluation
         """
         sorted_losses, losses = (
@@ -147,7 +150,7 @@ class TreeStructuredParzenEstimator:
 
         self._update_parzen_estimators()
 
-    def _calculate_weights(self) -> Tuple[np.ndarray, np.ndarray]:
+    def _calculate_weights(self) -> tuple[np.ndarray, np.ndarray]:
         sorted_loss_vals = self._sorted_observations[self._metric_name]
         n_lower, n_upper = self._n_lower, sorted_loss_vals.size - self._n_lower
         lower_vals, upper_vals = sorted_loss_vals[:n_lower], sorted_loss_vals[n_lower:]
@@ -171,8 +174,8 @@ class TreeStructuredParzenEstimator:
 
     def _update_parzen_estimators(self) -> None:
         n_lower = self._n_lower
-        pe_lower_dict: Dict[str, ParzenEstimatorType] = {}
-        pe_upper_dict: Dict[str, ParzenEstimatorType] = {}
+        pe_lower_dict: dict[str, ParzenEstimatorType] = {}
+        pe_upper_dict: dict[str, ParzenEstimatorType] = {}
         weights_lower, weights_upper = self._calculate_weights()
         for hp_name in self._hp_names:
             is_categorical = self._is_categoricals[hp_name]
@@ -194,7 +197,7 @@ class TreeStructuredParzenEstimator:
         self._mvpe_lower = MultiVariateParzenEstimator(pe_lower_dict)
         self._mvpe_upper = MultiVariateParzenEstimator(pe_upper_dict)
 
-    def get_config_candidates(self) -> Dict[str, np.ndarray]:
+    def get_config_candidates(self) -> dict[str, np.ndarray]:
         """
         Since we compute the probability improvement of each objective independently,
         we need to sample the configurations in advance.
@@ -205,19 +208,19 @@ class TreeStructuredParzenEstimator:
                 If None is provided, we use n_ei_candidates.
 
         Returns:
-            config_cands (Dict[str, np.ndarray]):
+            config_cands (dict[str, np.ndarray]):
                 A dict of arrays of candidates in each dimension
         """
         return self._mvpe_lower.sample(
             n_samples=self._n_ei_candidates, rng=self._rng, dim_independent=True, return_dict=True
         )
 
-    def compute_probability_improvement(self, config_cands: Dict[str, np.ndarray]) -> np.ndarray:
+    def compute_probability_improvement(self, config_cands: dict[str, np.ndarray]) -> np.ndarray:
         """
         Compute the probability improvement given configurations
 
         Args:
-            config_cands (Dict[str, np.ndarray]):
+            config_cands (dict[str, np.ndarray]):
                 The dict of candidate values for each dimension.
                 The length is the number of dimensions and
                 each array has the length of n_ei_candidates.
@@ -253,7 +256,7 @@ class TreeStructuredParzenEstimator:
         weights_upper: np.ndarray,
         hp_name: str,
         is_categorical: bool,
-    ) -> Tuple[ParzenEstimatorType, ParzenEstimatorType]:
+    ) -> tuple[ParzenEstimatorType, ParzenEstimatorType]:
         """
         Construct parzen estimators for the lower and the upper groups and return them
 
@@ -342,7 +345,7 @@ class TreeStructuredParzenEstimator:
         return (1 + 1 / N) / (1 + n_choices / N)
 
     @property
-    def observations(self) -> Dict[str, np.ndarray]:
+    def observations(self) -> dict[str, np.ndarray]:
         return {hp_name: vals.copy() for hp_name, vals in self._observations.items()}
 
     @property
