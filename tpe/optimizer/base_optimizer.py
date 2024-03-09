@@ -120,6 +120,7 @@ class BaseOptimizer(metaclass=ABCMeta):
         """
         use_logger = logger_name is not None
         logger_name = logger_name if use_logger else "temp"
+        assert isinstance(logger_name, str), "MyPy redefinition."
         logger = get_logger(logger_name, logger_name, disable=(not use_logger))
         best_config, best_loss, t = {}, np.inf, 0
 

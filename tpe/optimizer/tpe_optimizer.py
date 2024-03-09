@@ -29,7 +29,7 @@ class TPEOptimizer(BaseOptimizer):
         min_bandwidth_factor: float = 1e-1,
         top: float = 1.0,
         # TODO: Make dict of percentile_func_maker
-        percentile_func_maker: PercentileFuncMaker = default_percentile_maker,
+        percentile_func_maker: PercentileFuncMaker = default_percentile_maker,  # type: ignore[assignment]
     ):
         """
         Args:

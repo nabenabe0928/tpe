@@ -50,7 +50,7 @@ def get_args_from_parser(Choices: Enum, opts: dict) -> Namespace:
     parser.add_argument("--exp_id", type=int, default=0)
     parser.add_argument("--max_evals", type=int, default=100)
 
-    default_choice = getattr(Choices, Choices._member_names_[0]).name
+    default_choice = getattr(Choices, Choices._member_names_[0]).name  # type: ignore[attr-defined]
     parser.add_argument("--dataset", choices=list([c.name for c in Choices]), default=default_choice)  # type: ignore
 
     args = parser.parse_args()
