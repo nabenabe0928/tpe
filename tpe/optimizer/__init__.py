@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import warnings
 
 from tpe.optimizer.random_search import RandomSearch

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from tpe import optimizer
 from tpe.utils import utils
 
