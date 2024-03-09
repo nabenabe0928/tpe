@@ -1,4 +1,6 @@
-from typing import Any, Dict, List, Optional
+from __future__ import annotations
+
+from typing import Any
 
 import ConfigSpace as CS
 
@@ -17,13 +19,13 @@ class TPEOptimizer(BaseOptimizer):
         resultfile: str = "temp",
         n_init: int = 10,
         max_evals: int = 100,
-        seed: Optional[int] = None,
+        seed: int | None = None,
         metric_name: str = "loss",
         runtime_name: str = "iter_time",
         only_requirements: bool = False,
         n_ei_candidates: int = 24,
         # TODO: task names for transfer learning
-        result_keys: List[str] = ["loss"],
+        result_keys: list[str] | None = None,
         min_bandwidth_factor: float = 1e-1,
         top: float = 1.0,
         # TODO: Make dict of percentile_func_maker
@@ -41,10 +43,11 @@ class TPEOptimizer(BaseOptimizer):
             runtime_name (str): The name of the runtime metric.
             only_requirements (bool): If True, we only save runtime and loss.
             n_ei_candidates (int): The number of samplings to optimize the EI value
-            result_keys (List[str]): Keys of results.
+            result_keys (list[str]): Keys of results.
             min_bandwidth_factor (float): The minimum bandwidth for numerical parameters
             top (float): The hyperparam of the cateogircal kernel. It defines the prob of the top category.
         """
+        result_keys = result_keys if result_keys is not None else [metric_name]
         super().__init__(
             obj_func=obj_func,
             config_space=config_space,
@@ -72,19 +75,19 @@ class TPEOptimizer(BaseOptimizer):
             for key in result_keys
         }
 
-    def update(self, eval_config: Dict[str, Any], results: Dict[str, float], runtime: float) -> None:
+    def update(self, eval_config: dict[str, Any], results: dict[str, float], runtime: float) -> None:
         for key, val in results.items():
             self._tpe_samplers[key].update_observations(eval_config=eval_config, loss=val, runtime=runtime)
 
-    def fetch_observations(self) -> Dict[str, np.ndarray]:
+    def fetch_observations(self) -> dict[str, np.ndarray]:
         observations = self._tpe_samplers[self._metric_name].observations
         for key in self._result_keys:
             observations[key] = self._tpe_samplers[key].observations[key]
 
         return observations
 
-    def _get_config_cands(self, n_samples_dict: Dict[str, int]) -> Dict[str, np.ndarray]:
-        config_cands: Dict[str, np.ndarray] = {}
+    def _get_config_cands(self, n_samples_dict: dict[str, int]) -> dict[str, np.ndarray]:
+        config_cands: dict[str, np.ndarray] = {}
         for key in self._result_keys:
             tpe_sampler = self._tpe_samplers[key]
             n_samples = n_samples_dict.get(key, tpe_sampler._n_ei_candidates)
@@ -102,7 +105,7 @@ class TPEOptimizer(BaseOptimizer):
         return config_cands
 
     def _compute_probability_improvement(
-        self, config_cands: Dict[str, np.ndarray], weight_dict: Dict[str, float]
+        self, config_cands: dict[str, np.ndarray], weight_dict: dict[str, float]
     ) -> np.ndarray:
         pi_config_array = np.zeros((len(self._result_keys), config_cands[self._hp_names[0]].size))
         weights = np.ones(len(self._result_keys))
@@ -115,19 +118,19 @@ class TPEOptimizer(BaseOptimizer):
         return weights @ pi_config_array
 
     def sample(
-        self, weight_dict: Optional[Dict[str, float]] = None, n_samples_dict: Optional[Dict[str, int]] = None
-    ) -> Dict[str, Any]:
+        self, weight_dict: dict[str, float] | None = None, n_samples_dict: dict[str, int] | None = None
+    ) -> dict[str, Any]:
         """
         Sample a configuration using tree-structured parzen estimator (TPE)
 
         Args:
-            weights (Optional[Dict[str, float]]):
+            weights (dict[str, float] | None):
                 Weights for each tpe samplers.
-            n_samples_dict (Optional[Dict[str, int]]):
+            n_samples_dict (dict[str, int] | None):
                 The number of samples for each tpe samplers.
 
         Returns:
-            eval_config (Dict[str, Any]): A sampled configuration from TPE
+            eval_config (dict[str, Any]): A sampled configuration from TPE
         """
         n_samples_dict = {} if n_samples_dict is None else n_samples_dict
         weight_dict = {key: 1.0 for key in self._result_keys} if weight_dict is None else weight_dict

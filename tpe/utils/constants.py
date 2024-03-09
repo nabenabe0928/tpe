@@ -1,4 +1,7 @@
-from typing import Any, Callable, Dict, Protocol, Union
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import Any, Protocol
 
 import ConfigSpace.hyperparameters as CSH
 
@@ -6,16 +9,13 @@ import numpy as np
 
 
 EPS = 1.0e-300
-NumericType = Union[float, int]
+NumericType = float | int
 SQR2, SQR2PI = np.sqrt(2), np.sqrt(2 * np.pi)
 
-CategoricalHPType = Union[CSH.CategoricalHyperparameter]
-NumericalHPType = Union[
-    CSH.UniformIntegerHyperparameter,
-    CSH.UniformFloatHyperparameter,
-    CSH.OrdinalHyperparameter,
-]
-HPType = Union[CategoricalHPType, NumericalHPType]
+CategoricalHPType = CSH.CategoricalHyperparameter
+NumericalHPType = CSH.UniformIntegerHyperparameter | CSH.UniformFloatHyperparameter | CSH.OrdinalHyperparameter
+
+HPType = CategoricalHPType | NumericalHPType
 
 config2type = {
     "UniformFloatHyperparameter": float,
@@ -32,7 +32,7 @@ type2config = {
 
 
 class PercentileFuncMaker(Protocol):
-    def __call__(self, **kwargs: Dict[str, Any]) -> Callable[[np.ndarray], int]:
+    def __call__(self, **kwargs: dict[str, Any]) -> Callable[[np.ndarray], int]:
         raise NotImplementedError
 
 

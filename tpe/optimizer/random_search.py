@@ -1,4 +1,6 @@
-from typing import Any, Dict, List, Optional
+from __future__ import annotations
+
+from typing import Any
 
 import ConfigSpace as CS
 
@@ -15,13 +17,13 @@ class RandomSearch(BaseOptimizer):
         resultfile: str,
         n_init: int = 10,
         max_evals: int = 100,
-        seed: Optional[int] = None,
+        seed: int | None = None,
         metric_name: str = "loss",
         runtime_name: str = "iter_time",
         only_requirements: bool = False,
-        result_keys: List[str] = ["loss"],
+        result_keys: list[str] | None = None,
     ):
-
+        result_keys = result_keys if result_keys is not None else [metric_name]
         super().__init__(
             obj_func=obj_func,
             config_space=config_space,
@@ -39,7 +41,7 @@ class RandomSearch(BaseOptimizer):
         self._observations[metric_name] = np.array([])
         self._observations[runtime_name] = np.array([])
 
-    def update(self, eval_config: Dict[str, Any], results: Dict[str, float], runtime: float) -> None:
+    def update(self, eval_config: dict[str, Any], results: dict[str, float], runtime: float) -> None:
         for hp_name, val in eval_config.items():
             self._observations[hp_name] = np.append(self._observations[hp_name], val)
 
@@ -48,8 +50,8 @@ class RandomSearch(BaseOptimizer):
 
         self._observations[self._runtime_name] = np.append(self._observations[self._runtime_name], runtime)
 
-    def fetch_observations(self) -> Dict[str, np.ndarray]:
+    def fetch_observations(self) -> dict[str, np.ndarray]:
         return {hp_name: vals.copy() for hp_name, vals in self._observations.items()}
 
-    def sample(self) -> Dict[str, Any]:
+    def sample(self) -> dict[str, Any]:
         return self.initial_sample()

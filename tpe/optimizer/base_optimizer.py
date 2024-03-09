@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import time
 from abc import ABCMeta, abstractmethod
-from typing import Any, Dict, List, Optional, Protocol, Tuple
+from typing import Any, Protocol
 
 import ConfigSpace as CS
 
@@ -11,16 +13,16 @@ from tpe.utils.utils import get_logger, get_random_sample, revert_eval_config, s
 
 
 class ObjectiveFunc(Protocol):
-    def __call__(self, eval_config: Dict[str, Any]) -> Tuple[Dict[str, float], float]:
+    def __call__(self, eval_config: dict[str, Any]) -> tuple[dict[str, float], float]:
         """
         Objective func prototype.
 
         Args:
-            eval_config (Dict[str, Any]):
+            eval_config (dict[str, Any]):
                 A configuration after the reversion.
 
         Returns:
-            results (Dict[str, float]):
+            results (dict[str, float]):
                 Each metric obtained by the objective function.
             runtime (float):
                 The runtime required to get all metrics
@@ -29,12 +31,12 @@ class ObjectiveFunc(Protocol):
 
 
 class BestUpdateFunc(Protocol):
-    def __call__(self, results: Dict[str, float], loss: float, best_loss: float) -> bool:
+    def __call__(self, results: dict[str, float], loss: float, best_loss: float) -> bool:
         """
         Objective func prototype.
 
         Args:
-            results (Dict[str, float]):
+            results (dict[str, float]):
                 Each metric obtained by the objective function.
             loss (float):
                 The loss metric.
@@ -48,7 +50,7 @@ class BestUpdateFunc(Protocol):
         raise NotImplementedError
 
 
-def default_best_update(results: Dict[str, float], loss: float, best_loss: float) -> bool:
+def default_best_update(results: dict[str, float], loss: float, best_loss: float) -> bool:
     return loss < best_loss
 
 
@@ -60,11 +62,11 @@ class BaseOptimizer(metaclass=ABCMeta):
         resultfile: str,
         n_init: int,
         max_evals: int,
-        seed: Optional[int],
+        seed: int | None,
         metric_name: str,
         runtime_name: str,
         only_requirements: bool,
-        result_keys: List[str],
+        result_keys: list[str],
     ):
         """
         Attributes:
@@ -72,14 +74,14 @@ class BaseOptimizer(metaclass=ABCMeta):
             resultfile (str): The name of the result file to output in the end
             n_init (int): The number of random sampling before using TPE
             obj_func (Callable): The objective function
-            hp_names (List[str]): The list of hyperparameter names
+            hp_names (list[str]): The list of hyperparameter names
             metric_name (str): The name of the metric (or objective function value)
-            observations (Dict[str, Any]): The storage of the observations
+            observations (dict[str, Any]): The storage of the observations
             config_space (CS.ConfigurationSpace): The searching space of the task
-            is_categoricals (Dict[str, bool]): Whether the given hyperparameter is categorical
-            is_ordinals (Dict[str, bool]): Whether the given hyperparameter is ordinal
+            is_categoricals (dict[str, bool]): Whether the given hyperparameter is categorical
+            is_ordinals (dict[str, bool]): Whether the given hyperparameter is ordinal
             only_requirements (bool): If True, we only save runtime and loss.
-            result_keys (List[str]): Keys of results.
+            result_keys (list[str]): Keys of results.
         """
 
         self._rng = np.random.RandomState(seed)
@@ -103,17 +105,17 @@ class BaseOptimizer(metaclass=ABCMeta):
         }
 
     def optimize(
-        self, logger_name: Optional[str] = None, best_update: BestUpdateFunc = default_best_update
-    ) -> Tuple[Dict[str, Any], float]:
+        self, logger_name: str | None = None, best_update: BestUpdateFunc = default_best_update
+    ) -> tuple[dict[str, Any], float]:
         """
         Optimize obj_func using TPE Sampler and store the results in the end.
 
         Args:
-            logger_name (Optional[str]):
+            logger_name (str | None):
                 The name of logger to write the intermediate results
 
         Returns:
-            best_config (Dict[str, Any]): The configuration that has the best loss
+            best_config (dict[str, Any]): The configuration that has the best loss
             best_loss (float): The best loss value during the optimization
         """
         use_logger = logger_name is not None
@@ -155,13 +157,13 @@ class BaseOptimizer(metaclass=ABCMeta):
         return best_config, best_loss
 
     @abstractmethod
-    def update(self, eval_config: Dict[str, Any], results: Dict[str, float], runtime: float) -> None:
+    def update(self, eval_config: dict[str, Any], results: dict[str, float], runtime: float) -> None:
         """
         Update of the child sampler.
 
         Args:
-            eval_config (Dict[str, Any]): The configuration to be evaluated
-            results (Dict[str, float]):
+            eval_config (dict[str, Any]): The configuration to be evaluated
+            results (dict[str, float]):
                 Each metric obtained by the objective function.
             runtime (float):
                 The runtime required to get all metrics
@@ -169,32 +171,32 @@ class BaseOptimizer(metaclass=ABCMeta):
         raise NotImplementedError
 
     @abstractmethod
-    def fetch_observations(self) -> Dict[str, np.ndarray]:
+    def fetch_observations(self) -> dict[str, np.ndarray]:
         """
         Fetch observations of this optimization.
 
         Returns:
-            observations (Dict[str, np.ndarray]):
+            observations (dict[str, np.ndarray]):
                 observations of this optimization.
         """
         raise NotImplementedError
 
     @abstractmethod
-    def sample(self) -> Dict[str, Any]:
+    def sample(self) -> dict[str, Any]:
         """
         Sample a configuration using a child class instance sampler
 
         Returns:
-            eval_config (Dict[str, Any]): A sampled configuration
+            eval_config (dict[str, Any]): A sampled configuration
         """
         raise NotImplementedError
 
-    def initial_sample(self) -> Dict[str, Any]:
+    def initial_sample(self) -> dict[str, Any]:
         """
         Sampling method up to n_init configurations
 
         Returns:
-            samples (Dict[str, Any]):
+            samples (dict[str, Any]):
                 Typically randomly sampled configurations
 
         """
@@ -210,7 +212,7 @@ class BaseOptimizer(metaclass=ABCMeta):
             is_ordinal=self._is_ordinals[hp_name],
         )
 
-    def _revert_eval_config(self, eval_config: Dict[str, NumericType]) -> Dict[str, Any]:
+    def _revert_eval_config(self, eval_config: dict[str, NumericType]) -> dict[str, Any]:
         return revert_eval_config(
             eval_config=eval_config,
             config_space=self._config_space,

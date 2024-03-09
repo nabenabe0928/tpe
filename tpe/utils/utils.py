@@ -1,9 +1,11 @@
+from __future__ import annotations
+
 import json
 import os
 from argparse import ArgumentParser, Namespace
 from enum import Enum
 from logging import DEBUG, FileHandler, Formatter, Logger, basicConfig, getLogger
-from typing import Any, Dict, List, Literal, Optional, Type, TypedDict, Union
+from typing import Any, Literal, Type, TypedDict
 
 import ConfigSpace as CS
 import ConfigSpace.hyperparameters as CSH
@@ -22,27 +24,27 @@ bool_json = Literal["True", "False"]
 
 
 class MetaInformation(TypedDict):
-    lower: Optional[NumericType]  # The lower bound of parameters
-    upper: Optional[NumericType]  # The upper bound of parameters
-    log: Optional[Union[bool_json, bool]]  # scale: If True, log, otherwise uniform
-    q: Optional[NumericType]  # The quantization parameter"
+    lower: NumericType | None  # The lower bound of parameters
+    upper: NumericType | None  # The upper bound of parameters
+    log: bool_json | bool | None  # scale: If True, log, otherwise uniform
+    q: NumericType | None  # The quantization parameter"
 
 
 class ParameterSettings(TypedDict):
-    param_type: Union[Type[int], Type[float], Type[str], Type[bool]]  # parameter type
+    param_type: Type[int] | Type[float] | Type[str] | Type[bool]  # parameter type
     ignore: bool_json  # Whether we ignore this parameter or not
-    lower: Optional[NumericType]  # The lower bound of parameters
-    upper: Optional[NumericType]  # The upper bound of parameters
-    log: Optional[Union[bool_json, bool]]  # scale: If True, log, otherwise uniform
-    q: Optional[NumericType]  # The quantization parameter"
-    sequence: Optional[List[NumericType]]  # The choices for numerical parameters.
-    choices: Optional[List[str]]  # The choices for categorical parameters. Must be str for config space
-    dataclass: Optional[str]  # The choices for categorical parameters in dataclass
-    default_value: Optional[Union[NumericType, str]]  # The default value for this parameter
-    meta: Optional[MetaInformation]  # Any information that is useful
+    lower: NumericType | None  # The lower bound of parameters
+    upper: NumericType | None  # The upper bound of parameters
+    log: bool_json | bool | None  # scale: If True, log, otherwise uniform
+    q: NumericType | None  # The quantization parameter"
+    sequence: list[NumericType] | None  # The choices for numerical parameters.
+    choices: list[str] | None  # The choices for categorical parameters. Must be str for config space
+    dataclass: str | None  # The choices for categorical parameters in dataclass
+    default_value: NumericType | str | None  # The default value for this parameter
+    meta: MetaInformation | None  # Any information that is useful
 
 
-def get_args_from_parser(Choices: Enum, opts: Dict) -> Namespace:
+def get_args_from_parser(Choices: Enum, opts: dict) -> Namespace:
     parser = ArgumentParser()
     parser.add_argument("--opt_name", choices=list(opts.keys()), default="tpe")
     parser.add_argument("--exp_id", type=int, default=0)
@@ -55,7 +57,7 @@ def get_args_from_parser(Choices: Enum, opts: Dict) -> Namespace:
     return args
 
 
-def get_filename_from_args(bench_name: str, constraints: List[Enum], args: Namespace) -> str:
+def get_filename_from_args(bench_name: str, constraints: list[Enum], args: Namespace) -> str:
     name = os.path.join(bench_name, args.dataset, args.opt_name, f"{args.exp_id:0>3}")
     return name
 
@@ -102,12 +104,12 @@ def get_hyperparameter(
     return hyperparameter
 
 
-def get_config_space(searching_space: Dict[str, ParameterSettings], hp_module_path: str) -> CS.ConfigurationSpace:
+def get_config_space(searching_space: dict[str, ParameterSettings], hp_module_path: str) -> CS.ConfigurationSpace:
     """
     Create the config space by CS.ConfigurationSpace based on searching space dict
 
     Args:
-        searching_space (Dict[str, ParameterSettings]):
+        searching_space (dict[str, ParameterSettings]):
             The dict of the pairs of a parameter name and the details
         hp_module_path (str): The path of the module describing the searching space
 
@@ -174,28 +176,28 @@ def get_logger(file_name: str, logger_name: str, disable: bool = False) -> Logge
 
 
 def extract_hyperparameter(
-    eval_config: Dict[str, Any],
+    eval_config: dict[str, Any],
     config_space: CS.ConfigurationSpace,
-    searching_space: Dict[str, ParameterSettings],
+    searching_space: dict[str, ParameterSettings],
     hp_module_path: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Extract categorical values from another module
 
     Args:
-        eval_config (Dict[str, Any]):
+        eval_config (dict[str, Any]):
             The configuration to evaluate.
             The categorical is provided by one of the key strings.
         config_space (CS.ConfigurationSpace):
             The configuration space
-        searching_space (Dict[str, ParameterSettings]):
+        searching_space (dict[str, ParameterSettings]):
             Dict information taken from a prepared json file.
         hp_module_path (str):
             The path where the `hyperparameters.py` for the target
             objective exists.
 
     Returns:
-        return_config (Dict[str, Any]):
+        return_config (dict[str, Any]):
             The configuration that is created by replacing
             all the categorical keys to the object of interests
             such as function
@@ -269,12 +271,12 @@ def check_value_range(hp_name: str, config: CSH.Hyperparameter, val: NumericType
 
 
 def revert_eval_config(
-    eval_config: Dict[str, NumericType],
+    eval_config: dict[str, NumericType],
     config_space: CS.ConfigurationSpace,
-    is_categoricals: Dict[str, bool],
-    is_ordinals: Dict[str, bool],
-    hp_names: List[str],
-) -> Dict[str, Any]:
+    is_categoricals: dict[str, bool],
+    is_ordinals: dict[str, bool],
+    hp_names: list[str],
+) -> dict[str, Any]:
     """
     Revert the eval_config into the original value range.
     For example,
@@ -283,16 +285,16 @@ def revert_eval_config(
         * quantized value: value -> steped by q, i.e. q, 2q, 3q, ...
 
     Args:
-        eval_config (Dict[str, NumericType]): The configuration to evaluate and revert
+        eval_config (dict[str, NumericType]): The configuration to evaluate and revert
         config_space (CS.ConfigurationSpace): The searching space information
-        is_categoricals (Dict[str, bool]): Whether each hyperparameter is categorical
-        is_ordinals (Dict[str, bool]): Whether each hyperparameter is ordinal
-        hp_names (List[str]): The list of the names of hyperparameters
+        is_categoricals (dict[str, bool]): Whether each hyperparameter is categorical
+        is_ordinals (dict[str, bool]): Whether each hyperparameter is ordinal
+        hp_names (list[str]): The list of the names of hyperparameters
 
     Returns:
-        reverted_eval_config (Dict[str, Any])
+        reverted_eval_config (dict[str, Any])
     """
-    converted_eval_config: Dict[str, Any] = {}
+    converted_eval_config: dict[str, Any] = {}
     for hp_name in hp_names:
         is_categorical, is_ordinal = is_categoricals[hp_name], is_ordinals[hp_name]
         config = config_space.get_hyperparameter(hp_name)
@@ -326,13 +328,12 @@ def revert_eval_config(
 
 
 def store_results(
-    best_config: Dict[str, np.ndarray],
+    best_config: dict[str, np.ndarray],
     logger: Logger,
-    observations: Dict[str, np.ndarray],
+    observations: dict[str, np.ndarray],
     file_name: str,
-    requirements: Optional[List[str]] = None,
+    requirements: list[str] | None = None,
 ) -> None:
-
     logger.info(f"\nThe observations: {observations}")
     if requirements is None:
         save_observations(filename=file_name, observations=observations)
@@ -346,13 +347,13 @@ def store_results(
         save_observations(filename=file_name, observations=required_observations)
 
 
-def save_observations(filename: str, observations: Dict[str, np.ndarray]) -> None:
+def save_observations(filename: str, observations: dict[str, np.ndarray]) -> None:
     """
     Save the observations during the optimization procedure
 
     Args:
         filename (str): The name of the json file
-        observations (Dict[str, np.ndarray]): The observations to save
+        observations (dict[str, np.ndarray]): The observations to save
     """
     subdirs = "/".join(filename.split("/")[:-1])
     os.makedirs(f"results/{subdirs}", exist_ok=True)
