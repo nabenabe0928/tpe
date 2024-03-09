@@ -17,30 +17,34 @@ pip install tpe
 The optimization of 10D sphere function can be executed as follows:
 
 ```python
-from typing import Dict
+from __future__ import annotations
+
+import time
 
 import ConfigSpace as CS
 import ConfigSpace.hyperparameters as CSH
+
 import numpy as np
 
 from tpe.optimizer import TPEOptimizer
 
 
-def sphere(eval_config: Dict[str, float]) -> float:
+def sphere(eval_config: dict[str, float]) -> tuple[dict[str, float], float]:
+    start = time.time()
     vals = np.array(list(eval_config.values()))
     vals *= vals
-    return np.sum(vals)
+    return {"loss": np.sum(vals)}, time.time() - start
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     dim = 10
     cs = CS.ConfigurationSpace()
     for d in range(dim):
-        cs.add_hyperparameter(CSH.UniformFloatHyperparameter(f'x{d}', lower=-5, upper=5))
+        cs.add_hyperparameter(CSH.UniformFloatHyperparameter(f"x{d}", lower=-5, upper=5))
 
     opt = TPEOptimizer(obj_func=sphere, config_space=cs, resultfile='sphere')
     # If you do not want to do logging, remove the `logger_name` argument
-    opt.optimize(logger_name="sphere")
+    print(opt.optimize(logger_name="sphere"))
 ```
 
 The documentation of `ConfigSpace` is available [here](https://automl.github.io/ConfigSpace/master/).
