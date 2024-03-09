@@ -17,8 +17,9 @@ pip install tpe
 The optimization of 10D sphere function can be executed as follows:
 
 ```python
+from __future__ import annotations
+
 import time
-from typing import Dict, Tuple
 
 import ConfigSpace as CS
 import ConfigSpace.hyperparameters as CSH
