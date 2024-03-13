@@ -48,3 +48,16 @@ if __name__ == "__main__":
 ```
 
 The documentation of `ConfigSpace` is available [here](https://automl.github.io/ConfigSpace/master/).
+
+# Citation
+
+Please cite the following paper when using my implementation:
+
+```bibtex
+@article{watanabe2023tpe,
+  title   = {Tree-structured {P}arzen estimator: Understanding its algorithm components and their roles for better empirical performance},
+  author  = {S. Watanabe},
+  journal = {arXiv preprint arXiv:2304.11127},
+  year    = {2023}
+}
+```
