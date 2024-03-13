@@ -47,9 +47,9 @@ The documentation of `ConfigSpace` is available [here](https://automl.github.io/
 
 # Citation
 
-Please cite the following paper:
+Please cite the following paper when using my implementation:
 
-```
+```bibtex
 @article{watanabe2023tpe,
   title   = {Tree-structured {P}arzen estimator: Understanding its algorithm components and their roles for better empirical performance},
   author  = {S. Watanabe},
