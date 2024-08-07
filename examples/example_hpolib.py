@@ -47,6 +47,7 @@ def objective(trial: optuna.Trial) -> float:
 
 
 module = optunahub.load_module(package="samplers/tpe_tutorial")
+# NOTE: Please check https://hub.optuna.org/samplers/tpe_tutorial/ for the parameter descriptions.
 tpe_config = {
     "consider_prior": True,
     "consider_magic_clip": True,
