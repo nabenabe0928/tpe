@@ -6,6 +6,11 @@
 > This repository is now not maintained anymore, so people might experience hard time in the installation.
 > However, if you just would like to use my TPE optimizer for your experiments, please use the one registered at OptunaHub.
 > I added an example for HPOLib in [examples](./examples/example_hpolib.py).
+> You can run the example with the following:
+> ```shell
+> # dataset_id can take from 0 to 3.
+> $ python examples/example_hpolib.py --dataset_id 0
+> ```
 
 # Introduction
 This package is the implementation example of tree-structured parzen estimator (TPE).
