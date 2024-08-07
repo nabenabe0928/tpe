@@ -19,7 +19,7 @@ olympus-surrogate-bench
 
 # TPE
 scipy==1.9.3
-numpy==1.21.6
+numpy<2.0.0
 parzen-estimator>=0.5.7
 
 # BORE (we compromised the XGBoost version for JAHS-Bench)
