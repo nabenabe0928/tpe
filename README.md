@@ -1,6 +1,17 @@
 [![Build Status](https://github.com/nabenabe0928/tpe/workflows/Functionality%20test/badge.svg?branch=stable)](https://github.com/nabenabe0928/tpe)
 [![codecov](https://codecov.io/gh/nabenabe0928/tpe/branch/stable/graph/badge.svg?token=UXC2K5VJNN)](https://codecov.io/gh/nabenabe0928/tpe)
 
+> [!IMPORTANT]
+> The TPE optimizer for the experiments are now available at [OptunaHub](https://hub.optuna.org/samplers/tpe_tutorial/).
+> This repository is now not maintained anymore, so people might experience hard time in the installation.
+> However, if you just would like to use my TPE optimizer for your experiments, please use the one registered at OptunaHub.
+> I added an example for HPOLib in [examples](./examples/example_hpolib.py).
+> You can run the example with the following:
+> ```shell
+> # dataset_id can take from 0 to 3.
+> $ python examples/example_hpolib.py --dataset_id 0
+> ```
+
 # Introduction
 This package is the implementation example of tree-structured parzen estimator (TPE).
 TPE is an hyperparameter optimization (HPO) method invented in [`Algorithms for Hyper-Parameter Optimization`](https://papers.nips.cc/paper/2011/file/86e8f7ab32cfd12577bc2619bc635690-Paper.pdf).
